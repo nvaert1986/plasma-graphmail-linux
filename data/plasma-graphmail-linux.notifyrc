@@ -1,0 +1,54 @@
+[Global]
+IconName=io.github.nvaert1986.graphmail
+Comment=Graph Mail
+
+[Event/newMail]
+IconName=mail-unread-new
+Name=New mail
+Name[nl]=Nieuwe e-mail
+Comment=New mail arrived in the Inbox
+Comment[nl]=Er is nieuwe e-mail binnengekomen in het Postvak IN
+Action=Popup
+Sound=Oxygen-Im-New-Mail.ogg
+
+[Event/sendFailed]
+IconName=mail-unread
+Name=Message not sent
+Name[nl]=Bericht niet verzonden
+Comment=Exchange refused a message; it was kept in Drafts
+Comment[nl]=Exchange heeft een bericht geweigerd; het is bewaard in Concepten
+Action=Popup
+
+[Event/reminder]
+IconName=view-calendar-day
+Name=Calendar reminder
+Name[nl]=Agendaherinnering
+Comment=An event in your calendar is about to start
+Comment[nl]=Een afspraak in uw agenda begint zo
+Action=Popup|Sound
+Sound=Oxygen-Sys-App-Message.ogg
+
+[Event/overdueReminders]
+IconName=view-calendar-day
+Name=Overdue reminders
+Name[nl]=Verlopen herinneringen
+Comment=Reminders of events that are over and were never dismissed
+Comment[nl]=Herinneringen van afspraken die voorbij zijn en nooit zijn genegeerd
+Action=Popup
+
+[Event/taskReminder]
+Name=Task reminder
+Name[nl]=Taakherinnering
+Comment=A task's reminder time has come
+Comment[nl]=De herinneringstijd van een taak is aangebroken
+IconName=view-task
+Action=Popup|Sound
+Sound=Oxygen-Sys-App-Message.ogg
+
+[Event/conflict]
+Name=Changed elsewhere
+Name[nl]=Elders gewijzigd
+Comment=A change was not applied: the item was changed in the same place in Outlook or on another device
+Comment[nl]=Een wijziging is niet doorgevoerd: het item is op dezelfde plek in Outlook of op een ander apparaat gewijzigd
+IconName=dialog-warning
+Action=Popup

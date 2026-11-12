@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=io.github.nvaert1986.GraphMail
+Exec=@KDE_INSTALL_FULL_BINDIR@/graphmaild
+SystemdService=plasma-graphmail-linux.service

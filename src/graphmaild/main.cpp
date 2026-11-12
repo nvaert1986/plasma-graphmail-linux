@@ -1,0 +1,36 @@
+// SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#include "accounts.h"
+#include "daemon.h"
+
+#include <KLocalizedString>
+#include <KSignalHandler>
+
+#include <QCoreApplication>
+
+#include <csignal>
+
+int main(int argc, char **argv)
+{
+    QCoreApplication app(argc, argv);
+    QCoreApplication::setApplicationName(QStringLiteral("graphmaild"));
+    // Accounts are shared by the suite; the app registration per account is this app's own
+    GraphCore::Accounts::setApplication(QStringLiteral("plasma-graphmail-linux"));
+    QCoreApplication::setApplicationVersion(QStringLiteral(GRAPHMAIL_VERSION));
+    KLocalizedString::setApplicationDomain("plasma-graphmail-linux");
+
+    // systemd stops the service with SIGTERM: close every cache cleanly
+    KSignalHandler::self()->watchSignal(SIGTERM);
+    KSignalHandler::self()->watchSignal(SIGINT);
+    QObject::connect(KSignalHandler::self(), &KSignalHandler::signalReceived, &app, &QCoreApplication::quit);
+
+    GraphMail::Daemon daemon;
+    QString error;
+    if (!daemon.start(&error)) {
+        qCritical().noquote() << error;
+        return 1;
+    }
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, &daemon, &GraphMail::Daemon::shutdown);
+    return app.exec();
+}

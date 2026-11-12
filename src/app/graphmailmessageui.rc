@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<gui name="plasma-graphmail-linux-message" version="2"
+     xmlns="http://www.kde.org/standards/kxmlgui/1.0"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0 http://www.kde.org/standards/kxmlgui/1.0/kxmlgui.xsd">
+  <ToolBar name="mainToolBar" iconText="textbesideicon">
+    <text>Main Toolbar</text>
+    <Action name="reply"/>
+    <Action name="reply_all"/>
+    <Action name="forward"/>
+    <Separator/>
+    <Action name="delete"/>
+    <Action name="archive"/>
+    <Action name="move"/>
+    <Separator/>
+    <Action name="flag"/>
+    <Action name="mark_unread"/>
+  </ToolBar>
+</gui>

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<gui name="plasma-graphmail-linux-calendar" version="6"
+     xmlns="http://www.kde.org/standards/kxmlgui/1.0"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0 http://www.kde.org/standards/kxmlgui/1.0/kxmlgui.xsd">
+  <MenuBar>
+    <Menu name="event">
+      <text>&amp;Event</text>
+      <Action name="new_event"/>
+      <Action name="delete_event"/>
+      <Separator/>
+      <Action name="open_colleague_calendar"/>
+    </Menu>
+    <Menu name="view">
+      <text>&amp;View</text>
+      <Action name="view_day"/>
+      <Action name="view_workweek"/>
+      <Action name="view_week"/>
+      <Action name="view_month"/>
+      <Action name="view_agenda"/>
+      <Separator/>
+      <Action name="week_numbers"/>
+      <Action name="second_time_zone"/>
+      <Separator/>
+      <Action name="go_today"/>
+      <Action name="go_previous"/>
+      <Action name="go_next"/>
+      <Separator/>
+      <Action name="sync"/>
+      <Action name="go_mail"/>
+      <Action name="go_contacts"/>
+      <Action name="go_tasks"/>
+    </Menu>
+    <Menu name="settings">
+      <Action name="delete_request_after_responding" append="configure_merge"/>
+    </Menu>
+  </MenuBar>
+  <ToolBar name="mainToolBar" iconText="textbesideicon">
+    <text>Main Toolbar</text>
+    <Action name="new_event"/>
+    <Action name="open_colleague_calendar"/>
+    <Separator/>
+    <Action name="go_today"/>
+    <Action name="go_previous"/>
+    <Action name="go_next"/>
+    <Separator/>
+    <Action name="view_day"/>
+    <Action name="view_workweek"/>
+    <Action name="view_week"/>
+    <Action name="view_month"/>
+    <Action name="view_agenda"/>
+    <Separator/>
+    <Action name="sync"/>
+  </ToolBar>
+</gui>

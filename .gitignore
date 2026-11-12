@@ -1,0 +1,18 @@
+build*/
+.cache/
+compile_commands.json
+CMakeLists.txt.user*
+*.kdev4
+HANDOFF.md
+.dev/
+
+# Phase 0 test tool and Python caches: development only
+probe/
+__pycache__/
+*.pyc
+
+# Internal notes: design and phase documents (with organisation and test details) and the
+# to-do list stay local and are never published
+docs/
+TODO.md
+.ruff_cache/

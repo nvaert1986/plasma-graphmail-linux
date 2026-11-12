@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Graph Mail
+GenericName=Mail Client
+GenericName[nl]=E-mailprogramma
+Comment=Mail, calendar and contacts for Microsoft 365 on KDE Plasma
+Comment[nl]=E-mail, agenda en contactpersonen voor Microsoft 365 op KDE Plasma
+Exec=@KDE_INSTALL_FULL_BINDIR@/plasma-graphmail-linux
+Icon=io.github.nvaert1986.graphmail
+Terminal=false
+Categories=Qt;KDE;Office;Email;Network;
+Keywords=mail;e-mail;email;Exchange;Microsoft 365;calendar;contacts;
+Keywords[nl]=mail;e-mail;Exchange;Microsoft 365;agenda;contactpersonen;
+StartupNotify=true

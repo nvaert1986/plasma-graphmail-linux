@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<gui name="plasma-graphmail-linux" version="20"
+     xmlns="http://www.kde.org/standards/kxmlgui/1.0"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0 http://www.kde.org/standards/kxmlgui/1.0/kxmlgui.xsd">
+  <MenuBar>
+    <Menu name="message">
+      <text>&amp;Message</text>
+      <Action name="new_message"/>
+      <Action name="new_from_template"/>
+      <Separator/>
+      <Action name="reply"/>
+      <Action name="reply_all"/>
+      <Action name="forward"/>
+      <Separator/>
+      <Action name="mark_read"/>
+      <Action name="mark_unread"/>
+      <Action name="flag"/>
+      <Separator/>
+      <Action name="move"/>
+      <Action name="archive"/>
+      <Action name="delete"/>
+      <Separator/>
+      <Action name="focus_move"/>
+      <Action name="focus_always"/>
+      <Action name="report_junk"/>
+      <Action name="ignore_conversation"/>
+    </Menu>
+    <Menu name="view">
+      <text>&amp;View</text>
+      <Action name="go_calendar"/>
+      <Action name="go_contacts"/>
+      <Action name="go_tasks"/>
+      <Separator/>
+      <Action name="sync"/>
+      <Action name="waiting"/>
+      <Action name="search"/>
+      <Separator/>
+      <Action name="show_conversations"/>
+      <Action name="focused_inbox"/>
+      <Action name="reading_pane"/>
+      <Action name="show_all_folders"/>
+    </Menu>
+    <Menu name="settings">
+      <Action name="automatic_replies" append="configure_merge"/>
+      <Action name="rules" append="configure_merge"/>
+      <Action name="mailbox_settings" append="configure_merge"/>
+      <Action name="undo_send" append="configure_merge"/>
+      <Action name="mailboxes" append="configure_merge"/>
+      <Action name="offline_settings" append="configure_merge"/>
+      <Action name="signatures" append="configure_merge"/>
+    </Menu>
+  </MenuBar>
+  <ToolBar name="searchToolBar" noEdit="true">
+    <text>Search Bar</text>
+    <Action name="search_box"/>
+  </ToolBar>
+  <ToolBar name="mainToolBar" iconText="textbesideicon" newline="true">
+    <text>Main Toolbar</text>
+    <Action name="new_message"/>
+    <Action name="sync"/>
+    <Separator/>
+    <Action name="reply"/>
+    <Action name="reply_all"/>
+    <Action name="forward"/>
+    <Separator/>
+    <Action name="delete"/>
+    <Action name="archive"/>
+    <Action name="move"/>
+    <Separator/>
+    <Action name="flag"/>
+    <Action name="categorize"/>
+    <Action name="mark_read"/>
+    <Action name="quick_steps"/>
+    <Action name="mark_unread"/>
+  </ToolBar>
+</gui>

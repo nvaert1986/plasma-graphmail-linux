@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<gui name="plasma-graphmail-linux-composer" version="2"
+     xmlns="http://www.kde.org/standards/kxmlgui/1.0"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0 http://www.kde.org/standards/kxmlgui/1.0/kxmlgui.xsd">
+  <MenuBar>
+    <Menu name="message">
+      <text>&amp;Message</text>
+      <Action name="send"/>
+      <Action name="save_draft"/>
+      <Action name="discard"/>
+      <Separator/>
+      <Action name="attach"/>
+      <Action name="signature"/>
+      <Separator/>
+      <Action name="importance_high"/>
+      <Action name="importance_low"/>
+      <Separator/>
+      <Action name="save_template"/>
+    </Menu>
+    <Menu name="options">
+      <text>O&amp;ptions</text>
+      <Action name="delivery_receipt"/>
+      <Action name="read_receipt"/>
+      <Separator/>
+      <Action name="sensitivity"/>
+      <Separator/>
+      <Action name="delay_delivery"/>
+    </Menu>
+    <Menu name="view">
+      <text>&amp;View</text>
+      <Action name="show_bcc"/>
+    </Menu>
+    <Menu name="format">
+      <text>F&amp;ormat</text>
+      <Action name="plain_text"/>
+      <Separator/>
+      <Action name="format_text_bold"/>
+      <Action name="format_text_italic"/>
+      <Action name="format_text_underline"/>
+      <Action name="format_text_strikeout"/>
+      <Separator/>
+      <Action name="format_list_style"/>
+      <Action name="format_list_indent_more"/>
+      <Action name="format_list_indent_less"/>
+      <Separator/>
+      <Action name="format_align_left"/>
+      <Action name="format_align_center"/>
+      <Action name="format_align_right"/>
+      <Separator/>
+      <Action name="manage_link"/>
+      <Action name="add_image"/>
+      <Action name="insert_horizontal_rule"/>
+      <Action name="insert_table"/>
+      <Separator/>
+      <Action name="paste_without_formatting"/>
+      <Action name="format_reset"/>
+    </Menu>
+  </MenuBar>
+  <ToolBar name="mainToolBar" iconText="textbesideicon">
+    <text>Main Toolbar</text>
+    <Action name="send"/>
+    <Separator/>
+    <Action name="attach"/>
+    <Action name="signature"/>
+    <Separator/>
+    <Action name="importance_high"/>
+    <Action name="importance_low"/>
+    <Separator/>
+    <Action name="save_draft"/>
+    <Action name="discard"/>
+  </ToolBar>
+  <ToolBar name="formatToolBar" iconText="icononly">
+    <text>Formatting Toolbar</text>
+    <Action name="format_font_family"/>
+    <Action name="format_font_size"/>
+    <Action name="format_text_bold"/>
+    <Action name="format_text_italic"/>
+    <Action name="format_text_underline"/>
+    <Action name="format_text_foreground_color"/>
+    <Action name="format_text_background_color"/>
+    <Separator/>
+    <Action name="format_list_style"/>
+    <Action name="format_list_indent_less"/>
+    <Action name="format_list_indent_more"/>
+    <Separator/>
+    <Action name="format_align_left"/>
+    <Action name="format_align_center"/>
+    <Action name="format_align_right"/>
+    <Separator/>
+    <Action name="manage_link"/>
+    <Action name="add_image"/>
+  </ToolBar>
+</gui>
