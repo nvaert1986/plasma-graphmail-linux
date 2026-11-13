@@ -15,6 +15,7 @@
 #include "categorylist.h"
 #include "daemonclient.h"
 #include "rulesdialog.h"
+#include "mimeexport.h"
 
 #include <KConfigGroup>
 #include <KSharedConfig>
@@ -27,6 +28,7 @@
 #include <QStandardPaths>
 #include <QJsonDocument>
 #include <QTest>
+#include <QUrl>
 
 using namespace GraphMail;
 
@@ -163,6 +165,32 @@ private Q_SLOTS:
         model.dropMimeData(&same, Qt::MoveAction, -1, -1, target);
         QCOMPARE(moved.size(), 1);
         QCOMPARE(moved.first().at(2).value<QList<qint64>>(), (QList<qint64>{12, 13}));
+    }
+
+    // Message files from the file manager: imported into the folder they are dropped on
+    void dropMessageFiles()
+    {
+        MailboxSet mailboxes;
+        mailboxes.reload();
+        FolderModel model(&mailboxes);
+        const QModelIndex target = model.indexForWellKnown(account + QStringLiteral("/me"), QStringLiteral("deleteditems"));
+        QMimeData files;
+        files.setUrls({QUrl::fromLocalFile(QStringLiteral("/tmp/a.msg")), QUrl::fromLocalFile(QStringLiteral("/tmp/b.EML"))});
+        QMimeData mixed;
+        mixed.setUrls({QUrl::fromLocalFile(QStringLiteral("/tmp/a.msg")), QUrl::fromLocalFile(QStringLiteral("/tmp/c.pdf"))});
+        QMimeData remote;
+        remote.setUrls({QUrl(QStringLiteral("https://example.com/a.msg"))});
+        QVERIFY(model.canDropMimeData(&files, Qt::CopyAction, -1, -1, target));
+        QVERIFY(!model.canDropMimeData(&mixed, Qt::CopyAction, -1, -1, target));
+        QVERIFY(!model.canDropMimeData(&remote, Qt::CopyAction, -1, -1, target));
+        QVERIFY(!model.canDropMimeData(&files, Qt::CopyAction, -1, -1, model.index(0, 0)));
+        QSignalSpy dropped(&model, &FolderModel::filesDropped);
+        QSignalSpy moved(&model, &FolderModel::moveRequested);
+        model.dropMimeData(&files, Qt::CopyAction, -1, -1, target);
+        QCOMPARE(dropped.size(), 1);
+        QCOMPARE(moved.size(), 0);
+        QCOMPARE(dropped.first().at(1).toLongLong(), target.data(FolderModel::FolderIdRole).toLongLong());
+        QCOMPARE(dropped.first().at(2).toStringList(), (QStringList{QStringLiteral("/tmp/a.msg"), QStringLiteral("/tmp/b.EML")}));
     }
 
     void flatListPagesAndRefreshes()
@@ -373,6 +401,29 @@ private Q_SLOTS:
         QCOMPARE(made.value(QLatin1String("actions")).toObject(),
                  QJsonObject({{QStringLiteral("markAsRead"), true}, {QStringLiteral("markImportance"), QStringLiteral("high")}}));
         QVERIFY(!made.contains(QLatin1String("exceptions")));
+    }
+
+    // Export (docs/PHASE9B.md): a message rebuilt from the cache and the mbox format
+    void exportFormats()
+    {
+        MailboxSet mailboxes;
+        mailboxes.reload();
+        Store *store = mailboxes.store(account + QStringLiteral("/me"));
+        QVERIFY(store);
+        const QList<ListRow> rows = store->listPage(inbox, std::nullopt, 1);
+        QVERIFY(!rows.isEmpty());
+        const QByteArray mime = MimeExport::rebuild(store, mailboxes.blobs(account + QStringLiteral("/me")), rows.constFirst().id);
+        QVERIFY(mime.contains("\r\nSubject: "));
+        QVERIFY(mime.contains("\r\nMIME-Version: 1.0\r\n"));
+        QVERIFY(mime.contains("X-GraphMail-Rebuilt:"));
+        QVERIFY(mime.startsWith("From: "));
+        // Names that are not ASCII are encoded words
+        QCOMPARE(MimeExport::encodeWord(QStringLiteral("Café")), QByteArray("=?UTF-8?B?") + QByteArray("Café").toBase64() + "?=");
+        QCOMPARE(MimeExport::encodeWord(QStringLiteral("Plain")), QByteArray("Plain"));
+        // mboxrd: a "From " line and its quoted forms get one more ">", CRLF becomes LF
+        const QByteArray entry = MimeExport::mboxEntry("Subject: x\r\n\r\nFrom here\r\n>From there\r\nok\r\n", QStringLiteral("a@example.com"),
+                                                       QDateTime(QDate(2026, 11, 13), QTime(9, 5, 7), QTimeZone::UTC));
+        QCOMPARE(entry, QByteArray("From a@example.com Fri Nov 13 09:05:07 2026\nSubject: x\n\n>From here\n>>From there\nok\n\n"));
     }
 
     void conversations()

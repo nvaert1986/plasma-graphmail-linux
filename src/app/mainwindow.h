@@ -15,6 +15,7 @@
 #include <QTimer>
 
 #include <memory>
+#include <functional>
 
 class KBusyIndicatorWidget;
 class KMessageWidget;
@@ -134,6 +135,34 @@ public:
     }
     // A module (2 calendar, 3 contacts, 4 tasks) in a window of its own, as Outlook's Open in New Window
     void openInNewWindow(int module);
+    // File > Print (docs/PHASE9B.md): the message shown or the first selected; tests: into a PDF
+    void printMessage(const QString &pdfFile = {}, const std::function<void(bool)> &done = {});
+    // Save As (docs/PHASE9B.md): one message as .eml, several as mbox; a whole folder as mbox.
+    // file empty: asks; done(ok) when written
+    void exportMessages(const QList<qint64> &messages, const QString &file = {}, const std::function<void(bool)> &done = {});
+    void exportFolder(const QString &mailboxKey, qint64 folder, const QString &file = {}, const std::function<void(bool)> &done = {});
+    // Outlook Data Files (docs/PHASE9B.md): export folders with their subfolders (none: the
+    // whole mailbox) to a PST; import a PST's mail into a mailbox. Without a file the user picks one.
+    void exportPst(const QString &mailboxKey, const QList<qint64> &folders, const QString &file = {}, const std::function<void(bool)> &done = {}, bool itemsOnly = false);
+    void importPst(const QString &mailboxKey, const QString &file = {}, bool merge = false, bool ask = true, const std::function<void(bool)> &done = {});
+    // .msg and .eml files: shown in the message viewer, or imported into a folder (none: the
+    // folder shown). Without files the user picks them.
+    // The viewer shown, nullptr when nothing was
+    QWidget *openMessageFile(const QString &file = {});
+    // Tests: a file's window without waiting on it (the message viewer, or the PST import dialog)
+    QWidget *showFileForTests(const QString &file);
+    void importMessageFiles(const QString &mailboxKey, qint64 folder, QStringList files = {}, const std::function<void(bool)> &done = {});
+    // Settings > Archive Folder...: kept in the mailbox when Exchange takes it, else on this computer
+    void chooseArchiveFolder(const QString &mailboxKey, qint64 folder = 0, const std::function<void(bool)> &done = {});
+    // Files given on the command line or from the file manager: .msg and .eml in the message
+    // viewer, .pst and .ost into the import (for the mailbox shown)
+    void openFiles(const QStringList &files);
+    // Tests: the selected messages
+    QList<qint64> selectedMessageIds() const;
+private:
+    QString askExportFile(QString name, bool mbox);
+    void runExport(const QString &mailboxKey, const QList<qint64> &messages, const QString &file, bool mbox, const std::function<void(bool)> &done);
+public:
     // The mailboxes' photos (docs/PHASE9.md)
     ProfilePhotos *photos() const
     {
@@ -169,6 +198,9 @@ private:
     void moveSelected(qint64 folder);
     void moveToFolder();
     void archiveSelected();
+    // Archive (9b.3): the folder Archive moves to: the one chosen on this computer, else the
+    // mailbox's archive folder; 0 when there is none
+    qint64 archiveFolder(const QString &mailboxKey) const;
     void search();
     // Graph's $search for the mailboxes in scope; merged into the results when it answers
     void searchOnline();

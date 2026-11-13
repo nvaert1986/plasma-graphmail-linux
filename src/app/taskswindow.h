@@ -34,6 +34,8 @@ class TasksWindow : public KXmlGuiWindow
     Q_OBJECT
 
 public:
+    // File > Print: the list shown (docs/PHASE9B.md); tests: into a PDF
+    void printList(const QString &pdfFile = {});
     TasksWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *parent = nullptr);
 
     // Selects a task (a reminder's Open)

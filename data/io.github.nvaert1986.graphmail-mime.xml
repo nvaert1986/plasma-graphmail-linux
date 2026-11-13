@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Outlook's file types, for systems whose shared-mime-info does not know them yet.
+     .msg by name only: Word and Excel files share its compound file signature. -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/vnd.ms-outlook">
+    <comment>Outlook message</comment>
+    <comment xml:lang="nl">Outlook-bericht</comment>
+    <sub-class-of type="application/x-ole-storage"/>
+    <glob pattern="*.msg"/>
+  </mime-type>
+  <mime-type type="application/vnd.ms-outlook-pst">
+    <comment>Outlook data file</comment>
+    <comment xml:lang="nl">Outlook-gegevensbestand</comment>
+    <magic priority="60">
+      <match type="string" value="!BDN" offset="0">
+        <match type="string" value="SM" offset="8"/>
+      </match>
+    </magic>
+    <glob pattern="*.pst"/>
+    <glob pattern="*.ost"/>
+  </mime-type>
+</mime-info>

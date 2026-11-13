@@ -28,7 +28,14 @@
 #include "templates.h"
 #include "quicksteps.h"
 #include "shell.h"
+#include "pstexport.h"
+#include "pstimport.h"
+#include "mimemapi.h"
+#include <MimeTreeParserWidgets/MessageViewerDialog>
+#include <QTemporaryDir>
 #include "profilephotos.h"
+#include "printing.h"
+#include "mimeexport.h"
 #include "waitingwindow.h"
 #include "searchfolderdialog.h"
 #include "mailboxsettings.h"
@@ -46,6 +53,10 @@
 #include <KToolBar>
 
 #include <QAction>
+#include <QStandardPaths>
+#include <QRegularExpression>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QPointer>
 #include <QPushButton>
 #include <QListWidget>
@@ -99,7 +110,8 @@ int markReadSeconds()
 
 namespace
 {
-QPointer<MainWindow> s_mainWindow;
+// The one main window (MainWindow::instance()); cleared when it goes
+MainWindow *s_mainWindow = nullptr;
 }
 
 MainWindow::MainWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *parent)
@@ -127,6 +139,9 @@ MainWindow::MainWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *par
     m_folders->setDragDropMode(QAbstractItemView::DropOnly);
     m_folders->setDropIndicatorShown(true);
     m_folderModel->setShowAllFolders(windowGroup().readEntry("ShowAllFolders", false));
+    connect(m_folderModel, &FolderModel::filesDropped, this, [this](const QString &mailboxKey, qint64 folder, const QStringList &files) {
+        importMessageFiles(mailboxKey, folder, files);
+    });
     connect(m_folderModel, &FolderModel::moveRequested, this, [this](const QString &mailboxKey, qint64 folder, const QList<qint64> &messages) {
         for (qint64 message : messages) {
             m_daemon->move(mailboxKey.section(QLatin1Char('/'), 0, 0), mailboxKey.section(QLatin1Char('/'), 1), message, folder);
@@ -364,11 +379,16 @@ MainWindow::MainWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *par
     updateActions();
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow()
+{
+    if (s_mainWindow == this) {
+        s_mainWindow = nullptr;
+    }
+}
 
 MainWindow *MainWindow::instance()
 {
-    return s_mainWindow.data();
+    return s_mainWindow;
 }
 
 void MainWindow::setupActions()
@@ -838,12 +858,51 @@ void MainWindow::setupActions()
     offline->setIcon(QIcon::fromTheme(QStringLiteral("folder-sync")));
     connect(offline, &QAction::triggered, this, &MainWindow::openOfflineSettings);
 
+    QAction *importPstAction = actions->addAction(QStringLiteral("import_pst"));
+    importPstAction->setText(i18nc("@action", "Import Outlook Data File..."));
+    importPstAction->setIcon(QIcon::fromTheme(QStringLiteral("document-import")));
+    connect(importPstAction, &QAction::triggered, this, [this] {
+        importPst(m_mailboxKey);
+    });
+    QAction *exportPstAction = actions->addAction(QStringLiteral("export_pst"));
+    exportPstAction->setText(i18nc("@action", "Export to Outlook Data File..."));
+    exportPstAction->setIcon(QIcon::fromTheme(QStringLiteral("document-export")));
+    connect(exportPstAction, &QAction::triggered, this, [this] {
+        exportPst(m_mailboxKey, {});
+    });
+
+    QAction *openMessageAction = actions->addAction(QStringLiteral("open_message_file"));
+    openMessageAction->setText(i18nc("@action", "Open Message File..."));
+    openMessageAction->setIcon(QIcon::fromTheme(QStringLiteral("document-open")));
+    connect(openMessageAction, &QAction::triggered, this, [this] {
+        openMessageFile();
+    });
+    QAction *importMessagesAction = actions->addAction(QStringLiteral("import_message_files"));
+    importMessagesAction->setText(i18nc("@action", "Import Message Files..."));
+    importMessagesAction->setIcon(QIcon::fromTheme(QStringLiteral("document-import")));
+    connect(importMessagesAction, &QAction::triggered, this, [this] {
+        importMessageFiles(m_mailboxKey, m_folders->currentIndex().data(FolderModel::FolderIdRole).toLongLong());
+    });
+
     QAction *autoReplies = actions->addAction(QStringLiteral("automatic_replies"));
     autoReplies->setText(i18nc("@action", "Automatic Replies..."));
     autoReplies->setIcon(QIcon::fromTheme(QStringLiteral("mail-reply-sender")));
     connect(autoReplies, &QAction::triggered, this, [this] {
         openAutoReplies();
     });
+
+    KStandardAction::print(
+        this,
+        [this] {
+            printMessage();
+        },
+        actions);
+    KStandardAction::saveAs(
+        this,
+        [this] {
+            exportMessages(selectedMessages());
+        },
+        actions);
 
     QAction *fromTemplate = actions->addAction(QStringLiteral("new_from_template"));
     fromTemplate->setText(i18nc("@action", "New from Template..."));
@@ -873,6 +932,13 @@ void MainWindow::setupActions()
     mailboxSettings->setIcon(QIcon::fromTheme(QStringLiteral("preferences-system-time")));
     connect(mailboxSettings, &QAction::triggered, this, [this] {
         openMailboxSettings();
+    });
+
+    QAction *archiveFolderAction = actions->addAction(QStringLiteral("archive_folder"));
+    archiveFolderAction->setText(i18nc("@action", "Archive Folder..."));
+    archiveFolderAction->setIcon(QIcon::fromTheme(QStringLiteral("archive-insert")));
+    connect(archiveFolderAction, &QAction::triggered, this, [this] {
+        chooseArchiveFolder(m_mailboxKey);
     });
 
     QAction *rules = actions->addAction(QStringLiteral("rules"));
@@ -999,6 +1065,374 @@ void MainWindow::navigate(int module)
     default:
         break;
     }
+}
+
+void MainWindow::printMessage(const QString &pdfFile, const std::function<void(bool)> &done)
+{
+    qint64 message = m_reading->message();
+    if (message == 0) {
+        const QList<qint64> ids = selectedMessages();
+        message = ids.isEmpty() ? 0 : ids.constFirst();
+    }
+    const std::optional<MailboxInfo> box = m_mailboxes->mailbox(m_mailboxKey);
+    if (message == 0 || !box) {
+        if (done) {
+            done(false);
+        }
+        return;
+    }
+    Printing::printMessage(this, m_mailboxes->store(m_mailboxKey), m_mailboxes->blobs(m_mailboxKey), message, false,
+                           box->displayName.isEmpty() ? box->address : box->displayName, pdfFile, done);
+}
+
+void MainWindow::exportMessages(const QList<qint64> &messages, const QString &givenFile, const std::function<void(bool)> &done)
+{
+    Store *store = m_mailboxes->store(m_mailboxKey);
+    if (messages.isEmpty() || !store) {
+        if (done) {
+            done(false);
+        }
+        return;
+    }
+    const bool mbox = messages.size() > 1;
+    QString file = givenFile;
+    if (file.isEmpty()) {
+        const std::optional<MessageRow> first = store->message(messages.constFirst());
+        QString name = mbox ? m_folders->currentIndex().data(Qt::DisplayRole).toString() : (first ? first->subject : QString());
+        file = askExportFile(name, mbox);
+        if (file.isEmpty()) {
+            return;
+        }
+    }
+    runExport(m_mailboxKey, messages, file, mbox, done);
+}
+
+void MainWindow::exportFolder(const QString &mailboxKey, qint64 folder, const QString &file, const std::function<void(bool)> &done)
+{
+    Store *store = m_mailboxes->store(mailboxKey);
+    QList<qint64> ids;
+    std::optional<PageCursor> cursor;
+    while (store) {
+        const QList<ListRow> page = store->listPage(folder, cursor, 1000);
+        for (const ListRow &row : page) {
+            ids.append(row.id);
+        }
+        if (page.size() < 1000) {
+            break;
+        }
+        cursor = PageCursor{page.constLast().received, page.constLast().id};
+    }
+    // Oldest first, as mail programs read an mbox
+    std::reverse(ids.begin(), ids.end());
+    runExport(mailboxKey, ids, file, true, done);
+}
+
+QList<qint64> MainWindow::selectedMessageIds() const
+{
+    return selectedMessages();
+}
+
+QString MainWindow::askExportFile(QString name, bool mbox)
+{
+    // A file name from the subject or folder, without what file systems refuse
+    static const QRegularExpression unsafe(QStringLiteral("[/\\\\:*?\"<>|]"));
+    name.replace(unsafe, QStringLiteral("_"));
+    if (name.trimmed().isEmpty()) {
+        name = i18nc("@item file name of an exported message", "message");
+    }
+    if (mbox) {
+        return QFileDialog::getSaveFileName(this,
+                                            i18nc("@title:window", "Save Messages"),
+                                            QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QLatin1Char('/') + name + QStringLiteral(".mbox"),
+                                            i18nc("@item:inlistbox file type", "Mailbox file (*.mbox)"));
+    }
+    // One message: Outlook's .msg or the Internet's .eml, by the chosen type
+    const QString msgFilter = i18nc("@item:inlistbox file type", "Outlook message (*.msg)");
+    const QString emlFilter = i18nc("@item:inlistbox file type", "Mail message (*.eml)");
+    QString chosen = emlFilter;
+    QString file = QFileDialog::getSaveFileName(this,
+                                                i18nc("@title:window", "Save Message"),
+                                                QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QLatin1Char('/') + name + QStringLiteral(".eml"),
+                                                emlFilter + QStringLiteral(";;") + msgFilter,
+                                                &chosen);
+    if (!file.isEmpty() && chosen == msgFilter && !file.endsWith(QLatin1String(".msg"), Qt::CaseInsensitive)) {
+        if (file.endsWith(QLatin1String(".eml"), Qt::CaseInsensitive)) {
+            file.chop(4);
+        }
+        file += QStringLiteral(".msg");
+    }
+    return file;
+}
+
+void MainWindow::exportPst(const QString &mailboxKey, const QList<qint64> &folders, const QString &givenFile, const std::function<void(bool)> &done, bool itemsOnly)
+{
+    const std::optional<MailboxInfo> box = m_mailboxes->mailbox(mailboxKey);
+    if (!box || !m_mailboxes->store(mailboxKey)) {
+        if (done) {
+            done(false);
+        }
+        return;
+    }
+    QString file = givenFile;
+    if (file.isEmpty()) {
+        static const QRegularExpression unsafe(QStringLiteral("[/\\\\:*?\"<>|]"));
+        QString name = folders.size() == 1 ? m_mailboxes->store(mailboxKey)->folder(folders.first()).value_or(FolderRow()).name : box->label();
+        name.replace(unsafe, QStringLiteral("_"));
+        file = QFileDialog::getSaveFileName(this,
+                                            i18nc("@title:window", "Export to Outlook Data File"),
+                                            QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QLatin1Char('/') + name + QStringLiteral(".pst"),
+                                            i18nc("@item:inlistbox file type", "Outlook data file (*.pst)"));
+        if (file.isEmpty()) {
+            return;
+        }
+    }
+    auto *exporter = new PstExporter(m_mailboxes, m_daemon, mailboxKey, folders, file, this);
+    exporter->setItemsOnly(itemsOnly);
+    connect(exporter, &PstExporter::finished, this, [this, done](bool ok, int original, int rebuilt, int items, const QString &path, const QString &error) {
+        if (!ok) {
+            m_status->setText(error.isEmpty() ? i18nc("@info:status %1 a file", "Could not save %1.", path)
+                                              : i18nc("@info:status %1 a file, %2 the reason", "Could not save %1: %2", path, error));
+        } else {
+            QString text = rebuilt > 0 ? i18ncp("@info:status %2 a file",
+                                                "Saved in %2; %1 message was rebuilt from this computer's copy (Microsoft 365 did not answer).",
+                                                "Saved in %2; %1 messages were rebuilt from this computer's copy (Microsoft 365 did not answer).",
+                                                rebuilt,
+                                                path)
+                                       : i18ncp("@info:status %2 a file", "%1 message saved in %2.", "%1 messages saved in %2.", original, path);
+            if (items > 0) {
+                // Contacts, tasks and series are whole; single events: those on this computer
+                text += QLatin1Char(' ')
+                    + i18ncp("@info:status", "Also %1 contact, calendar item or task (calendar: the events this computer has).",
+                             "Also %1 contacts, calendar items and tasks (calendar: the events this computer has).", items);
+            }
+            m_status->setText(text);
+        }
+        if (done) {
+            done(ok);
+        }
+    });
+    exporter->start();
+}
+
+void MainWindow::importPst(const QString &mailboxKey, const QString &givenFile, bool merge, bool ask, const std::function<void(bool)> &done)
+{
+    const auto fail = [done] {
+        if (done) {
+            done(false);
+        }
+    };
+    const std::optional<MailboxInfo> box = m_mailboxes->mailbox(mailboxKey);
+    if (!box) {
+        fail();
+        return;
+    }
+    QString file = givenFile;
+    if (file.isEmpty()) {
+        file = QFileDialog::getOpenFileName(this,
+                                            i18nc("@title:window", "Import Outlook Data File"),
+                                            QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+                                            i18nc("@item:inlistbox file type", "Outlook data file (*.pst *.ost)"));
+        if (file.isEmpty()) {
+            return;
+        }
+    }
+    auto pst = std::make_shared<Pst::PstFile>();
+    QString error;
+    if (!pst->open(file, &error)) {
+        if (ask) {
+            KMessageBox::error(this, i18nc("@info %1 a file, %2 the reason", "%1 could not be opened as an Outlook data file: %2", file, error));
+        }
+        fail();
+        return;
+    }
+    // A password protects the file in Outlook's interface only (MS-PST 4.2), but it MUST be asked
+    if (const quint32 crc = pst->passwordCrc(); crc != 0) {
+        bool accepted = false;
+        const QString password = ask ? QInputDialog::getText(this, i18nc("@title:window", "Outlook Data File Password"),
+                                                             i18nc("@label:textbox %1 a file", "The password of %1:", file), QLineEdit::Password, {}, &accepted)
+                                     : QString();
+        if (!accepted || !PstImport::passwordMatches(password, crc)) {
+            if (accepted) {
+                KMessageBox::error(this, i18nc("@info", "The password is not correct."));
+            }
+            fail();
+            return;
+        }
+    }
+    QList<quint32> folders;
+    QHash<quint32, quint32> parents;
+    QString newFolder;
+    PstImportDialog dialog(pst.get(), file, box->label(), this);
+    if (ask) {
+        if (dialog.exec() != QDialog::Accepted) {
+            fail();
+            return;
+        }
+        newFolder = dialog.newFolderName();
+    } else {
+        newFolder = merge ? QString() : QFileInfo(file).completeBaseName();
+    }
+    folders = dialog.folders();
+    parents = dialog.parents();
+    auto *importer = new PstImporter(m_daemon, mailboxKey, pst, folders, parents, QStringLiteral("msgfolderroot"), newFolder, this);
+    connect(importer, &PstImporter::finished, this, [this, done, ask](bool ok, int imported, int skipped, int failed, const QStringList &log) {
+        const QString summary = i18ncp("@info %2 skipped, %3 failed", "%1 message imported; %2 left out, %3 failed.", "%1 messages imported; %2 left out, %3 failed.", imported,
+                                       skipped, failed);
+        m_status->setText(summary);
+        if (ask) {
+            if (log.isEmpty()) {
+                KMessageBox::information(this, summary, i18nc("@title:window", "Import Outlook Data File"));
+            } else {
+                KMessageBox::informationList(this, summary, log, i18nc("@title:window", "Import Outlook Data File"));
+            }
+        }
+        for (const QString &line : log) {
+            qWarning() << "pst import log:" << line;
+        }
+        if (done) {
+            done(ok);
+        }
+    });
+    importer->start();
+}
+
+QWidget *MainWindow::openMessageFile(const QString &givenFile)
+{
+    QString file = givenFile;
+    if (file.isEmpty()) {
+        file = QFileDialog::getOpenFileName(this,
+                                            i18nc("@title:window", "Open Message File"),
+                                            QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+                                            i18nc("@item:inlistbox file type", "Messages (*.msg *.eml)"));
+        if (file.isEmpty()) {
+            return nullptr;
+        }
+    }
+    QString shown = file;
+    QTemporaryDir *dir = nullptr;
+    if (file.endsWith(QLatin1String(".msg"), Qt::CaseInsensitive)) {
+        // Outlook's format: as MIME into KDE's message viewer, from a private temporary folder
+        dir = new QTemporaryDir(QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation)).filePath(QStringLiteral("graphmail-XXXXXX")));
+        shown = dir->filePath(QFileInfo(file).completeBaseName() + QStringLiteral(".eml"));
+        QString error;
+        if (!MimeMapi::msgToEml(file, shown, &error)) {
+            delete dir;
+            KMessageBox::error(this, i18nc("@info %1 a file, %2 the reason", "%1 could not be opened: %2", file, error));
+            return nullptr;
+        }
+    }
+    auto *viewer = new MimeTreeParser::Widgets::MessageViewerDialog(shown, this);
+    viewer->setAttribute(Qt::WA_DeleteOnClose);
+    if (dir) {
+        connect(viewer, &QObject::destroyed, this, [dir] {
+            delete dir;
+        });
+    }
+    viewer->show();
+    return viewer;
+}
+
+QWidget *MainWindow::showFileForTests(const QString &file)
+{
+    if (!file.endsWith(QLatin1String(".pst"), Qt::CaseInsensitive)) {
+        QWidget *viewer = openMessageFile(file);
+        if (viewer) {
+            viewer->resize(900, 700);
+        }
+        return viewer;
+    }
+    auto pst = std::make_shared<Pst::PstFile>();
+    QString error;
+    if (!pst->open(file, &error)) {
+        return nullptr;
+    }
+    const std::optional<MailboxInfo> box = m_mailboxes->mailbox(m_mailboxKey);
+    auto *dialog = new PstImportDialog(pst.get(), file, box ? box->label() : m_mailboxKey, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    // The file stays open as long as the dialog shows it
+    connect(dialog, &QObject::destroyed, this, [pst] {});
+    dialog->show();
+    return dialog;
+}
+
+void MainWindow::openFiles(const QStringList &files)
+{
+    for (const QString &file : files) {
+        const QString lower = file.toLower();
+        if (lower.endsWith(QLatin1String(".pst")) || lower.endsWith(QLatin1String(".ost"))) {
+            importPst(m_mailboxKey, file);
+        } else if (QFileInfo::exists(file)) {
+            openMessageFile(file);
+        }
+    }
+}
+
+void MainWindow::importMessageFiles(const QString &mailboxKey, qint64 folder, QStringList files, const std::function<void(bool)> &done)
+{
+    const Store *store = m_mailboxes->store(mailboxKey);
+    const std::optional<FolderRow> row = store && folder != 0 ? store->folder(folder) : std::nullopt;
+    if (!row) {
+        if (done) {
+            done(false);
+        }
+        return;
+    }
+    const bool ask = files.isEmpty();
+    if (ask) {
+        files = QFileDialog::getOpenFileNames(this,
+                                              i18nc("@title:window %1 a folder", "Import Message Files into %1", row->name),
+                                              QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+                                              i18nc("@item:inlistbox file type", "Messages (*.msg *.eml)"));
+        if (files.isEmpty()) {
+            return;
+        }
+    }
+    // The log is for people: tests (which pass done) read the journal instead
+    const bool showLog = ask || !done;
+    auto *importer = new MessageFileImporter(m_daemon, mailboxKey, files, row->graphId, this);
+    connect(importer, &MessageFileImporter::finished, this, [this, done, showLog](bool ok, int imported, int skipped, int failed, const QStringList &log) {
+        const QString summary = i18ncp("@info %2 skipped, %3 failed", "%1 message imported; %2 left out, %3 failed.", "%1 messages imported; %2 left out, %3 failed.", imported,
+                                       skipped, failed);
+        m_status->setText(summary);
+        if (showLog && !log.isEmpty()) {
+            KMessageBox::informationList(this, summary, log, i18nc("@title:window", "Import Message Files"));
+        }
+        for (const QString &line : log) {
+            qWarning() << "message import log:" << line;
+        }
+        if (done) {
+            done(ok);
+        }
+    });
+    importer->start();
+}
+
+void MainWindow::runExport(const QString &mailboxKey, const QList<qint64> &messages, const QString &file, bool mbox, const std::function<void(bool)> &done)
+{
+    if (messages.isEmpty()) {
+        if (done) {
+            done(false);
+        }
+        return;
+    }
+    auto *exporter = new MimeExporter(m_mailboxes, m_daemon, mailboxKey, messages, file, mbox, this);
+    connect(exporter, &MimeExporter::finished, this, [this, done](bool ok, int original, int rebuilt, const QString &path) {
+        if (!ok) {
+            m_status->setText(i18nc("@info:status %1 a file", "Could not save %1.", path));
+        } else if (rebuilt > 0) {
+            m_status->setText(i18ncp("@info:status %2 a file",
+                                     "Saved in %2; %1 message was rebuilt from this computer's copy (Microsoft 365 did not answer).",
+                                     "Saved in %2; %1 messages were rebuilt from this computer's copy (Microsoft 365 did not answer).",
+                                     rebuilt,
+                                     path));
+        } else {
+            m_status->setText(i18ncp("@info:status %2 a file", "%1 message saved in %2.", "%1 messages saved in %2.", original, path));
+        }
+        if (done) {
+            done(ok);
+        }
+    });
+    exporter->start();
 }
 
 void MainWindow::openInNewWindow(int module)
@@ -1292,7 +1726,24 @@ void MainWindow::folderMenu(const QPoint &pos)
         menu.addAction(QIcon::fromTheme(QStringLiteral("folder-saved-search")), i18nc("@action:inmenu", "New Search Folder..."), this, [this, key] {
             editSearchFolder(key, {}, {}, {});
         });
+        const qint64 folder = index.data(FolderModel::FolderIdRole).toLongLong();
+        const QString name = index.data(Qt::DisplayRole).toString();
+        menu.addAction(QIcon::fromTheme(QStringLiteral("document-export")), i18nc("@action:inmenu", "Export to mbox..."), this, [this, key, folder, name] {
+            if (const QString file = askExportFile(name, true); !file.isEmpty()) {
+                exportFolder(key, folder, file);
+            }
+        });
+        menu.addAction(QIcon::fromTheme(QStringLiteral("document-export")), i18nc("@action:inmenu", "Export to Outlook Data File..."), this, [this, key, folder] {
+            exportPst(key, {folder});
+        });
     } else if (const std::optional<MailboxInfo> box = m_mailboxes->mailbox(key); box && box->own && index.data(FolderModel::IsMailboxRole).toBool()) {
+        menu.addAction(QIcon::fromTheme(QStringLiteral("document-import")), i18nc("@action:inmenu", "Import Outlook Data File..."), this, [this, key] {
+            importPst(key);
+        });
+        menu.addAction(QIcon::fromTheme(QStringLiteral("document-export")), i18nc("@action:inmenu", "Export to Outlook Data File..."), this, [this, key] {
+            exportPst(key, {});
+        });
+        menu.addSeparator();
         // The own mailbox's photo, as Outlook's account picture
         menu.addAction(QIcon::fromTheme(QStringLiteral("camera-photo")), i18nc("@action:inmenu", "Change Photo..."), this, [this, key] {
             m_photos->change(this, key);
@@ -2063,14 +2514,93 @@ void MainWindow::moveToFolder()
     }
 }
 
-void MainWindow::archiveSelected()
+qint64 MainWindow::archiveFolder(const QString &mailboxKey) const
 {
-    const QModelIndex archive = m_folderModel->indexForWellKnown(m_mailboxKey, QStringLiteral("archive"));
-    if (!archive.isValid()) {
-        statusBar()->showMessage(i18nc("@info:status", "This mailbox has no Archive folder"), 5000);
+    const QString chosen = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("ArchiveFolder")).readEntry(mailboxKey, QString());
+    const Store *store = m_mailboxes->store(mailboxKey);
+    if (!chosen.isEmpty() && store) {
+        if (const std::optional<FolderRow> row = store->folderByGraphId(chosen)) {
+            return row->id;
+        }
+    }
+    const QModelIndex archive = m_folderModel->indexForWellKnown(mailboxKey, QStringLiteral("archive"));
+    return archive.isValid() ? archive.data(FolderModel::FolderIdRole).toLongLong() : 0;
+}
+
+void MainWindow::chooseArchiveFolder(const QString &mailboxKey, qint64 givenFolder, const std::function<void(bool)> &done)
+{
+    qint64 folder = givenFolder;
+    if (folder == 0) {
+        MoveDialog dialog(m_folderModel, mailboxKey, this);
+        dialog.setWindowTitle(i18nc("@title:window", "Archive Folder"));
+        if (dialog.exec() != QDialog::Accepted || dialog.folder() == 0) {
+            return;
+        }
+        folder = dialog.folder();
+    }
+    const Store *store = m_mailboxes->store(mailboxKey);
+    const std::optional<FolderRow> row = store ? store->folder(folder) : std::nullopt;
+    if (!row) {
+        if (done) {
+            done(false);
+        }
         return;
     }
-    const qint64 folder = archive.data(FolderModel::FolderIdRole).toLongLong();
+    const QString graphId = row->graphId;
+    const QString name = row->name;
+    const QJsonObject args{{QStringLiteral("folder"), graphId}};
+    m_daemon->query(mailboxKey.section(QLatin1Char('/'), 0, 0), mailboxKey.section(QLatin1Char('/'), 1), QStringLiteral("archiveFolderSet"),
+                    QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)), this, [this, mailboxKey, graphId, name, done](const QString &json) {
+                        const bool taken = QJsonDocument::fromJson(json.toUtf8()).object().value(QLatin1String("ok")).toBool();
+                        KConfigGroup group = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("ArchiveFolder"));
+                        if (taken) {
+                            // The mailbox knows it now, on every device: no local choice needed
+                            group.deleteEntry(mailboxKey);
+                            m_status->setText(i18nc("@info:status %1 a folder", "Archive moves messages to %1.", name));
+                        } else {
+                            group.writeEntry(mailboxKey, graphId);
+                            m_status->setText(i18nc("@info:status %1 a folder", "Archive moves messages to %1 (on this computer: Microsoft 365 did not take the setting).", name));
+                        }
+                        group.sync();
+                        if (done) {
+                            done(taken);
+                        }
+                    });
+}
+
+void MainWindow::archiveSelected()
+{
+    const qint64 folder = archiveFolder(m_mailboxKey);
+    if (folder == 0) {
+        // Outlook asks for one the first time; here: make "Archive" at the top of the mailbox
+        if (KMessageBox::questionTwoActions(this,
+                                            i18nc("@info", "This mailbox has no archive folder yet. Create a folder named Archive for it?"),
+                                            i18nc("@title:window", "Archive"),
+                                            KGuiItem(i18nc("@action:button", "Create Archive Folder"), QStringLiteral("folder-new")),
+                                            KStandardGuiItem::cancel())
+            != KMessageBox::PrimaryAction) {
+            return;
+        }
+        const QString key = m_mailboxKey;
+        const QJsonObject args{{QStringLiteral("parent"), QStringLiteral("msgfolderroot")}, {QStringLiteral("name"), i18nc("@item folder name", "Archive")}};
+        m_daemon->query(key.section(QLatin1Char('/'), 0, 0), key.section(QLatin1Char('/'), 1), QStringLiteral("folderCreate"),
+                        QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)), this, [this, key](const QString &json) {
+                            const QJsonObject answer = QJsonDocument::fromJson(json.toUtf8()).object();
+                            if (!answer.value(QLatin1String("ok")).toBool()) {
+                                m_status->setText(i18nc("@info:status %1 the reason", "The Archive folder could not be made: %1", answer.value(QLatin1String("detail")).toString()));
+                                return;
+                            }
+                            // Kept on this computer at once; the mailbox setting is tried as well
+                            KConfigGroup group = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("ArchiveFolder"));
+                            group.writeEntry(key, answer.value(QLatin1String("id")).toString());
+                            group.sync();
+                            const QJsonObject set{{QStringLiteral("folder"), answer.value(QLatin1String("id")).toString()}};
+                            m_daemon->query(key.section(QLatin1Char('/'), 0, 0), key.section(QLatin1Char('/'), 1), QStringLiteral("archiveFolderSet"),
+                                            QString::fromUtf8(QJsonDocument(set).toJson(QJsonDocument::Compact)), this, [](const QString &) {});
+                            m_status->setText(i18nc("@info:status", "The Archive folder was made; Archive works as soon as it appears in the folder list."));
+                        });
+        return;
+    }
     if (folder != m_folder) {
         moveSelected(folder);
     }

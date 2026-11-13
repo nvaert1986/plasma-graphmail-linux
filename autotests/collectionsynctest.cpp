@@ -310,6 +310,13 @@ private Q_SLOTS:
             if (target.startsWith(QLatin1String("/v1.0/me/mailFolders/inbox"))) {
                 return jsonReply(200, R"({"id":"A"})");
             }
+            // The alias names the default Archive; the mailbox setting another folder, which wins
+            if (target.startsWith(QLatin1String("/v1.0/me/mailFolders/archive"))) {
+                return jsonReply(200, R"({"id":"C"})");
+            }
+            if (target.startsWith(QLatin1String("/v1.0/me/mailboxSettings"))) {
+                return jsonReply(200, R"({"archiveFolder":"B"})");
+            }
             return jsonReply(404, R"({"error":{"code":"ErrorFolderNotFound"}})");
         };
         FolderTreeSync sync(&ctx);
@@ -319,7 +326,9 @@ private Q_SLOTS:
         QCOMPARE(store->folders().size(), 3);
         QCOMPARE(store->folderByWellKnown(QStringLiteral("inbox"))->graphId, QStringLiteral("A"));
         QCOMPARE(store->folderByGraphId(QStringLiteral("C"))->parentGraphId, QStringLiteral("B"));
-        QCOMPARE(store->meta(QStringLiteral("well_known")), QStringLiteral("2"));
+        QCOMPARE(store->folderByWellKnown(QStringLiteral("archive"))->graphId, QStringLiteral("B"));
+        QCOMPARE(store->folderByGraphId(QStringLiteral("C"))->wellKnown, QString());
+        QCOMPARE(store->meta(QStringLiteral("well_known")), QStringLiteral("3"));
 
         // A count change (the case Graph's folder delta does not report) and a removal
         result = runSync(sync);

@@ -52,6 +52,21 @@ target_sources(graphmailcore PRIVATE
     graphmailcore/itemqueue.cpp
     graphmailcore/mailboxaccess.cpp
     graphmailcore/mailboxsettings.cpp
+    graphmailcore/messageimport.cpp
+    graphmailcore/pst/psttables.cpp
+    graphmailcore/pst/pstalgorithms.cpp
+    graphmailcore/pst/pstndb.cpp
+    graphmailcore/pst/pstndbwriter.cpp
+    graphmailcore/pst/pstltp.cpp
+    graphmailcore/pst/pstltpwriter.cpp
+    graphmailcore/pst/pstmessaging.cpp
+    graphmailcore/pst/pstwriter.cpp
+    graphmailcore/pst/mapigraph.cpp
+    graphmailcore/pst/rtf.cpp
+    graphmailcore/pst/mapiitems.cpp
+    graphmailcore/pst/mapiitemsexport.cpp
+    graphmailcore/cfb/cfb.cpp
+    graphmailcore/msg/msgfile.cpp
     graphmailcore/mailboxworker.cpp
     graphmailcore/operationqueue.cpp
     graphmailcore/outboxengine.cpp
@@ -102,6 +117,11 @@ add_executable(plasma-graphmail-linux
     app/quicksteps.cpp
     app/shell.cpp
     app/profilephotos.cpp
+    app/printing.cpp
+    app/mimeexport.cpp
+    app/mimemapi.cpp
+    app/pstexport.cpp
+    app/pstimport.cpp
     app/categorylist.cpp
     app/calendarwindow.cpp
     app/composer.cpp
@@ -141,6 +161,7 @@ qt_add_resources(plasma-graphmail-linux "ui"
 target_link_libraries(plasma-graphmail-linux PRIVATE
     graphmailcore
     Qt6::Widgets
+    Qt6::PrintSupport
     Qt6::WebEngineWidgets
     Qt6::OpenGLWidgets
     Qt6::DBus
@@ -154,6 +175,7 @@ target_link_libraries(plasma-graphmail-linux PRIVATE
     KF6::WidgetsAddons
     KF6::XmlGui
     KPim6::MimeTreeParserWidgets
+    KPim6::Mime
     KPim6::Tnef
     KPim6::PimTextEdit
     KF6::CalendarCore

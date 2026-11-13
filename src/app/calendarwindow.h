@@ -51,6 +51,8 @@ public:
     void setWorkingHours(const WorkingHours &hours);
     void loadWorkingHours();
     // View > Second Time Zone (docs/PHASE9.md); tests: set without the dialog (empty = none)
+    // File > Print: the view shown (docs/PHASE9B.md); tests: into a PDF
+    void printView(const QString &pdfFile = {});
     void setSecondTimeZoneForTests(const QString &zone, const QString &label, const QString &ownLabel);
     // Opens an event (a reminder's Open, tests)
     void openEvent(const QString &mailboxKey, qint64 event);

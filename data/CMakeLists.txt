@@ -12,3 +12,10 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/io.github.nvaert1986.GraphMail.service
 
 configure_file(io.github.nvaert1986.graphmail.desktop.in ${CMAKE_CURRENT_BINARY_DIR}/io.github.nvaert1986.graphmail.desktop @ONLY)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/io.github.nvaert1986.graphmail.desktop DESTINATION ${KDE_INSTALL_APPDIR})
+
+# Outlook's file types (.msg, .pst, .ost), so they open here from the file manager
+install(FILES io.github.nvaert1986.graphmail-mime.xml DESTINATION ${KDE_INSTALL_MIMEDIR})
+find_package(SharedMimeInfo)
+if(SharedMimeInfo_FOUND)
+    update_xdg_mimetypes(${KDE_INSTALL_MIMEDIR})
+endif()

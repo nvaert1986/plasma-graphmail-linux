@@ -15,6 +15,8 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QTimer>
+#include <cmath>
+#include <QStyle>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
@@ -538,6 +540,54 @@ void TimeGridView::setEvents(QDate first, QDate last, const QList<DisplayEvent> 
 void TimeGridView::scrollToHour(int hour)
 {
     m_scroll->verticalScrollBar()->setValue(hour * hourHeight);
+}
+
+QPair<int, int> TimeGridView::printHours() const
+{
+    int from = 24;
+    int to = 0;
+    for (QDate day = m_first; day.isValid() && day <= m_last; day = day.addDays(1)) {
+        const QPair<double, double> work = m_workingHours.localHours(day);
+        if (work.second > work.first) {
+            from = std::min(from, int(work.first));
+            to = std::max(to, int(std::ceil(work.second)));
+        }
+    }
+    // An hour before and after, as Outlook prints a day
+    if (from >= to) {
+        return {7, 19};
+    }
+    return {std::max(0, from - 1), std::min(24, to + 1)};
+}
+
+void TimeGridView::printTo(QPainter *painter, const QRectF &target, int fromHour, int toHour)
+{
+    const QPalette before = palette();
+    const bool own = testAttribute(Qt::WA_SetPalette);
+    QPalette paper = QApplication::style()->standardPalette();
+    paper.setColor(QPalette::Base, Qt::white);
+    paper.setColor(QPalette::Window, Qt::white);
+    paper.setColor(QPalette::AlternateBase, QColor(0xf0, 0xf0, 0xf0));
+    paper.setColor(QPalette::Text, Qt::black);
+    paper.setColor(QPalette::WindowText, Qt::black);
+    setPalette(paper);
+    const int width = m_grid->width();
+    const int headerHeight = m_header->height();
+    const QRect hours(0, fromHour * hourHeight, width, (toHour - fromHour) * hourHeight);
+    const qreal scale = std::min(target.width() / width, target.height() / (headerHeight + hours.height()));
+    painter->save();
+    painter->translate(target.topLeft());
+    painter->scale(scale, scale);
+    m_header->render(painter, QPoint(0, 0), QRegion(), QWidget::DrawChildren);
+    // The region's top-left lands at the offset: the hours right under the header
+    m_grid->render(painter, QPoint(0, headerHeight), QRegion(hours), QWidget::DrawChildren);
+    painter->restore();
+    if (own) {
+        setPalette(before);
+    } else {
+        setPalette(QPalette());
+        setAttribute(Qt::WA_SetPalette, false);
+    }
 }
 
 int TimeGridView::timeColumnWidth() const

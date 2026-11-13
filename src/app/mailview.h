@@ -43,6 +43,8 @@ public:
     void showBody(Store *store, BlobStore *blobs, qint64 message, bool allowRemote);
     // A plain page with this text (no body cached yet, errors)
     void showText(const QString &text);
+    // The body with Outlook's print header in front, black on white (docs/PHASE9B.md)
+    void showForPrinting(Store *store, BlobStore *blobs, qint64 message, bool allowRemote, const QString &headerHtml);
 
     // Whether the HTML refers to anything on the internet (images, style sheets, backgrounds)
     static bool hasRemoteContent(const QByteArray &html);

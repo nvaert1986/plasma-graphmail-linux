@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "taskswindow.h"
+#include "printing.h"
 #include "categorylist.h"
 #include "daemonclient.h"
 #include "graphmapper.h"
@@ -350,6 +351,12 @@ void TasksWindow::setupActions()
         });
     }
     // Close: the window it is in (the one application window when it is embedded)
+    KStandardAction::print(
+        this,
+        [this] {
+            printList();
+        },
+        actions);
     KStandardAction::close(
         this,
         [this] {
@@ -911,6 +918,12 @@ bool TasksWindow::categorizeForTests(const QString &mailboxKey, qint64 task, con
         return true;
     }
     return false;
+}
+
+void TasksWindow::printList(const QString &pdfFile)
+{
+    const QString title = m_lists->currentItem() ? m_lists->currentItem()->text(0) : windowTitle();
+    Printing::printHtml(this, title, Printing::treeHtml(m_tasks, title), pdfFile);
 }
 
 }

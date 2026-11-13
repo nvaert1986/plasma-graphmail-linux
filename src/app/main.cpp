@@ -32,10 +32,12 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QElapsedTimer>
+#include <QDir>
 #include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPointer>
+#include <QFileInfo>
 #include <QTimer>
 
 #include <memory>
@@ -75,6 +77,7 @@ int main(int argc, char **argv)
 
     QCommandLineParser parser;
     about.setupCommandLine(&parser);
+    parser.addPositionalArgument(QStringLiteral("files"), i18n("Outlook messages (.msg), mail files (.eml) to show, or Outlook data files (.pst) to import"), QStringLiteral("[files...]"));
     parser.addOptions({
         {QStringLiteral("message"), i18n("Show this message (account/mailbox/id)"), QStringLiteral("spec")},
         {QStringLiteral("folder"), i18n("Open this folder (account/mailbox/folder id)"), QStringLiteral("path")},
@@ -172,6 +175,17 @@ int main(int argc, char **argv)
         {QStringLiteral("ignore-conversation"), i18n("With --select: ignore the message's conversation, or stop (off) (tests)"), QStringLiteral("on")},
         {QStringLiteral("reading-pane"), i18n("With --screenshot: right, bottom or off (tests)"), QStringLiteral("where")},
         {QStringLiteral("focus-tab"), i18n("With --folder on an Inbox: show Focused or Other (tests)"), QStringLiteral("tab")},
+        {QStringLiteral("export-file"), i18n("With --screenshot: save the selected message (--select) or the whole folder (--export-folder) into this file (tests)"), QStringLiteral("file")},
+        {QStringLiteral("export-folder"), i18n("With --export-file: the folder opened with --folder, as mbox (tests)")},
+        {QStringLiteral("export-pst"), i18n("With --screenshot and --folder: export that folder with its subfolders (or with --export-pst-mailbox the whole mailbox) to this Outlook data file (tests)"), QStringLiteral("file")},
+        {QStringLiteral("export-pst-mailbox"), i18n("With --export-pst: the whole mailbox of --folder (tests)")},
+        {QStringLiteral("export-pst-items"), i18n("With --export-pst: only the contacts, calendars and tasks of the mailbox of --folder (tests)")},
+        {QStringLiteral("import-pst"), i18n("With --screenshot and --folder: import this Outlook data file into the mailbox of --folder, in a new folder named after the file (tests)"), QStringLiteral("file")},
+        {QStringLiteral("import-pst-merge"), i18n("With --import-pst: into the mailbox's own folders (tests)")},
+        {QStringLiteral("archive-folder"), i18n("With --screenshot and --folder: make this folder id the mailbox's archive folder (tests)"), QStringLiteral("id")},
+        {QStringLiteral("show-file"), i18n("With --screenshot: show this .msg or .eml in the message viewer, or this .pst in the import dialog, and take the picture of that (tests)"), QStringLiteral("file")},
+        {QStringLiteral("import-messages"), i18n("With --screenshot and --folder: import these .msg or .eml files (comma separated) into that folder (tests)"), QStringLiteral("files")},
+        {QStringLiteral("print-pdf"), i18n("With --screenshot: print the message shown, or the calendar, contacts or tasks opened, into this PDF (tests)"), QStringLiteral("file")},
         {QStringLiteral("flag-when"), i18n("With --select: flag the message today, tomorrow, thisweek, nextweek, none, complete or clear (tests)"), QStringLiteral("when")},
         {QStringLiteral("compose-save"), i18n("With --compose: save it as a draft, then quit (tests)")},
         {QStringLiteral("load-images"), i18n("With --screenshot: load internet content as if \"Load Images\" was clicked (tests)")},
@@ -255,7 +269,7 @@ int main(int argc, char **argv)
         openTask(parser.value(QStringLiteral("task")));
     }
     if (unique) {
-        QObject::connect(unique.get(), &KDBusService::activateRequested, window, [window, shell, openOutgoing, openEvent, openTask](const QStringList &arguments, const QString &) {
+        QObject::connect(unique.get(), &KDBusService::activateRequested, window, [window, shell, openOutgoing, openEvent, openTask](const QStringList &arguments, const QString &workingDirectory) {
             QCommandLineParser again;
             again.addOption({QStringLiteral("message"), QString(), QStringLiteral("spec")});
             again.addOption({QStringLiteral("outgoing"), QString(), QStringLiteral("spec")});
@@ -265,6 +279,11 @@ int main(int argc, char **argv)
             again.addOption({QStringLiteral("contacts"), QString()});
             again.addOption({QStringLiteral("tasks"), QString()});
             again.parse(arguments);
+            // Files from the file manager, relative to where that start was made
+            QStringList files;
+            for (const QString &file : again.positionalArguments()) {
+                files.append(QDir(workingDirectory).absoluteFilePath(file));
+            }
             if (again.isSet(QStringLiteral("message"))) {
                 openMessage(window, again.value(QStringLiteral("message")));
             }
@@ -287,6 +306,7 @@ int main(int argc, char **argv)
             shell->show();
             shell->raise();
             shell->activateWindow();
+            window->openFiles(files);
         });
     }
 
@@ -410,16 +430,16 @@ int main(int argc, char **argv)
                 shown = dialog;
                 if (spec == QLatin1String("show")) {
                     // Graph's answer comes through the daemon: wait for it (at most 10 s)
-                    bool loaded = false;
-                    QObject::connect(dialog, &GraphMail::AutoRepliesDialog::loadedForTests, dialog, [&loaded] {
-                        loaded = true;
+                    const auto loaded = std::make_shared<bool>(false);
+                    QObject::connect(dialog, &GraphMail::AutoRepliesDialog::loadedForTests, dialog, [loaded] {
+                        *loaded = true;
                     }, Qt::SingleShotConnection);
                     QElapsedTimer waited;
                     waited.start();
-                    while (!loaded && waited.elapsed() < 10000) {
+                    while (!*loaded && waited.elapsed() < 10000) {
                         QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
                     }
-                    qWarning() << "auto replies test: loaded" << loaded;
+                    qWarning() << "auto replies test: loaded" << *loaded;
                 } else {
                     const bool scheduled = spec.startsWith(QLatin1String("scheduled|"));
                     const QString kind = scheduled ? spec.section(QLatin1Char('|'), 0, 2) : spec.section(QLatin1Char('|'), 0, 0);
@@ -433,17 +453,17 @@ int main(int argc, char **argv)
         if (parser.isSet(QStringLiteral("mailbox-settings"))) {
             GraphMail::MailboxSettingsDialog *dialog = window->openMailboxSettings(parser.value(QStringLiteral("settings-mailbox")));
             shown = dialog;
-            bool loaded = false;
-            QObject::connect(dialog, &GraphMail::MailboxSettingsDialog::loadedForTests, dialog, [&loaded] {
-                loaded = true;
+            const auto loaded = std::make_shared<bool>(false);
+            QObject::connect(dialog, &GraphMail::MailboxSettingsDialog::loadedForTests, dialog, [loaded] {
+                *loaded = true;
             }, Qt::SingleShotConnection);
             QElapsedTimer waited;
             waited.start();
-            while (!loaded && waited.elapsed() < 15000) {
+            while (!*loaded && waited.elapsed() < 15000) {
                 QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
             }
             const QString spec = parser.value(QStringLiteral("mailbox-settings"));
-            if (loaded && spec.startsWith(QLatin1String("hours|"))) {
+            if (*loaded && spec.startsWith(QLatin1String("hours|"))) {
                 dialog->saveHoursForTests(spec.section(QLatin1Char('|'), 1, 1), spec.section(QLatin1Char('|'), 2, 2), spec.section(QLatin1Char('|'), 3, 3));
                 waited.restart();
                 while (waited.elapsed() < 8000) {
@@ -462,16 +482,16 @@ int main(int argc, char **argv)
             shown = dialog;
             // Graph's answers come through the daemon: wait for the list, run the action, wait again
             auto waitLoaded = [dialog] {
-                bool loaded = false;
-                QObject::connect(dialog, &GraphMail::RulesDialog::loadedForTests, dialog, [&loaded] {
-                    loaded = true;
+                const auto loaded = std::make_shared<bool>(false);
+                QObject::connect(dialog, &GraphMail::RulesDialog::loadedForTests, dialog, [loaded] {
+                    *loaded = true;
                 }, Qt::SingleShotConnection);
                 QElapsedTimer waited;
                 waited.start();
-                while (!loaded && waited.elapsed() < 15000) {
+                while (!*loaded && waited.elapsed() < 15000) {
                     QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
                 }
-                return loaded;
+                return *loaded;
             };
             qWarning() << "rules test: loaded" << waitLoaded();
             const QString spec = parser.value(QStringLiteral("rules"));
@@ -732,6 +752,78 @@ int main(int argc, char **argv)
         if (parser.isSet(QStringLiteral("focus-move")) || parser.isSet(QStringLiteral("junk")) || parser.isSet(QStringLiteral("ignore-conversation"))) {
             window->reading9ForTests(parser.value(QStringLiteral("focus-move")), parser.value(QStringLiteral("junk")), parser.value(QStringLiteral("ignore-conversation")));
         }
+        if (parser.isSet(QStringLiteral("export-file"))) {
+            const auto finished = std::make_shared<int>(-1);
+            auto done = [finished](bool ok) {
+                *finished = ok ? 1 : 0;
+            };
+            const QString file = parser.value(QStringLiteral("export-file"));
+            if (parser.isSet(QStringLiteral("export-folder"))) {
+                const QString path = parser.value(QStringLiteral("folder"));
+                window->exportFolder(path.section(QLatin1Char('/'), 0, 1), path.section(QLatin1Char('/'), 2).toLongLong(), file, done);
+            } else {
+                window->exportMessages(window->selectedMessageIds(), file, done);
+            }
+            // Each message is asked of the daemon first: wait (at most 60 s)
+            QElapsedTimer waited;
+            waited.start();
+            while (*finished < 0 && waited.elapsed() < 60000) {
+                QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+            }
+            qWarning() << "export test: done" << *finished;
+        }
+        if (parser.isSet(QStringLiteral("export-pst")) || parser.isSet(QStringLiteral("import-pst")) || parser.isSet(QStringLiteral("import-messages"))
+            || parser.isSet(QStringLiteral("archive-folder"))) {
+            const auto finished = std::make_shared<int>(-1);
+            auto done = [finished](bool ok) {
+                *finished = ok ? 1 : 0;
+            };
+            const QString path = parser.value(QStringLiteral("folder"));
+            const QString key = path.section(QLatin1Char('/'), 0, 1);
+            if (parser.isSet(QStringLiteral("export-pst"))) {
+                const bool items = parser.isSet(QStringLiteral("export-pst-items"));
+                const QList<qint64> folders = parser.isSet(QStringLiteral("export-pst-mailbox")) || items ? QList<qint64>() : QList<qint64>{path.section(QLatin1Char('/'), 2).toLongLong()};
+                window->exportPst(key, folders, parser.value(QStringLiteral("export-pst")), done, items);
+            } else if (parser.isSet(QStringLiteral("archive-folder"))) {
+                window->chooseArchiveFolder(key, parser.value(QStringLiteral("archive-folder")).toLongLong(), done);
+            } else if (parser.isSet(QStringLiteral("import-messages"))) {
+                window->importMessageFiles(key, path.section(QLatin1Char('/'), 2).toLongLong(), parser.value(QStringLiteral("import-messages")).split(QLatin1Char(',')), done);
+            } else {
+                window->importPst(key, parser.value(QStringLiteral("import-pst")), parser.isSet(QStringLiteral("import-pst-merge")), false, done);
+            }
+            // Messages go through the daemon one at a time: wait (at most 10 minutes)
+            QElapsedTimer waited;
+            waited.start();
+            while (*finished < 0 && waited.elapsed() < 600000) {
+                QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+            }
+            qWarning() << "pst test: done" << *finished;
+        }
+        if (parser.isSet(QStringLiteral("print-pdf"))) {
+            const QString file = parser.value(QStringLiteral("print-pdf"));
+            if (calendar) {
+                calendar->printView(file);
+                qWarning() << "print test: calendar" << QFileInfo::exists(file);
+            } else if (contacts) {
+                contacts->printList(file);
+                qWarning() << "print test: contacts" << QFileInfo::exists(file);
+            } else if (tasks) {
+                tasks->printList(file);
+                qWarning() << "print test: tasks" << QFileInfo::exists(file);
+            } else {
+                // The message's page loads first: wait for it (at most 20 s)
+                const auto finished = std::make_shared<int>(-1);
+                window->printMessage(file, [finished](bool ok) {
+                    *finished = ok ? 1 : 0;
+                });
+                QElapsedTimer waited;
+                waited.start();
+                while (*finished < 0 && waited.elapsed() < 20000) {
+                    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+                }
+                qWarning() << "print test: message" << *finished;
+            }
+        }
         if (parser.isSet(QStringLiteral("flag-when"))) {
             window->flagSelected(parser.value(QStringLiteral("flag-when")));
             qWarning() << "flag test:" << parser.value(QStringLiteral("flag-when"));
@@ -740,6 +832,11 @@ int main(int argc, char **argv)
             if (QWidget *message = window->openSelectedMessage()) {
                 message->resize(900, 700);
                 shown = message;
+            }
+        }
+        if (parser.isSet(QStringLiteral("show-file"))) {
+            if (QWidget *w = window->showFileForTests(parser.value(QStringLiteral("show-file")))) {
+                shown = w;
             }
         }
         // A saved dialog is gone by then: the window behind it instead
@@ -761,5 +858,15 @@ int main(int argc, char **argv)
         return app.exec();
     }
     shell->show();
+    if (const QStringList files = parser.positionalArguments(); !files.isEmpty()) {
+        QStringList absolute;
+        for (const QString &file : files) {
+            absolute.append(QFileInfo(file).absoluteFilePath());
+        }
+        // After the window is up, as when the file manager hands them to a running copy
+        QTimer::singleShot(0, window, [window, absolute] {
+            window->openFiles(absolute);
+        });
+    }
     return app.exec();
 }

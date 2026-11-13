@@ -251,8 +251,9 @@ void FolderTreeSync::start()
 
 void FolderTreeSync::resolveWellKnown()
 {
-    // v2 (2026-11-11): also the folders Graph Mail hides like Outlook (conversation history, sync issues)
-    if (m_ctx->store->meta(QStringLiteral("well_known")) == QLatin1String("2")) {
+    // v2 (2026-11-11): also the folders Graph Mail hides like Outlook (conversation history, sync
+    // issues); v3 (2026-11-13): the archive folder from the mailbox setting
+    if (m_ctx->store->meta(QStringLiteral("well_known")) == QLatin1String("3")) {
         finish(m_result);
         return;
     }
@@ -288,13 +289,33 @@ void FolderTreeSync::resolveWellKnown()
                 *complete = false;
             }
             if (--*pending == 0) {
-                if (*complete) {
-                    m_ctx->store->setMeta(QStringLiteral("well_known"), QStringLiteral("2"));
-                }
-                finish(m_result);
+                resolveArchiveSetting(*complete);
             }
         });
     }
+}
+
+void FolderTreeSync::resolveArchiveSetting(bool complete)
+{
+    // The "archive" alias always names the default Archive folder; Outlook's Archive button uses
+    // mailboxSettings.archiveFolder, which may name another (9b.3, tested live 2026-11-13). Without
+    // access to the settings (a shared mailbox) the alias stays.
+    GraphRequest *request = m_ctx->client->start({"GET", m_ctx->root + QStringLiteral("/mailboxSettings?$select=archiveFolder"), {}, {}, true, nullptr});
+    connect(request, &GraphRequest::finished, this, [this, request, complete] {
+        const GraphResponse response = request->response();
+        request->deleteLater();
+        const QString id = response.ok() ? response.json().value(QLatin1String("archiveFolder")).toString() : QString();
+        if (!id.isEmpty() && m_ctx->store->folderByGraphId(id)) {
+            if (const std::optional<FolderRow> old = m_ctx->store->folderByWellKnown(QStringLiteral("archive")); old && old->graphId != id) {
+                m_ctx->store->setFolderWellKnown(old->graphId, QString());
+            }
+            m_ctx->store->setFolderWellKnown(id, QStringLiteral("archive"));
+        }
+        if (complete && response.status < 500 && response.status != 0) {
+            m_ctx->store->setMeta(QStringLiteral("well_known"), QStringLiteral("3"));
+        }
+        finish(m_result);
+    });
 }
 
 // --- MailFolderSync -------------------------------------------------------------------------

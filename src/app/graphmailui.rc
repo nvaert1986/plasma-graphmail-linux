@@ -1,11 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<gui name="plasma-graphmail-linux" version="20"
+<gui name="plasma-graphmail-linux" version="23"
      xmlns="http://www.kde.org/standards/kxmlgui/1.0"
      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
      xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0 http://www.kde.org/standards/kxmlgui/1.0/kxmlgui.xsd">
   <MenuBar>
+    <Menu name="file">
+      <Action name="open_message_file"/>
+      <Action name="import_message_files"/>
+      <Action name="import_pst"/>
+      <Action name="export_pst"/>
+    </Menu>
     <Menu name="message">
       <text>&amp;Message</text>
       <Action name="new_message"/>
@@ -47,6 +53,7 @@
       <Action name="automatic_replies" append="configure_merge"/>
       <Action name="rules" append="configure_merge"/>
       <Action name="mailbox_settings" append="configure_merge"/>
+      <Action name="archive_folder" append="configure_merge"/>
       <Action name="undo_send" append="configure_merge"/>
       <Action name="mailboxes" append="configure_merge"/>
       <Action name="offline_settings" append="configure_merge"/>

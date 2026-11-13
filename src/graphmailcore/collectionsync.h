@@ -127,6 +127,7 @@ public:
 private:
     void start() override;
     void resolveWellKnown();
+    void resolveArchiveSetting(bool complete);
 
     SyncResult m_result;
     QSet<QString> m_seen;

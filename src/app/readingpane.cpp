@@ -35,6 +35,7 @@
 #include <KIO/JobUiDelegateFactory>
 #include <KIO/OpenUrlJob>
 #include <MimeTreeParserWidgets/MessageViewerDialog>
+#include "mimemapi.h"
 #include <QCoreApplication>
 #include <QWebEnginePage>
 
@@ -605,6 +606,16 @@ void ReadingPane::runPending(qint64 attachment)
         file.close();
         file.setPermissions(QFileDevice::ReadOwner);
         const QString name = QFileInfo(path).fileName();
+        // An Outlook message: as MIME into the same viewer
+        if (name.endsWith(QLatin1String(".msg"), Qt::CaseInsensitive)) {
+            QString error;
+            if (MimeMapi::msgToEml(path, path + QStringLiteral(".eml"), &error)) {
+                auto *viewer = new MimeTreeParser::Widgets::MessageViewerDialog(path + QStringLiteral(".eml"), this);
+                viewer->setAttribute(Qt::WA_DeleteOnClose);
+                viewer->show();
+                return;
+            }
+        }
         // An attached mail: KDE's mail viewer, inside Graph Mail (also signed or encrypted mail)
         if (name.endsWith(QLatin1String(".eml"), Qt::CaseInsensitive)) {
             auto *viewer = new MimeTreeParser::Widgets::MessageViewerDialog(path, this);

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "messagewindow.h"
+#include "printing.h"
 #include "composer.h"
 #include "daemonclient.h"
 #include "foldermodel.h"
@@ -103,6 +104,15 @@ QString MessageWindow::mailbox() const
 
 void MessageWindow::setupActions()
 {
+    // File > Print, as from the main window (docs/PHASE9B.md)
+    KStandardAction::print(
+        this,
+        [this] {
+            const std::optional<MailboxInfo> box = m_mailboxes->mailbox(m_mailboxKey);
+            Printing::printMessage(this, m_mailboxes->store(m_mailboxKey), m_mailboxes->blobs(m_mailboxKey), m_message, false,
+                                   box ? (box->displayName.isEmpty() ? box->address : box->displayName) : QString());
+        },
+        actionCollection());
     KActionCollection *actions = actionCollection();
 
     QAction *markUnread = actions->addAction(QStringLiteral("mark_unread"));

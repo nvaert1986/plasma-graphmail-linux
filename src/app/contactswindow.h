@@ -30,6 +30,8 @@ class ContactsWindow : public KXmlGuiWindow
     Q_OBJECT
 
 public:
+    // File > Print: the list shown (docs/PHASE9B.md); tests: into a PDF
+    void printList(const QString &pdfFile = {});
     ContactsWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *parent = nullptr);
 
     // Tests: a new contact in the default folder of this mailbox, saved; the dialog

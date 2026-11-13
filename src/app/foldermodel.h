@@ -75,6 +75,8 @@ public:
 Q_SIGNALS:
     // Messages dropped on a folder of the same mailbox
     void moveRequested(const QString &mailboxKey, qint64 folder, const QList<qint64> &messages);
+    // .msg or .eml files dropped on a mail folder: an import
+    void filesDropped(const QString &mailboxKey, qint64 folder, const QStringList &files);
 
 private:
     struct Node {

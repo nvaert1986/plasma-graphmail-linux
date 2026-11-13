@@ -12,6 +12,7 @@
 #include <QHash>
 #include <QIcon>
 #include <QMimeData>
+#include <QUrl>
 
 namespace GraphMail
 {
@@ -332,17 +333,43 @@ Qt::ItemFlags FolderModel::flags(const QModelIndex &index) const
 
 QStringList FolderModel::mimeTypes() const
 {
-    return {MessageListModel::mimeType()};
+    return {MessageListModel::mimeType(), QStringLiteral("text/uri-list")};
 }
 
 Qt::DropActions FolderModel::supportedDropActions() const
 {
-    return Qt::MoveAction;
+    // Move for messages from the list, copy for files from the file manager
+    return Qt::MoveAction | Qt::CopyAction;
+}
+
+namespace
+{
+// Local .msg and .eml files among dropped URLs; empty when anything else is there
+QStringList messageFiles(const QMimeData *data)
+{
+    QStringList files;
+    for (const QUrl &url : data->urls()) {
+        const QString path = url.toLocalFile();
+        if (!url.isLocalFile() || !(path.endsWith(QLatin1String(".msg"), Qt::CaseInsensitive) || path.endsWith(QLatin1String(".eml"), Qt::CaseInsensitive))) {
+            return {};
+        }
+        files.append(path);
+    }
+    return files;
+}
 }
 
 bool FolderModel::canDropMimeData(const QMimeData *data, Qt::DropAction, int, int, const QModelIndex &parent) const
 {
-    if (!parent.isValid() || !data->hasFormat(MessageListModel::mimeType())) {
+    if (!parent.isValid()) {
+        return false;
+    }
+    if (data->hasUrls() && !data->hasFormat(MessageListModel::mimeType())) {
+        // Message files go into any mail folder (an import, docs/PHASE9B.md)
+        const Node *node = nodeFor(parent);
+        return !node->isMailbox && node->folder != 0 && !messageFiles(data).isEmpty();
+    }
+    if (!data->hasFormat(MessageListModel::mimeType())) {
         return false;
     }
     const Node *node = nodeFor(parent);
@@ -354,6 +381,11 @@ bool FolderModel::canDropMimeData(const QMimeData *data, Qt::DropAction, int, in
 bool FolderModel::dropMimeData(const QMimeData *data, Qt::DropAction action, int row, int column, const QModelIndex &parent)
 {
     if (!canDropMimeData(data, action, row, column, parent)) {
+        return false;
+    }
+    if (data->hasUrls() && !data->hasFormat(MessageListModel::mimeType())) {
+        const Node *node = nodeFor(parent);
+        Q_EMIT filesDropped(node->mailboxKey, node->folder, messageFiles(data));
         return false;
     }
     const QStringList lines = QString::fromLatin1(data->data(MessageListModel::mimeType())).split(QLatin1Char('\n'));

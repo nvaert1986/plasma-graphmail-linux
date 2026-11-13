@@ -75,6 +75,13 @@ public:
         m_store = store;
         m_blobs = blobs;
         m_message = message;
+        m_printHeader.clear();
+    }
+
+    // Printing (docs/PHASE9B.md): this block goes in front of the body, on white paper colours
+    void setPrintHeader(const QString &html)
+    {
+        m_printHeader = html;
     }
 
     void requestStarted(QWebEngineUrlRequestJob *job) override
@@ -93,11 +100,17 @@ public:
                 job->fail(QWebEngineUrlRequestJob::UrlNotFound);
                 return;
             }
-            if (m->bodyType == 1) {
-                reply(job, QByteArrayLiteral("text/html;charset=utf-8"), *body);
-            } else {
-                reply(job, QByteArrayLiteral("text/html;charset=utf-8"), plainToHtml(QString::fromUtf8(*body)).toUtf8());
+            const bool printing = !m_printHeader.isEmpty();
+            QByteArray html = m->bodyType == 1 ? *body : plainToHtml(QString::fromUtf8(*body), printing).toUtf8();
+            if (printing) {
+                // Right after <body ...>, else at the start
+                static const QRegularExpression bodyTag(QStringLiteral("<body[^>]*>"), QRegularExpression::CaseInsensitiveOption);
+                QString page = QString::fromUtf8(html);
+                const QRegularExpressionMatch match = bodyTag.match(page);
+                page.insert(match.hasMatch() ? match.capturedEnd() : 0, m_printHeader);
+                html = page.toUtf8();
             }
+            reply(job, QByteArrayLiteral("text/html;charset=utf-8"), html);
             return;
         }
         // cid:image001.png@01DD658D.988833C0 (sometimes with <...> or percent-encoding)
@@ -121,8 +134,9 @@ public:
     }
 
 private:
-    // A text/plain body in the desktop's font and colours, web and mail addresses clickable
-    static QString plainToHtml(const QString &text)
+    // A text/plain body in the desktop's font and colours (black on white for paper), web and mail
+    // addresses clickable
+    static QString plainToHtml(const QString &text, bool printing = false)
     {
         static const QRegularExpression links(QStringLiteral("(https?://[^\\s<>\"']+|mailto:[^\\s<>\"']+)"));
         QString html = text.toHtmlEscaped();
@@ -130,12 +144,12 @@ private:
         const QPalette palette = QApplication::palette();
         return QStringLiteral("<html><body style=\"margin: 12px; background: %1; color: %2; font-family: '%3'; font-size: %4pt\">"
                               "<div style=\"white-space: pre-wrap; word-wrap: break-word\">%5</div><style>a { color: %6 }</style></body></html>")
-            .arg(palette.color(QPalette::Base).name(),
-                 palette.color(QPalette::Text).name(),
+            .arg(printing ? QStringLiteral("#ffffff") : palette.color(QPalette::Base).name(),
+                 printing ? QStringLiteral("#000000") : palette.color(QPalette::Text).name(),
                  QApplication::font().family(),
                  QString::number(QApplication::font().pointSizeF()),
                  html,
-                 palette.color(QPalette::Link).name());
+                 printing ? QStringLiteral("#0645ad") : palette.color(QPalette::Link).name());
     }
 
     static void reply(QWebEngineUrlRequestJob *job, const QByteArray &type, const QByteArray &data)
@@ -149,6 +163,7 @@ private:
     Store *m_store = nullptr;
     BlobStore *m_blobs = nullptr;
     qint64 m_message = 0;
+    QString m_printHeader;
 };
 
 // Runs on Chromium's IO thread: only an atomic flag
@@ -268,6 +283,13 @@ void MailView::showBody(Store *store, BlobStore *blobs, qint64 message, bool all
     m_profile->settings()->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls, allowRemote);
     // A new URL every time, so Chromium never serves an older page from memory
     load(QUrl(QStringLiteral("graphmail:body/%1/%2").arg(message).arg(++m_generation)));
+}
+
+void MailView::showForPrinting(Store *store, BlobStore *blobs, qint64 message, bool allowRemote, const QString &headerHtml)
+{
+    showBody(store, blobs, message, allowRemote);
+    // After showBody, which clears it: the next request of the page gets the header
+    m_handler->setPrintHeader(headerHtml);
 }
 
 void MailView::showText(const QString &text)

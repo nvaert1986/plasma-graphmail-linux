@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "calendarwindow.h"
+#include "printing.h"
 #include "calendarsharingdialog.h"
 #include "categorylist.h"
 #include "accesstext.h"
@@ -28,6 +29,9 @@
 #include <QInputDialog>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QApplication>
+#include <QPainter>
+#include <QPrinter>
 #include <QTimeZone>
 #include <QLineEdit>
 #include <QFormLayout>
@@ -365,6 +369,13 @@ void CalendarWindow::setupActions()
     colleague->setIcon(QIcon::fromTheme(QStringLiteral("resource-calendar-insert")));
     connect(colleague, &QAction::triggered, this, &CalendarWindow::openColleagueCalendar);
 
+    KStandardAction::print(
+        this,
+        [this] {
+            printView();
+        },
+        actions);
+
     // Close: the window it is in (the one application window when it is embedded)
     KStandardAction::close(
         this,
@@ -510,10 +521,38 @@ KConfigGroup CalendarWindow::calendarGroup()
     return KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("Calendar"));
 }
 
+void CalendarWindow::printView(const QString &pdfFile)
+{
+    const QString title = m_title->text();
+    Printing::print(
+        this,
+        title,
+        [this, title](QPainter *painter, QPrinter *printer) {
+            const QRectF page(QPointF(0, 0), printer->pageLayout().paintRectPixels(printer->resolution()).size());
+            QFont font = QApplication::font();
+            font.setBold(true);
+            font.setPixelSize(int(page.height() / 32));
+            painter->setFont(font);
+            painter->setPen(Qt::black);
+            const QRectF titleRect(page.left(), page.top(), page.width(), page.height() / 18);
+            painter->drawText(titleRect, Qt::AlignLeft | Qt::AlignVCenter, title);
+            const QRectF body(page.left(), titleRect.bottom() + page.height() / 80, page.width(), page.height() - titleRect.height() - page.height() / 80);
+            if (currentView() == m_grid) {
+                const auto [from, to] = m_grid->printHours();
+                m_grid->printTo(painter, body, from, to);
+            } else {
+                Printing::renderLight(currentView(), painter, body);
+            }
+        },
+        pdfFile);
+}
+
 void CalendarWindow::applySecondTimeZone()
 {
     const KConfigGroup group = calendarGroup();
-    const QTimeZone zone(group.readEntry("SecondTimeZone", QString()).toUtf8());
+    // No name, no second column (an empty name gives the local zone, a valid one)
+    const QString name = group.readEntry("SecondTimeZone", QString());
+    const QTimeZone zone = name.isEmpty() ? QTimeZone() : QTimeZone(name.toUtf8());
     QString label = group.readEntry("SecondTimeZoneLabel", QString());
     if (zone.isValid() && label.isEmpty()) {
         label = zone.displayName(QTimeZone::GenericTime, QTimeZone::ShortName);

@@ -4,7 +4,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 # The version follows the last finished phase (0.1.0 = phase 1), patch numbers for fixes
-project(plasma-graphmail-linux VERSION 0.8.0 LANGUAGES CXX)
+project(plasma-graphmail-linux VERSION 0.9.1 LANGUAGES CXX)
 
 # Same floor as plasma-onedrive-linux: the shared Graph library is built by both
 set(QT_MIN_VERSION "6.8.0")
@@ -24,13 +24,14 @@ include(FeatureSummary)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui Widgets Network NetworkAuth Concurrent Sql DBus OpenGLWidgets WebEngineWidgets Test)
+find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui Widgets Network NetworkAuth Concurrent Sql DBus OpenGLWidgets WebEngineWidgets PrintSupport Test)
 find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS Config ConfigWidgets CoreAddons DBusAddons I18n IconThemes KIO Notifications WidgetsAddons XmlGui)
 find_package(Qt6Keychain REQUIRED)
 # KDE PIM: attached mails (.eml) in KDE's mail viewer, Outlook's winmail.dat
 # MimeTreeParserCore links libkleo without finding it itself
 find_package(KPim6Libkleo REQUIRED)
 find_package(KPim6MimeTreeParserWidgets REQUIRED)
+find_package(KPim6Mime REQUIRED)
 find_package(KPim6Tnef REQUIRED)
 find_package(KPim6TextEdit REQUIRED)
 find_package(KF6CalendarCore REQUIRED)

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "mailboxworker.h"
+#include "messageimport.h"
 #include "blobstore.h"
 #include "bodyfetcher.h"
 #include "connectivity.h"
@@ -1305,6 +1306,213 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
                                                QStringLiteral("automaticReplies, mailboxFullStatus, maxMessageSize, externalMemberCount, totalMemberCount, "
                                                               "recipientScope, deliveryRestriction, moderationStatus")}})
                         .toJson(QJsonDocument::Compact);
+    } else if (kind == QLatin1String("messageMime")) {
+        // Export (docs/PHASE9B.md): the message as Exchange keeps it (MIME), written into "file";
+        // answered {"ok", "problem", "detail", "bytes"}
+        const std::optional<MessageRow> m = m_store ? m_store->message(args.value(QLatin1String("message")).toInteger()) : std::nullopt;
+        auto file = std::make_shared<QFile>(args.value(QLatin1String("file")).toString());
+        if (!m || !file->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            Q_EMIT queryAnswered(request, QStringLiteral("{\"ok\":false,\"problem\":\"error\"}"));
+            return;
+        }
+        spec.pathOrUrl = m_ctx.root + QStringLiteral("/messages/") + m->graphId + QStringLiteral("/$value");
+        spec.sink = file.get();
+        spec.maxAttempts = 2;
+        GraphCore::GraphRequest *r = m_client->start(spec);
+        connect(r, &GraphCore::GraphRequest::finished, this, [this, r, request, file] {
+            const GraphCore::GraphResponse response = r->response();
+            r->deleteLater();
+            const qint64 bytes = file->size();
+            file->close();
+            if (!response.ok()) {
+                file->remove();
+            }
+            const QJsonObject answer{{QStringLiteral("ok"), response.ok()},
+                                     {QStringLiteral("problem"), accessProblem(response)},
+                                     {QStringLiteral("detail"), response.ok() ? QString() : response.describe()},
+                                     {QStringLiteral("bytes"), bytes}};
+            Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
+        });
+        return;
+    } else if (kind == QLatin1String("importMessage")) {
+        // PST and .msg import (docs/PHASE9B.md): one message into the folder (graph id), from the
+        // request file the app wrote; answered {"ok", "problem", "detail", "id"}
+        auto *job = new MessageImport(m_client, m_ctx.root, args.value(QLatin1String("folder")).toString(), args.value(QLatin1String("file")).toString(), this);
+        job->setSkipDuplicates(args.value(QLatin1String("skipDuplicates")).toBool());
+        connect(job, &MessageImport::finished, this, [this, request](const QJsonObject &answer) {
+            Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
+        });
+        job->start();
+        return;
+    } else if (kind == QLatin1String("folderCreate")) {
+        // A mail folder under a parent (graph id or well-known name), for an import; an existing
+        // one of that name is used. Answered {"ok", "problem", "detail", "id"}
+        const QString parent = m_ctx.root + QStringLiteral("/mailFolders/") + args.value(QLatin1String("parent")).toString() + QStringLiteral("/childFolders");
+        const QString name = args.value(QLatin1String("name")).toString();
+        spec.verb = "POST";
+        spec.pathOrUrl = parent;
+        spec.headers.append({QByteArrayLiteral("Content-Type"), QByteArrayLiteral("application/json")});
+        spec.body = QJsonDocument(QJsonObject{{QStringLiteral("displayName"), name}}).toJson(QJsonDocument::Compact);
+        spec.maxAttempts = 2;
+        GraphCore::GraphRequest *r = m_client->start(spec);
+        connect(r, &GraphCore::GraphRequest::finished, this, [this, r, request, parent, name] {
+            const GraphCore::GraphResponse response = r->response();
+            r->deleteLater();
+            const auto reply = [this, request](const GraphCore::GraphResponse &res, const QString &id) {
+                const QJsonObject answer{{QStringLiteral("ok"), !id.isEmpty()},
+                                         {QStringLiteral("problem"), id.isEmpty() ? accessProblem(res) : QString()},
+                                         {QStringLiteral("detail"), id.isEmpty() ? res.describe() : QString()},
+                                         {QStringLiteral("id"), id}};
+                Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
+            };
+            if (response.status != 409) {
+                reply(response, response.ok() ? response.json().value(QLatin1String("id")).toString() : QString());
+                return;
+            }
+            // ErrorFolderExists: the folder of that name
+            GraphCore::GraphRequestSpec find;
+            QString quoted = name;
+            quoted.replace(QLatin1Char('\''), QStringLiteral("''"));
+            find.pathOrUrl = parent + QStringLiteral("?$select=id&$filter=")
+                + QString::fromLatin1(QUrl::toPercentEncoding(QStringLiteral("displayName eq '%1'").arg(quoted)));
+            find.headers = {GraphCore::Prefer::header({GraphCore::Prefer::immutableId()})};
+            GraphCore::GraphRequest *f = m_client->start(find);
+            connect(f, &GraphCore::GraphRequest::finished, this, [f, reply] {
+                const GraphCore::GraphResponse found = f->response();
+                f->deleteLater();
+                const QJsonArray value = found.json().value(QLatin1String("value")).toArray();
+                reply(found, found.ok() && !value.isEmpty() ? value.first().toObject().value(QLatin1String("id")).toString() : QString());
+            });
+        });
+        return;
+    } else if (kind == QLatin1String("archiveFolderSet")) {
+        // The mailbox's archive folder (docs/PHASE9B.md, 9b.3): mailboxSettings.archiveFolder. Graph
+        // does not list it as writable; when Exchange takes it the cache's well-known mapping
+        // follows at once. Answered {"ok", "problem", "detail"}
+        const QString id = args.value(QLatin1String("folder")).toString();
+        spec.verb = "PATCH";
+        spec.pathOrUrl = m_ctx.root + QStringLiteral("/mailboxSettings");
+        spec.headers.append({QByteArrayLiteral("Content-Type"), QByteArrayLiteral("application/json")});
+        spec.body = QJsonDocument(QJsonObject{{QStringLiteral("archiveFolder"), id}}).toJson(QJsonDocument::Compact);
+        spec.maxAttempts = 2;
+        GraphCore::GraphRequest *r = m_client->start(spec);
+        connect(r, &GraphCore::GraphRequest::finished, this, [this, r, request, id] {
+            const GraphCore::GraphResponse response = r->response();
+            r->deleteLater();
+            // Exchange may answer OK yet keep its own: only a returned archiveFolder counts
+            const bool taken = response.ok() && response.json().value(QLatin1String("archiveFolder")).toString() == id;
+            if (taken && m_store) {
+                if (const std::optional<FolderRow> old = m_store->folderByWellKnown(QStringLiteral("archive")); old && old->graphId != id) {
+                    m_store->setFolderWellKnown(old->graphId, QString());
+                }
+                m_store->setFolderWellKnown(id, QStringLiteral("archive"));
+                Q_EMIT collectionChanged(m_config.account, m_config.mailbox, QStringLiteral("tree"), 1);
+            }
+            const QJsonObject answer{{QStringLiteral("ok"), taken},
+                                     {QStringLiteral("problem"), taken ? QString() : accessProblem(response)},
+                                     {QStringLiteral("detail"), taken ? QString() : response.ok() ? QStringLiteral("not taken") : response.describe()}};
+            Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
+        });
+        return;
+    } else if (kind == QLatin1String("importItem")) {
+        // PST import of a contact, event or To Do task (docs/PHASE9B.md) into a container (graph
+        // id; empty: the default contacts or calendar). Answered {"ok", "problem", "detail", "id"}
+        const QString what = args.value(QLatin1String("kind")).toString();
+        const QString container = args.value(QLatin1String("container")).toString();
+        if (what == QLatin1String("contact")) {
+            spec.pathOrUrl = m_ctx.root + (container.isEmpty() ? QStringLiteral("/contacts") : QStringLiteral("/contactFolders/") + container + QStringLiteral("/contacts"));
+        } else if (what == QLatin1String("event")) {
+            spec.pathOrUrl = m_ctx.root + (container.isEmpty() ? QStringLiteral("/events") : QStringLiteral("/calendars/") + container + QStringLiteral("/events"));
+        } else if (what == QLatin1String("task") && !container.isEmpty()) {
+            spec.pathOrUrl = m_ctx.root + QStringLiteral("/todo/lists/") + container + QStringLiteral("/tasks");
+        } else {
+            Q_EMIT queryAnswered(request, QStringLiteral("{\"ok\":false,\"problem\":\"error\"}"));
+            return;
+        }
+        spec.verb = "POST";
+        spec.headers.append({QByteArrayLiteral("Content-Type"), QByteArrayLiteral("application/json")});
+        spec.body = QJsonDocument(args.value(QLatin1String("item")).toObject()).toJson(QJsonDocument::Compact);
+        spec.maxAttempts = 2;
+        GraphCore::GraphRequest *r = m_client->start(spec);
+        connect(r, &GraphCore::GraphRequest::finished, this, [this, r, request] {
+            const GraphCore::GraphResponse response = r->response();
+            r->deleteLater();
+            const QJsonObject answer{{QStringLiteral("ok"), response.ok()},
+                                     {QStringLiteral("problem"), accessProblem(response)},
+                                     {QStringLiteral("detail"), response.ok() ? QString() : response.describe()},
+                                     {QStringLiteral("id"), response.json().value(QLatin1String("id")).toString()}};
+            Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
+        });
+        return;
+    } else if (kind == QLatin1String("containerCreate") || kind == QLatin1String("defaultTaskList")) {
+        // A contact folder, calendar or To Do list for an import (an existing one of that name
+        // is used), or the mailbox's default To Do list. Answered {"ok", "problem", "detail", "id"}
+        const QString what = args.value(QLatin1String("kind")).toString();
+        const QString name = args.value(QLatin1String("name")).toString();
+        QString collection;
+        QString nameField = QStringLiteral("displayName");
+        if (kind == QLatin1String("defaultTaskList") || what == QLatin1String("task")) {
+            collection = m_ctx.root + QStringLiteral("/todo/lists");
+        } else if (what == QLatin1String("contact")) {
+            collection = m_ctx.root + QStringLiteral("/contactFolders");
+        } else if (what == QLatin1String("event")) {
+            collection = m_ctx.root + QStringLiteral("/calendars");
+            nameField = QStringLiteral("name");
+        } else {
+            Q_EMIT queryAnswered(request, QStringLiteral("{\"ok\":false,\"problem\":\"error\"}"));
+            return;
+        }
+        const bool findDefault = kind == QLatin1String("defaultTaskList");
+        const auto reply = [this, request](const GraphCore::GraphResponse &res, const QString &id) {
+            const QJsonObject answer{{QStringLiteral("ok"), !id.isEmpty()},
+                                     {QStringLiteral("problem"), id.isEmpty() ? accessProblem(res) : QString()},
+                                     {QStringLiteral("detail"), id.isEmpty() ? (res.ok() ? QStringLiteral("not found") : res.describe()) : QString()},
+                                     {QStringLiteral("id"), id}};
+            Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
+        };
+        // Looks the collection through for the default list or the one of that name
+        const auto find = [this, collection, nameField, name, findDefault, reply] {
+            GraphCore::GraphRequestSpec list;
+            list.pathOrUrl = collection + QStringLiteral("?$top=200");
+            list.headers = {GraphCore::Prefer::header({GraphCore::Prefer::immutableId()})};
+            GraphCore::GraphRequest *f = m_client->start(list);
+            connect(f, &GraphCore::GraphRequest::finished, this, [f, nameField, name, findDefault, reply] {
+                const GraphCore::GraphResponse found = f->response();
+                f->deleteLater();
+                const QJsonArray value = found.json().value(QLatin1String("value")).toArray();
+                for (const QJsonValue &v : value) {
+                    const QJsonObject o = v.toObject();
+                    const bool match = findDefault ? o.value(QLatin1String("wellknownListName")).toString() == QLatin1String("defaultList")
+                                                   : o.value(nameField).toString().compare(name, Qt::CaseInsensitive) == 0;
+                    if (match) {
+                        reply(found, o.value(QLatin1String("id")).toString());
+                        return;
+                    }
+                }
+                reply(found, QString());
+            });
+        };
+        if (findDefault) {
+            find();
+            return;
+        }
+        spec.verb = "POST";
+        spec.pathOrUrl = collection;
+        spec.headers.append({QByteArrayLiteral("Content-Type"), QByteArrayLiteral("application/json")});
+        spec.body = QJsonDocument(QJsonObject{{nameField, name}}).toJson(QJsonDocument::Compact);
+        spec.maxAttempts = 2;
+        GraphCore::GraphRequest *r = m_client->start(spec);
+        connect(r, &GraphCore::GraphRequest::finished, this, [r, find, reply] {
+            const GraphCore::GraphResponse response = r->response();
+            r->deleteLater();
+            // ErrorFolderExists and the like: the one that is there
+            if (response.status == 409 || (response.status == 400 && response.describe().contains(QLatin1String("Exist"), Qt::CaseInsensitive))) {
+                find();
+                return;
+            }
+            reply(response, response.ok() ? response.json().value(QLatin1String("id")).toString() : QString());
+        });
+        return;
     } else if (kind == QLatin1String("mailboxPhoto")) {
         // The mailbox's own photo (docs/PHASE9.md), as base64; empty when it has none (404)
         spec.pathOrUrl = m_ctx.root + QStringLiteral("/photos/96x96/$value");

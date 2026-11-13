@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "contactswindow.h"
+#include "printing.h"
 #include "categorylist.h"
 #include "avatar.h"
 #include "composer.h"
@@ -277,6 +278,12 @@ void ContactsWindow::setupActions()
         });
     }
     // Close: the window it is in (the one application window when it is embedded)
+    KStandardAction::print(
+        this,
+        [this] {
+            printList();
+        },
+        actions);
     KStandardAction::close(
         this,
         [this] {
@@ -757,6 +764,12 @@ bool ContactsWindow::categorizeForTests(const QString &mailboxKey, qint64 contac
     }
     setContactCategory({mailboxKey, item->id, item->parent, QJsonDocument::fromJson(item->json.toUtf8()).object()}, name, on);
     return true;
+}
+
+void ContactsWindow::printList(const QString &pdfFile)
+{
+    const QString title = m_sources->currentItem() ? m_sources->currentItem()->text(0) : windowTitle();
+    Printing::printHtml(this, title, Printing::treeHtml(m_list, title), pdfFile);
 }
 
 }

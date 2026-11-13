@@ -11,6 +11,7 @@
 
 #include <QWidget>
 
+class QPainter;
 class QScrollArea;
 class QTreeWidget;
 
@@ -53,6 +54,11 @@ public:
     // A second time zone (docs/PHASE9.md): its hours in a column of their own, as Outlook's;
     // an invalid zone takes it away
     void setSecondTimeZone(const QTimeZone &zone, const QString &label, const QString &ownLabel);
+    // Printing (docs/PHASE9B.md): the day headers and the hours fromHour..toHour, scaled into the
+    // rectangle, on paper colours
+    void printTo(QPainter *painter, const QRectF &target, int fromHour, int toHour);
+    // The working day of the first day shown, for the hours to print
+    QPair<int, int> printHours() const;
 
 private:
     class Header;

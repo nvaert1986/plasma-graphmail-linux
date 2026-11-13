@@ -161,6 +161,78 @@ private Q_SLOTS:
         worker.stop();
     }
 
+    // Imports (docs/PHASE9B.md): containers made or found, the default To Do list, items posted to
+    // the right collection, mail folders found on 409, the archive folder only when Exchange keeps it
+    void importQueries()
+    {
+        FakeGraphServer server;
+        server.handler = [](const FakeRequest &r) {
+            const QByteArray t = r.target;
+            if (r.verb == "POST" && t.endsWith("/users/abc/contactFolders")) {
+                return jsonReply(409, R"({"error":{"code":"ErrorFolderExists","message":"exists"}})");
+            }
+            if (r.verb == "GET" && t.contains("/users/abc/contactFolders?")) {
+                return jsonReply(200, R"({"value":[{"id":"CF0","displayName":"Other"},{"id":"CF1","displayName":"example - contacts"}]})");
+            }
+            if (r.verb == "POST" && t.endsWith("/users/abc/calendars")) {
+                return jsonReply(201, R"({"id":"CAL1"})");
+            }
+            if (r.verb == "GET" && t.contains("/users/abc/todo/lists")) {
+                return jsonReply(200, R"({"value":[{"id":"L0","wellknownListName":"none"},{"id":"L1","wellknownListName":"defaultList"}]})");
+            }
+            if (r.verb == "POST" && (t.endsWith("/users/abc/contactFolders/CF1/contacts") || t.endsWith("/users/abc/events") || t.endsWith("/users/abc/todo/lists/L1/tasks"))) {
+                return jsonReply(201, R"({"id":"NEW"})");
+            }
+            if (r.verb == "POST" && t.endsWith("/users/abc/mailFolders/msgfolderroot/childFolders")) {
+                return jsonReply(409, R"({"error":{"code":"ErrorFolderExists","message":"exists"}})");
+            }
+            if (r.verb == "GET" && t.contains("/users/abc/mailFolders/msgfolderroot/childFolders?")) {
+                return jsonReply(200, R"({"value":[{"id":"F1"}]})");
+            }
+            if (r.verb == "PATCH" && t.endsWith("/users/abc/mailboxSettings")) {
+                // Exchange answering OK but keeping its own folder
+                return jsonReply(200, R"({"archiveFolder":"OLD"})");
+            }
+            return jsonReply(404, R"({"error":{"code":"ErrorItemNotFound","message":"m"}})");
+        };
+        MailboxWorker worker(calendarOnly(server), &tokens);
+        QSignalSpy answers(&worker, &MailboxWorker::queryAnswered);
+        worker.start();
+        const QStringList queries{
+            QStringLiteral(R"(containerCreate|{"kind":"contact","name":"Example - Contacts"})"),
+            QStringLiteral(R"(containerCreate|{"kind":"event","name":"Example - Calendar"})"),
+            QStringLiteral(R"(defaultTaskList|{})"),
+            QStringLiteral(R"(importItem|{"kind":"contact","container":"CF1","item":{"givenName":"Alice"}})"),
+            QStringLiteral(R"(importItem|{"kind":"event","container":"","item":{"subject":"Example"}})"),
+            QStringLiteral(R"(importItem|{"kind":"task","container":"L1","item":{"title":"Example"}})"),
+            QStringLiteral(R"(importItem|{"kind":"task","container":"","item":{"title":"Example"}})"),
+            QStringLiteral(R"(folderCreate|{"parent":"msgfolderroot","name":"Inbox"})"),
+            QStringLiteral(R"(archiveFolderSet|{"folder":"NEWARCHIVE"})"),
+        };
+        for (int i = 0; i < queries.size(); ++i) {
+            worker.query(quint64(i + 1), queries.at(i).section(QLatin1Char('|'), 0, 0), queries.at(i).section(QLatin1Char('|'), 1));
+            QTRY_COMPARE_WITH_TIMEOUT(answers.size(), i + 1, 10000);
+        }
+        auto answer = [&answers](int i) {
+            return QJsonDocument::fromJson(answers.at(i).at(1).toString().toUtf8()).object();
+        };
+        QCOMPARE(answer(0).value(QLatin1String("id")).toString(), QStringLiteral("CF1"));
+        QCOMPARE(answer(1).value(QLatin1String("id")).toString(), QStringLiteral("CAL1"));
+        QCOMPARE(answer(2).value(QLatin1String("id")).toString(), QStringLiteral("L1"));
+        for (int i = 3; i <= 5; ++i) {
+            QVERIFY2(answer(i).value(QLatin1String("ok")).toBool(), qPrintable(queries.at(i)));
+        }
+        // A task needs its list
+        QVERIFY(!answer(6).value(QLatin1String("ok")).toBool());
+        QCOMPARE(answer(7).value(QLatin1String("id")).toString(), QStringLiteral("F1"));
+        QVERIFY(!answer(8).value(QLatin1String("ok")).toBool());
+        const auto posted = std::find_if(server.requests.cbegin(), server.requests.cend(), [](const FakeRequest &r) {
+            return r.target.endsWith("/calendars");
+        });
+        QCOMPARE(QJsonDocument::fromJson(posted->body).object().value(QLatin1String("name")).toString(), QStringLiteral("Example - Calendar"));
+        worker.stop();
+    }
+
     // Automatic replies (docs/PHASE9.md): read and saved through /mailboxSettings; the answer
     // carries Graph's body or the reason it was refused
     void mailboxSettings()
