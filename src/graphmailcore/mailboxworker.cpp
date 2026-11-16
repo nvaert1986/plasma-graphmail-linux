@@ -133,11 +133,21 @@ void MailboxWorker::start()
     m_ctx.reapplyPending = [this](const QString &graphId) {
         m_ops->reapply(graphId);
     };
-    connect(m_ops, &OperationQueue::failed, this, [this](const QString &graphId, const QString &, const QString &error) {
+    connect(m_ops, &OperationQueue::failed, this, [this](const QString &graphId, const QString &kind, const QString &error) {
         Q_EMIT operationFailed(m_config.account, m_config.mailbox, graphId, error);
         // The old state is back in the cache
         if (const std::optional<MessageRow> row = m_store->messageByGraphId(graphId)) {
             changedLocally({row->folder});
+            // A refused delete or move because the message is no longer where the cache has it
+            // (ErrorCannotDeleteObject: already in Recoverable Items): list the folder again. Not
+            // for a missing permission, where the cache is right and a resync is only traffic
+            static const QStringList gone{QStringLiteral("ErrorCannotDeleteObject"), QStringLiteral("ErrorItemNotFound"), QStringLiteral("ErrorMoveCopyFailed")};
+            const bool stale = std::any_of(gone.cbegin(), gone.cend(), [&error](const QString &code) {
+                return error.contains(code);
+            });
+            if (stale && (kind == QLatin1String("delete") || kind == QLatin1String("move"))) {
+                resyncFolder(row->folder);
+            }
         }
         m_statusDirty = true;
     });
@@ -509,7 +519,10 @@ void MailboxWorker::tick()
     // fresh chain brings it for every message there and for new mail from then on
     if (m_config.mail && treeKnown && m_store->meta(QStringLiteral("focusSynced")).isEmpty()) {
         m_store->setMeta(QStringLiteral("focusSynced"), QStringLiteral("1"));
-        if (const std::optional<FolderRow> inbox = m_store->folderByWellKnown(QStringLiteral("inbox"))) {
+        // Only an Inbox already past its first chain (an older cache) needs it: a fresh chain
+        // asks for inferenceClassification already
+        if (const std::optional<FolderRow> inbox = m_store->folderByWellKnown(QStringLiteral("inbox"));
+            inbox && m_store->syncState(inbox->id).initialState == MailFolderSync::Incremental) {
             resyncFolder(inbox->id);
             return;
         }
@@ -784,9 +797,9 @@ void MailboxWorker::changedLocally(const QList<qint64> &folders)
     }
 }
 
-void MailboxWorker::markRead(qint64 message, bool read)
+void MailboxWorker::markRead(qint64 message, bool read, bool receipt)
 {
-    if (m_ops && m_ops->markRead(message, read)) {
+    if (m_ops && m_ops->markRead(message, read, receipt)) {
         m_statusDirty = true;
         changedLocally({folderOf(message)});
         tick();
@@ -817,6 +830,14 @@ void MailboxWorker::setFocused(qint64 message, bool focused)
     }
 }
 
+QString MailboxWorker::betaUrl() const
+{
+    // Graph's beta endpoint for actions v1.0 does not have (markAsJunk, reportMessage, ...)
+    QString beta = m_client->baseUrl();
+    beta.replace(QLatin1String("/v1.0"), QLatin1String("/beta"));
+    return beta;
+}
+
 QStringList MailboxWorker::ignoredConversations() const
 {
     QStringList ids;
@@ -833,23 +854,56 @@ int MailboxWorker::sweepIgnored()
     if (ignored.isEmpty() || !m_ops) {
         return 0;
     }
-    // Sent mail and drafts stay where they are, as in Outlook
-    QSet<qint64> keep;
+    // Without a known Deleted Items a remove would delete for good: no sweep until the folder
+    // tree is mapped (a fresh cache, a mailbox without one)
+    if (!m_store->folderByWellKnown(QStringLiteral("deleteditems"))) {
+        return 0;
+    }
+    // Sent mail, drafts and what is already deleted stay where they are, as in Outlook, also in
+    // subfolders of those folders
+    QSet<QString> keepGraphIds;
     for (const char *wellKnown : {"deleteditems", "sentitems", "drafts", "outbox"}) {
         if (const std::optional<FolderRow> f = m_store->folderByWellKnown(QLatin1String(wellKnown))) {
-            keep.insert(f->id);
+            keepGraphIds.insert(f->graphId);
+        }
+    }
+    const QList<FolderRow> folders = m_store->folders();
+    for (bool grew = true; grew;) {
+        grew = false;
+        for (const FolderRow &f : folders) {
+            if (!keepGraphIds.contains(f.graphId) && keepGraphIds.contains(f.parentGraphId)) {
+                keepGraphIds.insert(f.graphId);
+                grew = true;
+            }
+        }
+    }
+    QSet<qint64> keep;
+    for (const FolderRow &f : folders) {
+        if (keepGraphIds.contains(f.graphId)) {
+            keep.insert(f.id);
         }
     }
     int moved = 0;
-    for (const QString &conversation : ignored) {
-        const QList<qint64> ids = m_store->conversation(conversation);
-        for (qint64 id : ids) {
-            const std::optional<MessageRow> m = m_store->message(id);
-            if (m && !keep.contains(m->folder) && m->pendingOp == 0 && m_ops->remove(id)) {
-                changedLocally({m->folder});
-                ++moved;
-            }
+    bool skipped = false;
+    // One query for all ignored conversations: this runs after every sync with changes
+    for (const Store::ConversationMessage &m : m_store->conversationMessages(ignored, keep)) {
+        if (m.pending) {
+            // Being read or changed right now (the message the user ignored it from): next round
+            skipped = true;
+        } else if (m_ops->remove(m.id)) {
+            changedLocally({m.folder});
+            ++moved;
         }
+    }
+    if (skipped && !m_sweepAgain) {
+        m_sweepAgain = true;
+        QTimer::singleShot(15 * 1000, this, [this] {
+            m_sweepAgain = false;
+            if (!m_stopped) {
+                sweepIgnored();
+                tick();
+            }
+        });
     }
     return moved;
 }
@@ -1242,7 +1296,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
     } else if (kind == QLatin1String("ignoredConversations")) {
         Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(QJsonArray::fromStringList(m_store ? ignoredConversations() : QStringList())).toJson(QJsonDocument::Compact)));
         return;
-    } else if (kind == QLatin1String("focusOverride") || kind == QLatin1String("junk")) {
+    } else if (kind == QLatin1String("focusOverride") || kind == QLatin1String("junk") || kind == QLatin1String("phish") || kind == QLatin1String("copy")) {
         // Always Move to Focused/Other (an override for the sender), and Report Junk / Not Junk
         // (beta markAsJunk/markAsNotJunk: Exchange moves the message and adds the sender to the
         // blocked or safe senders). Answered {"ok", "problem", "detail"}
@@ -1260,11 +1314,26 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
                 Q_EMIT queryAnswered(request, {});
                 return;
             }
-            const bool junk = args.value(QLatin1String("junk")).toBool();
-            QString beta = m_client->baseUrl();
-            beta.replace(QLatin1String("/v1.0"), QLatin1String("/beta"));
-            spec.pathOrUrl = beta + m_ctx.root + QStringLiteral("/messages/") + m->graphId + (junk ? QStringLiteral("/markAsJunk") : QStringLiteral("/markAsNotJunk"));
-            spec.body = QJsonDocument(junk ? QJsonObject{{QStringLiteral("moveToJunk"), true}} : QJsonObject{{QStringLiteral("moveToInbox"), true}}).toJson(QJsonDocument::Compact);
+            if (kind == QLatin1String("junk")) {
+                const bool junk = args.value(QLatin1String("junk")).toBool();
+                spec.pathOrUrl = betaUrl() + m_ctx.root + QStringLiteral("/messages/") + m->graphId + (junk ? QStringLiteral("/markAsJunk") : QStringLiteral("/markAsNotJunk"));
+                spec.body = QJsonDocument(junk ? QJsonObject{{QStringLiteral("moveToJunk"), true}} : QJsonObject{{QStringLiteral("moveToInbox"), true}}).toJson(QJsonDocument::Compact);
+            } else if (kind == QLatin1String("phish")) {
+                // Report Phishing (beta reportMessage, as Outlook on the web): Microsoft gets the
+                // report and Exchange moves the message to Deleted Items
+                spec.pathOrUrl = betaUrl() + m_ctx.root + QStringLiteral("/messages/") + m->graphId + QStringLiteral("/reportMessage");
+                spec.body = QJsonDocument(QJsonObject{{QStringLiteral("ReportAction"), QStringLiteral("phish")}, {QStringLiteral("IsMessageMoveRequested"), true}})
+                                .toJson(QJsonDocument::Compact);
+            } else if (kind == QLatin1String("copy")) {
+                // Copy to a folder (v1.0): the copy arrives with that folder's next sync
+                const std::optional<FolderRow> target = m_store->folder(args.value(QLatin1String("folder")).toInteger());
+                if (!target) {
+                    Q_EMIT queryAnswered(request, {});
+                    return;
+                }
+                spec.pathOrUrl = m_ctx.root + QStringLiteral("/messages/") + m->graphId + QStringLiteral("/copy");
+                spec.body = QJsonDocument(QJsonObject{{QStringLiteral("destinationId"), target->graphId}}).toJson(QJsonDocument::Compact);
+            }
         }
         spec.maxAttempts = 2;
         GraphCore::GraphRequest *r = m_client->start(spec);
@@ -1275,8 +1344,8 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
                                      {QStringLiteral("problem"), accessProblem(response)},
                                      {QStringLiteral("detail"), response.ok() ? QString() : response.describe()}};
             Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
-            // The message moved in Exchange: the folders show it at once
-            if (response.ok() && kind == QLatin1String("junk")) {
+            // The message moved (or was copied) in Exchange: the folders show it at once
+            if (response.ok() && kind != QLatin1String("focusOverride")) {
                 syncNow();
             }
         });
@@ -1345,8 +1414,8 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
         job->start();
         return;
     } else if (kind == QLatin1String("folderCreate")) {
-        // A mail folder under a parent (graph id or well-known name), for an import; an existing
-        // one of that name is used. Answered {"ok", "problem", "detail", "id"}
+        // A mail folder under a parent (graph id or well-known name, msgfolderroot for the top); for an
+        // import an existing one of that name is used. Answered {"ok", "problem", "detail", "id"}
         const QString parent = m_ctx.root + QStringLiteral("/mailFolders/") + args.value(QLatin1String("parent")).toString() + QStringLiteral("/childFolders");
         const QString name = args.value(QLatin1String("name")).toString();
         spec.verb = "POST";
@@ -1355,7 +1424,9 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
         spec.body = QJsonDocument(QJsonObject{{QStringLiteral("displayName"), name}}).toJson(QJsonDocument::Compact);
         spec.maxAttempts = 2;
         GraphCore::GraphRequest *r = m_client->start(spec);
-        connect(r, &GraphCore::GraphRequest::finished, this, [this, r, request, parent, name] {
+        // "unique": New Folder in the folder pane, where an existing name is an error, not a match
+        const bool unique = args.value(QLatin1String("unique")).toBool();
+        connect(r, &GraphCore::GraphRequest::finished, this, [this, r, request, parent, name, unique] {
             const GraphCore::GraphResponse response = r->response();
             r->deleteLater();
             const auto reply = [this, request](const GraphCore::GraphResponse &res, const QString &id) {
@@ -1365,8 +1436,11 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
                                          {QStringLiteral("id"), id}};
                 Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
             };
-            if (response.status != 409) {
+            if (response.status != 409 || unique) {
                 reply(response, response.ok() ? response.json().value(QLatin1String("id")).toString() : QString());
+                if (response.ok() && unique) {
+                    syncNow();
+                }
                 return;
             }
             // ErrorFolderExists: the folder of that name
@@ -1383,6 +1457,76 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
                 const QJsonArray value = found.json().value(QLatin1String("value")).toArray();
                 reply(found, found.ok() && !value.isEmpty() ? value.first().toObject().value(QLatin1String("id")).toString() : QString());
             });
+        });
+        return;
+    } else if (kind == QLatin1String("folderChange")) {
+        // Rename, move, delete or mark all read in a mail folder (Outlook's folder pane). "action":
+        // markAllRead, rename (name),
+        // move (target: a folder id, 0 for the top of the mailbox) or delete: moved to Deleted Items,
+        // or gone for good when it already is inside Deleted Items. Answered {"ok", "problem", "detail"}
+        const std::optional<FolderRow> folder = m_store ? m_store->folder(args.value(QLatin1String("folder")).toInteger()) : std::nullopt;
+        const QString action = args.value(QLatin1String("action")).toString();
+        // Outlook's own folders (Inbox, Sent Items, ...) cannot be renamed, moved or deleted
+        if (!folder || (action != QLatin1String("markAllRead") && !folder->wellKnown.isEmpty())) {
+            Q_EMIT queryAnswered(request, {});
+            return;
+        }
+        const QString path = m_ctx.root + QStringLiteral("/mailFolders/") + folder->graphId;
+        spec.headers.append({QByteArrayLiteral("Content-Type"), QByteArrayLiteral("application/json")});
+        if (action == QLatin1String("markAllRead")) {
+            // One request for the whole folder (beta); no read receipts go out, as in Outlook
+            spec.verb = "POST";
+            spec.pathOrUrl = betaUrl() + path + QStringLiteral("/updateAllMessagesReadState");
+            spec.body = QJsonDocument(QJsonObject{{QStringLiteral("isRead"), true}, {QStringLiteral("suppressReadReceipts"), true}}).toJson(QJsonDocument::Compact);
+        } else if (action == QLatin1String("rename")) {
+            spec.verb = "PATCH";
+            spec.pathOrUrl = path;
+            spec.body = QJsonDocument(QJsonObject{{QStringLiteral("displayName"), args.value(QLatin1String("name")).toString()}}).toJson(QJsonDocument::Compact);
+        } else if (action == QLatin1String("move")) {
+            const qint64 targetId = args.value(QLatin1String("target")).toInteger();
+            const std::optional<FolderRow> target = targetId != 0 ? m_store->folder(targetId) : std::nullopt;
+            if (targetId != 0 && !target) {
+                Q_EMIT queryAnswered(request, {});
+                return;
+            }
+            spec.verb = "POST";
+            spec.pathOrUrl = path + QStringLiteral("/move");
+            spec.body = QJsonDocument(QJsonObject{{QStringLiteral("destinationId"), target ? target->graphId : QStringLiteral("msgfolderroot")}}).toJson(QJsonDocument::Compact);
+        } else if (action == QLatin1String("delete")) {
+            // Inside Deleted Items (at any depth): permanently, as Outlook does there
+            bool inDeleted = false;
+            QString parent = folder->parentGraphId;
+            for (int depth = 0; depth < 64 && !parent.isEmpty() && !inDeleted; ++depth) {
+                const std::optional<FolderRow> up = m_store->folderByGraphId(parent);
+                if (!up) {
+                    break;
+                }
+                inDeleted = up->wellKnown == QLatin1String("deleteditems");
+                parent = up->parentGraphId;
+            }
+            // Graph's DELETE skips Deleted Items (the folder lands in Recoverable Items at once,
+            // probed 2026-11-16); Outlook moves it to Deleted Items, so a move does
+            spec.verb = "POST";
+            spec.pathOrUrl = path + (inDeleted ? QStringLiteral("/permanentDelete") : QStringLiteral("/move"));
+            spec.body = inDeleted ? QByteArrayLiteral("{}")
+                                  : QJsonDocument(QJsonObject{{QStringLiteral("destinationId"), QStringLiteral("deleteditems")}}).toJson(QJsonDocument::Compact);
+        } else {
+            Q_EMIT queryAnswered(request, {});
+            return;
+        }
+        spec.maxAttempts = 2;
+        GraphCore::GraphRequest *r = m_client->start(spec);
+        connect(r, &GraphCore::GraphRequest::finished, this, [this, r, request] {
+            const GraphCore::GraphResponse response = r->response();
+            r->deleteLater();
+            const QJsonObject answer{{QStringLiteral("ok"), response.ok()},
+                                     {QStringLiteral("problem"), response.ok() ? QString() : accessProblem(response)},
+                                     {QStringLiteral("detail"), response.ok() ? QString() : response.describe()}};
+            Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
+            // The folder tree's delta brings the change into the cache
+            if (response.ok()) {
+                syncNow();
+            }
         });
         return;
     } else if (kind == QLatin1String("archiveFolderSet")) {
@@ -1558,7 +1702,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
         // filter: that needs User.Read.All, the app has User.ReadBasic.All
         QString text = args.value(QLatin1String("text")).toString();
         text.remove(QLatin1Char('"'));
-        spec.pathOrUrl = QStringLiteral("/users?$top=40&$count=true&$select=id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,companyName,businessPhones,mobilePhone"
+        spec.pathOrUrl = QStringLiteral("/users?$top=40&$count=true&$select=id,displayName,givenName,surname,mail,userPrincipalName,jobTitle,department,officeLocation,companyName,businessPhones,mobilePhone"
                                         "&$search=")
             + QString::fromLatin1(QUrl::toPercentEncoding(QStringLiteral("\"displayName:%1\" OR \"mail:%1\"").arg(text)));
         spec.headers.append({QByteArrayLiteral("ConsistencyLevel"), QByteArrayLiteral("eventual")});

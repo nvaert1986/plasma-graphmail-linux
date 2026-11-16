@@ -6,6 +6,7 @@
 #include "graphclient.h"
 #include "graphmail_debug.h"
 #include "mailboxaccess.h"
+#include "mailrunner.h"
 #include "scopes.h"
 #include "store.h"
 
@@ -97,6 +98,12 @@ bool Daemon::start(QString *error)
         return false;
     }
     bus.registerObject(QStringLiteral("/GraphMail"), this, QDBusConnection::ExportScriptableSlots | QDBusConnection::ExportScriptableSignals);
+    // Mail search from KRunner (data/io.github.nvaert1986.graphmail-runner.desktop)
+    MailRunner::registerTypes();
+    bus.registerObject(QStringLiteral("/runner"), new MailRunner([this] {
+                           return m_mailboxes.keys();
+                       }, this),
+                       QDBusConnection::ExportScriptableSlots);
 
     const QList<GraphCore::Account> accounts = GraphCore::Accounts::all();
     if (accounts.isEmpty()) {
@@ -732,6 +739,15 @@ void Daemon::FetchAttachment(const QString &account, const QString &mailbox, qlo
     }
 }
 
+void Daemon::MarkReadWithoutReceipt(const QString &account, const QString &mailbox, qlonglong message)
+{
+    if (GraphMail::MailboxWorker *w = worker(account, mailbox)) {
+        QMetaObject::invokeMethod(w, [w, message] {
+            w->markRead(message, true, false);
+        });
+    }
+}
+
 void Daemon::MarkRead(const QString &account, const QString &mailbox, qlonglong message, bool read)
 {
     if (GraphMail::MailboxWorker *w = worker(account, mailbox)) {
@@ -845,6 +861,53 @@ QString Daemon::runAccessCheck(const QString &accountId, const QString &address,
     watcher->setFuture(QtConcurrent::run([auth, address]() {
         GraphCore::GraphClient client(auth.get());
         return GraphMail::checkMailboxAccess(client, address);
+    }));
+    return {};
+}
+
+QString Daemon::OrgChart(const QString &accountId, const QString &user)
+{
+    const QString account = accountId.isEmpty() && m_auth.size() == 1 ? m_auth.cbegin().key() : accountId;
+    const GraphCore::Account a = GraphCore::Accounts::find(account);
+    if (!a.isValid()) {
+        return QStringLiteral("{\"ok\":false,\"problem\":\"unknownAccount\"}");
+    }
+    if (!m_directoryAuth.contains(account)) {
+        m_directoryAuth.insert(account, std::make_shared<GraphCore::Auth>(GraphCore::Auth::settingsFor(a, keychainService(), GraphCore::Scopes::directory())));
+    }
+    setDelayedReply(true);
+    const QDBusMessage request = message();
+    std::shared_ptr<GraphCore::Auth> auth = m_directoryAuth.value(account);
+    auto *watcher = new QFutureWatcher<QJsonObject>(this);
+    connect(watcher, &QFutureWatcher<QJsonObject>::finished, this, [this, watcher, request, account] {
+        watcher->deleteLater();
+        const QJsonObject answer = watcher->result();
+        // Asked again next time: an administrator may grant the consent meanwhile
+        if (answer.value(QLatin1String("problem")).toString() == QLatin1String("notGranted")) {
+            m_directoryAuth.remove(account);
+        }
+        QDBusConnection::sessionBus().send(request.createReply(QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact))));
+    });
+    watcher->setFuture(QtConcurrent::run([auth, user]() {
+        QString error;
+        if (auth->accessToken(&error).isEmpty()) {
+            // No consent for User.Read.All in this tenant (AADSTS65001), or offline
+            const bool consent = error.contains(QLatin1String("AADSTS65001")) || error.contains(QLatin1String("consent"), Qt::CaseInsensitive);
+            return QJsonObject{{QStringLiteral("ok"), false}, {QStringLiteral("problem"), consent ? QStringLiteral("notGranted") : QStringLiteral("offline")}};
+        }
+        GraphCore::GraphClient client(auth.get());
+        const QString base = QStringLiteral("/users/") + QString::fromUtf8(QUrl::toPercentEncoding(user));
+        const QString fields = QStringLiteral("$select=id,displayName,mail,userPrincipalName,jobTitle");
+        const GraphCore::GraphResponse manager = client.get(base + QStringLiteral("/manager?") + fields);
+        const GraphCore::GraphResponse reports = client.get(base + QStringLiteral("/directReports?$top=50&") + fields);
+        if (manager.status == 403 || reports.status == 403) {
+            return QJsonObject{{QStringLiteral("ok"), false}, {QStringLiteral("problem"), QStringLiteral("notGranted")}};
+        }
+        // 404 on the manager: none is set
+        return QJsonObject{{QStringLiteral("ok"), reports.ok()},
+                           {QStringLiteral("problem"), reports.ok() ? QString() : QStringLiteral("failed")},
+                           {QStringLiteral("manager"), manager.ok() ? QJsonValue(manager.json()) : QJsonValue()},
+                           {QStringLiteral("reports"), reports.json().value(QLatin1String("value")).toArray()}};
     }));
     return {};
 }

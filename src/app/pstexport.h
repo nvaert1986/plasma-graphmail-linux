@@ -6,6 +6,7 @@
 #include "pst/pstwriter.h"
 
 #include <QObject>
+#include <QSet>
 
 class QProgressDialog;
 class QWidget;
@@ -32,6 +33,18 @@ public:
     void setItemsOnly(bool itemsOnly)
     {
         m_itemsOnly = itemsOnly;
+    }
+    // Only these messages of the given folders, without their subfolders (Clean Up Old Mail)
+    void setMessages(const QSet<qint64> &messages)
+    {
+        m_only = messages;
+    }
+
+    // The messages written from Exchange's own MIME (not rebuilt from the cache, not skipped): only
+    // these may be removed afterwards (Cleanup's "Export to PST, then remove")
+    const QList<qint64> &savedOriginals() const
+    {
+        return m_saved;
     }
 
 Q_SIGNALS:
@@ -65,7 +78,9 @@ private:
     int m_rebuilt = 0;
     int m_items = 0;
     bool m_itemsOnly = false;
+    QSet<qint64> m_only;
     bool m_offline = false;
+    QList<qint64> m_saved;
     bool m_cancelled = false;
     QString m_error;
     QString m_tempDir;

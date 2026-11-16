@@ -10,7 +10,10 @@
 #include <QPixmap>
 #include <QTimer>
 
+#include <memory>
+
 class QLabel;
+class QTemporaryDir;
 class QLineEdit;
 class QPushButton;
 class QTreeWidget;
@@ -33,13 +36,14 @@ public:
     // File > Print: the list shown (docs/PHASE9B.md); tests: into a PDF
     void printList(const QString &pdfFile = {});
     ContactsWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *parent = nullptr);
+    ~ContactsWindow() override;
 
     // Tests: a new contact in the default folder of this mailbox, saved; the dialog
     QWidget *newContactForTests(const QString &mailboxKey, const QJsonObject &fields);
     // Tests: change or delete a contact (only names marked [TEST Graph Mail])
     QWidget *editContactForTests(const QString &mailboxKey, qint64 contact, const QJsonObject &changes);
     bool deleteContactForTests(const QString &mailboxKey, qint64 contact);
-    // Tests: search the directory and select the first person
+    // Search the directory and select the first person (a manager or report on the card; tests)
     void searchDirectoryForTests(const QString &text);
     // Categories (docs/PHASE9.md): on the card, Categorize for own contacts
     void setCategoryList(CategoryList *categories);
@@ -47,6 +51,16 @@ public:
     // Tests: search the directory for this address and Add to Contacts, the name marked
     // [TEST Graph Mail]; logs the outcome
     void addFromDirectoryForTests(const QString &address);
+    // Forward Contact > As a vCard for the selected person: a new message with the .vcf (also tests)
+    QWidget *forwardAsVCard();
+
+    // The name of a contact or a directory entry in the list
+    enum class NameOrder {
+        DisplayName,
+        FirstLast,
+        LastFirst,
+    };
+    static QString listName(const QJsonObject &o, NameOrder order);
 
 Q_SIGNALS:
     void navigate(int module);
@@ -65,6 +79,7 @@ private:
     void sourceChanged();
     void fillList();
     void showPerson(const Person &person);
+    void loadOrgChart(const Person &person, const QString &html);
     void searchDirectory();
     void loadPhoto(const Person &person);
     std::optional<Person> current() const;
@@ -88,6 +103,9 @@ private:
     QPushButton *m_edit;
     QPushButton *m_delete;
     QPushButton *m_add;
+    QPushButton *m_forward;
+    // The .vcf files of forwarded contacts, until the app quits
+    std::unique_ptr<QTemporaryDir> m_vcards;
     QPushButton *m_categorize = nullptr;
     CategoryList *m_categoryList = nullptr;
     QList<Person> m_people;

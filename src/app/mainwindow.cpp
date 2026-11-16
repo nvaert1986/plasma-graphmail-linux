@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "mainwindow.h"
+#include "graphmail_debug.h"
 #include "accesstext.h"
+#include "attachmentpreview.h"
 #include "autorepliesdialog.h"
 #include "calendarwindow.h"
 #include "categorylist.h"
@@ -12,6 +14,9 @@
 #include "taskswindow.h"
 #include "messagewindow.h"
 #include "signaturedialog.h"
+#include "sweepdialog.h"
+#include "cleanup.h"
+#include "conditionalformat.h"
 #include "conversationmodel.h"
 #include "daemonclient.h"
 #include "foldermodel.h"
@@ -19,10 +24,12 @@
 #include "mailboxset.h"
 #include "mailview.h"
 #include "messagedelegate.h"
+#include "messagedrag.h"
 #include "messagelistmodel.h"
 #include "movedialog.h"
 #include "offlinedialog.h"
 #include "readingpane.h"
+#include "readreceipts.h"
 #include "rulesdialog.h"
 #include "mailboxsettingsdialog.h"
 #include "templates.h"
@@ -35,6 +42,10 @@
 #include <QTemporaryDir>
 #include "profilephotos.h"
 #include "printing.h"
+#include "quote.h"
+#include "replyoptions.h"
+#include "mailto.h"
+#include "messagedetails.h"
 #include "mimeexport.h"
 #include "waitingwindow.h"
 #include "searchfolderdialog.h"
@@ -42,17 +53,21 @@
 
 #include <KActionCollection>
 #include <KActionMenu>
+#include <KNotifyConfigWidget>
 #include <KSelectAction>
 #include <KBusyIndicatorWidget>
 #include <KConfigGroup>
 #include <KLocalizedString>
 #include <KMessageBox>
 #include <KMessageWidget>
+#include <KNotification>
 #include <KSharedConfig>
 #include <KStandardAction>
 #include <KToolBar>
 
 #include <QAction>
+#include <QScrollBar>
+#include <QDesktopServices>
 #include <QStandardPaths>
 #include <QRegularExpression>
 #include <QFileDialog>
@@ -72,7 +87,12 @@
 #include <QFormLayout>
 #include <QDialogButtonBox>
 #include <QDialog>
+#include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDropEvent>
 #include <QElapsedTimer>
+#include <QEventLoop>
+#include <QMimeData>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
@@ -123,7 +143,7 @@ MainWindow::MainWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *par
     , m_conversationModel(new ConversationModel(this))
     , m_splitter(new QSplitter(Qt::Horizontal, this))
     , m_folders(new QTreeView(this))
-    , m_messages(new QTreeView(this))
+    , m_messages(new MessageListView(this))
     , m_reading(new ReadingPane(this))
     , m_status(new QLabel(this))
     , m_searchField(new QLineEdit(this))
@@ -143,6 +163,7 @@ MainWindow::MainWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *par
         importMessageFiles(mailboxKey, folder, files);
     });
     connect(m_folderModel, &FolderModel::moveRequested, this, [this](const QString &mailboxKey, qint64 folder, const QList<qint64> &messages) {
+        rememberForUndo(mailboxKey, messages, false);
         for (qint64 message : messages) {
             m_daemon->move(mailboxKey.section(QLatin1Char('/'), 0, 0), mailboxKey.section(QLatin1Char('/'), 1), message, folder);
         }
@@ -150,6 +171,7 @@ MainWindow::MainWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *par
 
     // The model (flat list or conversations) and its selection signal come from applyListModel()
     m_delegate = new MessageDelegate(m_messages);
+    m_delegate->reloadFormatting();
     m_messages->setItemDelegate(m_delegate);
     m_categoryList = new CategoryList(m_daemon, this);
     m_photos = new ProfilePhotos(m_mailboxes, m_daemon, this);
@@ -176,6 +198,29 @@ MainWindow::MainWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *par
     m_messages->setExpandsOnDoubleClick(false);
     connect(m_messages, &QTreeView::doubleClicked, this, &MainWindow::openMessageWindow);
     m_messages->installEventFilter(this);
+    // .eml and .msg files dropped on the list go into the folder shown; messages dragged out of it
+    // become .eml files (docs/PHASE9B.md 9b.33)
+    m_messages->viewport()->setAcceptDrops(true);
+    m_messages->viewport()->installEventFilter(this);
+    MessageDragData::setWriter([this](const QString &mailboxKey, const QList<qint64> &messages) {
+        return writeMessageFiles(mailboxKey, messages);
+    });
+    // Scheduled cleanup: looked at a few minutes after the start and then every hour
+    const auto scheduledCleanup = [this] {
+        const Cleanup::Settings s = Cleanup::settings();
+        if (s.everyDays > 0 && QDateTime::currentMSecsSinceEpoch() - s.lastRun >= qint64(s.everyDays) * 24 * 3600 * 1000) {
+            runCleanup(false);
+        }
+    };
+    m_cleanupTimer.setInterval(3600 * 1000);
+    connect(&m_cleanupTimer, &QTimer::timeout, this, scheduledCleanup);
+    m_cleanupTimer.start();
+    QTimer::singleShot(5 * 60 * 1000, this, scheduledCleanup);
+    // The unread badge follows the counts a moment after they change (a sync changes many at once)
+    m_badgeTimer.setSingleShot(true);
+    m_badgeTimer.setInterval(1000);
+    connect(&m_badgeTimer, &QTimer::timeout, this, &MainWindow::updateUnreadBadge);
+    m_badgeTimer.start();
 
     m_splitter->addWidget(m_folders);
     // The results bar sits above the message list while a search is shown
@@ -300,11 +345,27 @@ MainWindow::MainWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *par
         if (row && !row->isRead) {
             const QString account = m_mailboxKey.section(QLatin1Char('/'), 0, 0);
             const QString mailbox = m_mailboxKey.section(QLatin1Char('/'), 1);
-            m_daemon->markRead(account, mailbox, message, true);
+            // A read receipt the user is asked about waits for the reading pane's answer
+            const ReadReceipts::Decision decision = ReadReceipts::decide(ReadReceipts::mode(), store->readReceiptRequested(message), false);
+            if (decision == ReadReceipts::Decision::Wait) {
+                m_reading->markReadWhenKnown();
+            } else if (decision != ReadReceipts::Decision::Ask) {
+                m_daemon->markRead(account, mailbox, message, true, decision == ReadReceipts::Decision::Send);
+            }
         }
     });
 
     connect(m_folders->selectionModel(), &QItemSelectionModel::currentChanged, this, &MainWindow::folderChanged);
+    connect(m_folders, &QTreeView::collapsed, this, [this](const QModelIndex &index) {
+        if (index.data(FolderModel::IsFavoritesGroupRole).toBool()) {
+            m_favoritesClosed = true;
+        }
+    });
+    connect(m_folders, &QTreeView::expanded, this, [this](const QModelIndex &index) {
+        if (index.data(FolderModel::IsFavoritesGroupRole).toBool()) {
+            m_favoritesClosed = false;
+        }
+    });
     m_folders->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_folders, &QWidget::customContextMenuRequested, this, &MainWindow::folderMenu);
     m_conversations = windowGroup().readEntry("ConversationView", false);
@@ -319,6 +380,10 @@ MainWindow::MainWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *par
         if (account + QLatin1Char('/') + mailbox == m_mailboxKey && message == m_reading->message()) {
             m_reading->reload();
         }
+    });
+    connect(m_reading, &ReadingPane::mailtoRequested, this, &MainWindow::openMailto);
+    connect(m_reading, &ReadingPane::printRequested, this, [this] {
+        printMessage();
     });
     connect(m_reading, &ReadingPane::attachmentNeeded, this, [this](qint64 attachment) {
         m_daemon->fetchAttachment(m_mailboxKey.section(QLatin1Char('/'), 0, 0), m_mailboxKey.section(QLatin1Char('/'), 1), attachment);
@@ -383,6 +448,7 @@ MainWindow::~MainWindow()
 {
     if (s_mainWindow == this) {
         s_mainWindow = nullptr;
+        MessageDragData::setWriter({});
     }
 }
 
@@ -485,6 +551,59 @@ void MainWindow::setupActions()
     remove->setIcon(QIcon::fromTheme(QStringLiteral("edit-delete")));
     actions->setDefaultShortcut(remove, Qt::Key_Delete);
     connect(remove, &QAction::triggered, this, &MainWindow::deleteSelected);
+
+    // Deleted Items and Junk Email: Outlook's Empty Folder (also in the folder's menu)
+    QAction *empty = actions->addAction(QStringLiteral("empty_folder"));
+    empty->setText(i18nc("@action", "Empty Folder"));
+    empty->setIcon(QIcon::fromTheme(QStringLiteral("edit-delete-shred")));
+    empty->setVisible(false);
+    connect(empty, &QAction::triggered, this, [this] {
+        emptyFolder(m_mailboxKey, m_folder);
+    });
+
+    // Outlook's New Folder (Ctrl+Shift+E): inside the folder shown, or at the top of its mailbox
+    QAction *folderNew = actions->addAction(QStringLiteral("new_folder"));
+    folderNew->setText(i18nc("@action", "New Folder..."));
+    folderNew->setIcon(QIcon::fromTheme(QStringLiteral("folder-new")));
+    actions->setDefaultShortcut(folderNew, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E));
+    connect(folderNew, &QAction::triggered, this, [this] {
+        if (!m_mailboxKey.isEmpty()) {
+            newFolder(m_mailboxKey, m_folder);
+        }
+    });
+
+    // Outlook on the web's toolbar says just "Meeting"
+    if (QAction *meeting = actions->action(QStringLiteral("reply_with_meeting"))) {
+        meeting->setIconText(i18nc("@action short toolbar text for Reply with Meeting", "Meeting"));
+    }
+    QAction *phishing = actions->addAction(QStringLiteral("report_phishing"));
+    phishing->setText(i18nc("@action", "Report Phishing"));
+    phishing->setIcon(QIcon::fromTheme(QStringLiteral("security-low")));
+    connect(phishing, &QAction::triggered, this, &MainWindow::reportPhishing);
+    // One button for both, as Outlook's Read / Unread (the menus keep both)
+    QAction *toggleRead = actions->addAction(QStringLiteral("toggle_read"));
+    toggleRead->setText(i18nc("@action", "Mark as Read"));
+    toggleRead->setIcon(QIcon::fromTheme(QStringLiteral("mail-mark-read")));
+    connect(toggleRead, &QAction::triggered, this, [this] {
+        const Store *store = m_mailboxes->store(m_mailboxKey);
+        const QList<qint64> ids = selectedMessages();
+        const std::optional<MessageRow> first = store && !ids.isEmpty() ? store->message(ids.constFirst()) : std::nullopt;
+        markSelected(!(first && first->isRead));
+    });
+    QAction *copy = actions->addAction(QStringLiteral("copy_to"));
+    copy->setText(i18nc("@action", "Copy to Folder..."));
+    copy->setIcon(QIcon::fromTheme(QStringLiteral("edit-copy")));
+    connect(copy, &QAction::triggered, this, [this] {
+        MoveDialog dialog(m_folderModel, m_mailboxKey, this);
+        dialog.setWindowTitle(i18nc("@title:window", "Copy to Folder"));
+        if (dialog.exec() == QDialog::Accepted && dialog.folder() != 0) {
+            copySelected(dialog.folder());
+        }
+    });
+    QAction *ruleFrom = actions->addAction(QStringLiteral("create_rule"));
+    ruleFrom->setText(i18nc("@action", "Create Rule from This Message..."));
+    ruleFrom->setIcon(QIcon::fromTheme(QStringLiteral("view-filter")));
+    connect(ruleFrom, &QAction::triggered, this, &MainWindow::createRuleFromMessage);
 
     QAction *move = actions->addAction(QStringLiteral("move"));
     move->setText(i18nc("@action", "Move to Folder..."));
@@ -807,7 +926,9 @@ void MainWindow::setupActions()
         QKeySequence shortcut;
     } answers[] = {{"reply", "reply", "mail-reply-sender", QKeySequence(Qt::CTRL | Qt::Key_R)},
                    {"reply_all", "replyAll", "mail-reply-all", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R)},
-                   {"forward", "forward", "mail-forward", QKeySequence(Qt::CTRL | Qt::Key_F)}};
+                   {"forward", "forward", "mail-forward", QKeySequence(Qt::CTRL | Qt::Key_F)},
+                   {"forward_as_attachment", "forwardAsAttachment", "mail-forward", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_F)},
+                   {"edit_as_new", "editAsNew", "mail-message-new", QKeySequence()}};
     for (const auto &answer : answers) {
         QAction *action = actions->addAction(QLatin1String(answer.name));
         action->setIcon(QIcon::fromTheme(QLatin1String(answer.icon)));
@@ -823,6 +944,15 @@ void MainWindow::setupActions()
     actions->action(QStringLiteral("reply"))->setText(i18nc("@action", "Reply"));
     actions->action(QStringLiteral("reply_all"))->setText(i18nc("@action", "Reply All"));
     actions->action(QStringLiteral("forward"))->setText(i18nc("@action", "Forward"));
+    actions->action(QStringLiteral("forward_as_attachment"))->setText(i18nc("@action", "Forward as Attachment"));
+    actions->action(QStringLiteral("edit_as_new"))->setText(i18nc("@action Outlook's Resend", "Edit as New Message"));
+    QAction *meeting = actions->addAction(QStringLiteral("reply_with_meeting"));
+    meeting->setText(i18nc("@action", "Reply with Meeting"));
+    meeting->setIcon(QIcon::fromTheme(QStringLiteral("appointment-new")));
+    actions->setDefaultShortcut(meeting, QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_R));
+    connect(meeting, &QAction::triggered, this, [this] {
+        replyWithMeeting(m_mailboxKey, shownMessage());
+    });
 
     QAction *calendar = actions->addAction(QStringLiteral("go_calendar"));
     calendar->setText(i18nc("@action", "Calendar"));
@@ -839,7 +969,86 @@ void MainWindow::setupActions()
     tasks->setIcon(QIcon::fromTheme(QStringLiteral("view-task")));
     actions->setDefaultShortcut(tasks, QKeySequence(Qt::CTRL | Qt::Key_4));
     connect(tasks, &QAction::triggered, this, &MainWindow::openTasks);
+    // View > Zoom and the dark message background (docs/PHASE9B.md 9b.25)
+    KStandardAction::zoomIn(this, [this] {
+        m_reading->zoom(1);
+    }, actions);
+    KStandardAction::zoomOut(this, [this] {
+        m_reading->zoom(-1);
+    }, actions);
+    KStandardAction::actualSize(this, [this] {
+        m_reading->zoom(0);
+    }, actions);
+    auto *dark = new KToggleAction(QIcon::fromTheme(QStringLiteral("color-mode-invert-text")), i18nc("@action", "Dark Background for Messages"), this);
+    actions->addAction(QStringLiteral("dark_messages"), dark);
+    dark->setChecked(MailView::darkMessages());
+    dark->setVisible(MailView::darkTheme());
+    connect(dark, &KToggleAction::toggled, this, [this](bool on) {
+        MailView::setDarkMessages(on);
+        m_reading->reload();
+    });
+    // Optional: Office previews run LibreOffice, which not every office uses
+    auto *officePreview = new KToggleAction(QIcon::fromTheme(QStringLiteral("document-preview")), i18nc("@action", "Preview Office Documents with LibreOffice"), this);
+    actions->addAction(QStringLiteral("office_preview"), officePreview);
+    officePreview->setChecked(AttachmentPreview::officePreview());
+    if (!AttachmentPreview::hasLibreOffice()) {
+        officePreview->setText(i18nc("@action", "Preview Office Documents with LibreOffice (not installed)"));
+    }
+    connect(officePreview, &KToggleAction::toggled, this, [](bool on) {
+        AttachmentPreview::setOfficePreview(on);
+    });
+    QAction *sweepAction = actions->addAction(QStringLiteral("sweep"));
+    sweepAction->setText(i18nc("@action Outlook's Sweep", "Sweep..."));
+    sweepAction->setIcon(QIcon::fromTheme(QStringLiteral("edit-clear-all")));
+    connect(sweepAction, &QAction::triggered, this, &MainWindow::sweep);
+    QAction *formatting = actions->addAction(QStringLiteral("conditional_formatting"));
+    formatting->setText(i18nc("@action", "Conditional Formatting..."));
+    formatting->setIcon(QIcon::fromTheme(QStringLiteral("format-text-color")));
+    connect(formatting, &QAction::triggered, this, [this] {
+        ConditionalFormat::Dialog dialog(this);
+        if (dialog.exec() == QDialog::Accepted) {
+            m_delegate->reloadFormatting();
+            m_messages->viewport()->update();
+        }
+    });
+    // Settings > Read Receipts: Outlook's tracking option
+    auto *receipts = new KSelectAction(QIcon::fromTheme(QStringLiteral("mail-receipt")), i18nc("@action", "Read Receipts"), this);
+    actions->addAction(QStringLiteral("read_receipts"), receipts);
+    receipts->setItems({i18nc("@item:inmenu read receipts", "Ask Each Time"), i18nc("@item:inmenu read receipts", "Always Send"),
+                        i18nc("@item:inmenu read receipts", "Never Send")});
+    receipts->setCurrentItem(int(ReadReceipts::mode()));
+    connect(receipts, &KSelectAction::indexTriggered, this, [this](int index) {
+        ReadReceipts::setMode(ReadReceipts::Mode(index));
+        m_reading->reload();
+    });
+    QAction *cleanup = actions->addAction(QStringLiteral("cleanup"));
+    cleanup->setText(i18nc("@action", "Clean Up Old Mail..."));
+    cleanup->setIcon(QIcon::fromTheme(QStringLiteral("edit-clear-history")));
+    connect(cleanup, &QAction::triggered, this, [this] {
+        auto *dialog = new Cleanup::Dialog(this);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dialog, &Cleanup::Dialog::runRequested, this, [this] {
+            QTimer::singleShot(0, this, [this] {
+                runCleanup(true);
+            });
+        });
+        dialog->open();
+    });
+    m_undoAction = KStandardAction::undo(this, &MainWindow::undoLast, actions);
+    m_undoAction->setEnabled(false);
+    QAction *onlineArchive = actions->addAction(QStringLiteral("open_online_archive"));
+    onlineArchive->setText(i18nc("@action", "Open Online Archive in Browser"));
+    onlineArchive->setIcon(QIcon::fromTheme(QStringLiteral("folder-html")));
+    connect(onlineArchive, &QAction::triggered, this, [this] {
+        openOnlineArchive(mailboxKey());
+    });
 
+    QAction *replyOptions = actions->addAction(QStringLiteral("reply_options"));
+    replyOptions->setText(i18nc("@action", "Reply and Forward..."));
+    replyOptions->setIcon(QIcon::fromTheme(QStringLiteral("mail-reply-sender")));
+    connect(replyOptions, &QAction::triggered, this, [this] {
+        ReplyOptions::Dialog(this).exec();
+    });
     QAction *signatures = actions->addAction(QStringLiteral("signatures"));
     signatures->setText(i18nc("@action", "Signatures..."));
     signatures->setIcon(QIcon::fromTheme(QStringLiteral("document-sign")));
@@ -870,6 +1079,28 @@ void MainWindow::setupActions()
     connect(exportPstAction, &QAction::triggered, this, [this] {
         exportPst(m_mailboxKey, {});
     });
+
+    // File > Save as PDF and Message Details for the message shown (or the first selected)
+    QAction *savePdf = actions->addAction(QStringLiteral("save_pdf"));
+    savePdf->setText(i18nc("@action", "Save as PDF..."));
+    savePdf->setIcon(QIcon::fromTheme(QStringLiteral("application-pdf")));
+    connect(savePdf, &QAction::triggered, this, [this] {
+        const qint64 message = shownMessage();
+        const Store *store = m_mailboxes->store(m_mailboxKey);
+        const std::optional<MessageRow> row = store && message ? store->message(message) : std::nullopt;
+        if (!row) {
+            return;
+        }
+        if (const QString file = MimeExport::askPdfFile(this, row->subject); !file.isEmpty()) {
+            printMessage(file, [this, file](bool ok) {
+                m_status->setText(ok ? i18nc("@info:status %1 a file", "Saved as %1.", file) : i18nc("@info:status %1 a file", "Could not save %1.", file));
+            });
+        }
+    });
+    QAction *details = actions->addAction(QStringLiteral("message_details"));
+    details->setText(i18nc("@action", "Message Details..."));
+    details->setIcon(QIcon::fromTheme(QStringLiteral("document-properties")));
+    connect(details, &QAction::triggered, this, &MainWindow::openMessageDetails);
 
     QAction *openMessageAction = actions->addAction(QStringLiteral("open_message_file"));
     openMessageAction->setText(i18nc("@action", "Open Message File..."));
@@ -954,6 +1185,14 @@ void MainWindow::setupActions()
     connect(mailboxesAction, &QAction::triggered, this, &MainWindow::openMailboxes);
 
     KStandardAction::quit(qApp, &QCoreApplication::quit, actions);
+    // Settings > Configure Notifications: new mail, failed sending, reminders and the like
+    // (the events of plasma-graphmail-linux.notifyrc), as other KDE programs offer it
+    KStandardAction::configureNotifications(
+        this,
+        [this] {
+            KNotifyConfigWidget::configure(this);
+        },
+        actions);
 }
 
 WaitingWindow *MainWindow::openWaiting()
@@ -985,6 +1224,13 @@ MailboxesDialog *MainWindow::openMailboxes()
 
 CalendarWindow *MainWindow::openCalendar()
 {
+    calendarModule();
+    showModule(2, m_calendar);
+    return m_calendar;
+}
+
+CalendarWindow *MainWindow::calendarModule()
+{
     if (!m_calendar) {
         m_calendar = new CalendarWindow(m_mailboxes, m_daemon);
         m_calendar->setCategoryList(m_categoryList);
@@ -998,7 +1244,6 @@ CalendarWindow *MainWindow::openCalendar()
             m_calendar->setAttribute(Qt::WA_DeleteOnClose);
         }
     }
-    showModule(2, m_calendar);
     return m_calendar;
 }
 
@@ -1067,13 +1312,72 @@ void MainWindow::navigate(int module)
     }
 }
 
+QWidget *MainWindow::replyWithMeeting(const QString &mailboxKey, qint64 message)
+{
+    const Store *store = m_mailboxes->store(mailboxKey);
+    const std::optional<MessageRow> original = store && message ? store->message(message) : std::nullopt;
+    if (!original) {
+        return nullptr;
+    }
+    // The people of a Reply All (the sender and To required, Cc optional), without the user
+    QStringList own{m_mailboxes->mailbox(mailboxKey).value_or(MailboxInfo()).address};
+    const QList<MailboxInfo> boxes = m_mailboxes->mailboxes();
+    for (const MailboxInfo &box : boxes) {
+        if (box.own) {
+            own.append(box.address);
+        }
+    }
+    QList<OutgoingRecipient> required;
+    QList<OutgoingRecipient> optional;
+    Quote::recipients(*original, true, own, &required, &optional);
+    // The message below, as Outlook puts it in the meeting
+    const QString text = Quote::headerText(*original) + Quote::originalText(*original, m_mailboxes->blobs(mailboxKey));
+    return calendarModule()->newMeeting(mailboxKey, original->subject, required, optional, QStringLiteral("\n\n") + text);
+}
+
+QWidget *MainWindow::newAppointmentFromMail(const QString &mailboxKey, qint64 message)
+{
+    const Store *store = m_mailboxes->store(mailboxKey);
+    const std::optional<MessageRow> original = store && message ? store->message(message) : std::nullopt;
+    if (!original) {
+        return nullptr;
+    }
+    // Outlook's drag to Calendar: an appointment (no attendees) with the message as its text
+    const QString text = Quote::headerText(*original) + Quote::originalText(*original, m_mailboxes->blobs(mailboxKey));
+    return calendarModule()->newMeeting(mailboxKey, original->subject, {}, {}, text);
+}
+
+void MainWindow::newTaskFromMail(const QString &mailboxKey, qint64 message)
+{
+    const Store *store = m_mailboxes->store(mailboxKey);
+    const std::optional<MessageRow> original = store && message ? store->message(message) : std::nullopt;
+    if (!original) {
+        return;
+    }
+    const QString text = Quote::headerText(*original) + Quote::originalText(*original, m_mailboxes->blobs(mailboxKey));
+    if (openTasks()->newTask(mailboxKey, original->subject, text)) {
+        m_status->setText(i18nc("@info:status %1 a subject", "Task \"%1\" added to Tasks.", original->subject));
+    }
+}
+
+QWidget *MainWindow::openMessageDetails()
+{
+    const qint64 message = shownMessage();
+    return message ? MessageDetailsDialog::open(this, m_mailboxes, m_daemon, m_mailboxKey, message) : nullptr;
+}
+
+qint64 MainWindow::shownMessage() const
+{
+    if (const qint64 message = m_reading->message()) {
+        return message;
+    }
+    const QList<qint64> ids = selectedMessages();
+    return ids.isEmpty() ? 0 : ids.constFirst();
+}
+
 void MainWindow::printMessage(const QString &pdfFile, const std::function<void(bool)> &done)
 {
-    qint64 message = m_reading->message();
-    if (message == 0) {
-        const QList<qint64> ids = selectedMessages();
-        message = ids.isEmpty() ? 0 : ids.constFirst();
-    }
+    const qint64 message = shownMessage();
     const std::optional<MailboxInfo> box = m_mailboxes->mailbox(m_mailboxKey);
     if (message == 0 || !box) {
         if (done) {
@@ -1081,7 +1385,9 @@ void MainWindow::printMessage(const QString &pdfFile, const std::function<void(b
         }
         return;
     }
-    Printing::printMessage(this, m_mailboxes->store(m_mailboxKey), m_mailboxes->blobs(m_mailboxKey), message, false,
+    // Pictures as the reading pane shows them (Load Images)
+    const bool remote = m_reading->message() == message && m_reading->remoteAllowed();
+    Printing::printMessage(this, m_mailboxes->store(m_mailboxKey), m_mailboxes->blobs(m_mailboxKey), message, remote,
                            box->displayName.isEmpty() ? box->address : box->displayName, pdfFile, done);
 }
 
@@ -1099,7 +1405,7 @@ void MainWindow::exportMessages(const QList<qint64> &messages, const QString &gi
     if (file.isEmpty()) {
         const std::optional<MessageRow> first = store->message(messages.constFirst());
         QString name = mbox ? m_folders->currentIndex().data(Qt::DisplayRole).toString() : (first ? first->subject : QString());
-        file = askExportFile(name, mbox);
+        file = MimeExport::askFile(this, name, mbox);
         if (file.isEmpty()) {
             return;
         }
@@ -1130,38 +1436,6 @@ void MainWindow::exportFolder(const QString &mailboxKey, qint64 folder, const QS
 QList<qint64> MainWindow::selectedMessageIds() const
 {
     return selectedMessages();
-}
-
-QString MainWindow::askExportFile(QString name, bool mbox)
-{
-    // A file name from the subject or folder, without what file systems refuse
-    static const QRegularExpression unsafe(QStringLiteral("[/\\\\:*?\"<>|]"));
-    name.replace(unsafe, QStringLiteral("_"));
-    if (name.trimmed().isEmpty()) {
-        name = i18nc("@item file name of an exported message", "message");
-    }
-    if (mbox) {
-        return QFileDialog::getSaveFileName(this,
-                                            i18nc("@title:window", "Save Messages"),
-                                            QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QLatin1Char('/') + name + QStringLiteral(".mbox"),
-                                            i18nc("@item:inlistbox file type", "Mailbox file (*.mbox)"));
-    }
-    // One message: Outlook's .msg or the Internet's .eml, by the chosen type
-    const QString msgFilter = i18nc("@item:inlistbox file type", "Outlook message (*.msg)");
-    const QString emlFilter = i18nc("@item:inlistbox file type", "Mail message (*.eml)");
-    QString chosen = emlFilter;
-    QString file = QFileDialog::getSaveFileName(this,
-                                                i18nc("@title:window", "Save Message"),
-                                                QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QLatin1Char('/') + name + QStringLiteral(".eml"),
-                                                emlFilter + QStringLiteral(";;") + msgFilter,
-                                                &chosen);
-    if (!file.isEmpty() && chosen == msgFilter && !file.endsWith(QLatin1String(".msg"), Qt::CaseInsensitive)) {
-        if (file.endsWith(QLatin1String(".eml"), Qt::CaseInsensitive)) {
-            file.chop(4);
-        }
-        file += QStringLiteral(".msg");
-    }
-    return file;
 }
 
 void MainWindow::exportPst(const QString &mailboxKey, const QList<qint64> &folders, const QString &givenFile, const std::function<void(bool)> &done, bool itemsOnly)
@@ -1367,6 +1641,84 @@ void MainWindow::openFiles(const QStringList &files)
     }
 }
 
+QWidget *MainWindow::openMailto(const QString &link)
+{
+    const Mailto::Link mail = Mailto::parse(QUrl(link));
+    QStringList files;
+    for (const QString &file : mail.attachments) {
+        if (QFileInfo(file).isFile()) {
+            files.append(file);
+        }
+    }
+    // A link on a web page could name any file: attach only what the user agrees to
+    if (!files.isEmpty()
+        && KMessageBox::questionTwoActionsList(this,
+                                               i18nc("@info", "Another program asks to attach these files to the new message:"),
+                                               files,
+                                               i18nc("@title:window", "Attach Files"),
+                                               KGuiItem(i18nc("@action:button", "Attach"), QStringLiteral("mail-attachment")),
+                                               KGuiItem(i18nc("@action:button", "Leave Out"), QStringLiteral("dialog-cancel")))
+            != KMessageBox::PrimaryAction) {
+        files.clear();
+    }
+    auto *composer = static_cast<ComposerWindow *>(openComposer(QStringLiteral("new"), 0));
+    composer->prefill(mail.to, mail.cc, mail.bcc, mail.subject, mail.body, files);
+    return composer;
+}
+
+QList<QUrl> MainWindow::writeMessageFiles(const QString &mailboxKey, const QList<qint64> &messages)
+{
+    // In the app's cache: a message dropped on the composer is read by the daemon too
+    if (!m_dragFiles) {
+        const QString cache = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+        QDir().mkpath(cache);
+        m_dragFiles = std::make_unique<QTemporaryDir>(cache + QStringLiteral("/drag-XXXXXX"));
+    }
+    // A folder per drag: the same subject twice in one drag gets a number, not another drag's file
+    const QDir dir(m_dragFiles->path() + QLatin1Char('/') + QString::number(++m_drags));
+    if (!m_dragFiles->isValid() || !QDir().mkpath(dir.path())) {
+        return {};
+    }
+    const Store *store = m_mailboxes->store(mailboxKey);
+    QList<QUrl> urls;
+    QElapsedTimer waited;
+    waited.start();
+    for (qint64 message : messages.mid(0, 200)) {
+        const std::optional<MessageRow> row = store ? store->message(message) : std::nullopt;
+        if (!row) {
+            continue;
+        }
+        // The drop waits for the files: the original from Exchange while that is quick, the copy
+        // rebuilt from the cache for the rest
+        QByteArray mime;
+        if (waited.elapsed() < 15000) {
+            QEventLoop loop;
+            auto guard = std::make_unique<QObject>();
+            MimeExport::fetch(m_mailboxes, m_daemon, mailboxKey, message, guard.get(), [&mime, &loop](const QByteArray &data, bool) {
+                mime = data;
+                loop.quit();
+            });
+            if (mime.isEmpty()) {
+                QTimer::singleShot(10000, &loop, &QEventLoop::quit);
+                loop.exec(QEventLoop::ExcludeUserInputEvents);
+            }
+        }
+        if (mime.isEmpty()) {
+            mime = MimeExport::rebuild(m_mailboxes->store(mailboxKey), m_mailboxes->blobs(mailboxKey), message);
+        }
+        const QString base = MimeExport::safeFileName(row->subject);
+        QString path = dir.filePath(base + QStringLiteral(".eml"));
+        for (int n = 2; QFileInfo::exists(path); ++n) {
+            path = dir.filePath(QStringLiteral("%1 (%2).eml").arg(base).arg(n));
+        }
+        QFile file(path);
+        if (file.open(QIODevice::WriteOnly) && file.write(mime) == mime.size()) {
+            urls.append(QUrl::fromLocalFile(path));
+        }
+    }
+    return urls;
+}
+
 void MainWindow::importMessageFiles(const QString &mailboxKey, qint64 folder, QStringList files, const std::function<void(bool)> &done)
 {
     const Store *store = m_mailboxes->store(mailboxKey);
@@ -1468,6 +1820,8 @@ void MainWindow::openInNewWindow(int module)
 void MainWindow::openMessageById(const QString &mailboxKey, qint64 message)
 {
     auto *window = new MessageWindow(m_mailboxes, m_daemon, m_folderModel, mailboxKey, message, m_markReadEnabled);
+    connect(window, &MessageWindow::replyWithMeetingRequested, this, &MainWindow::replyWithMeeting);
+    connect(window, &MessageWindow::mailtoRequested, this, &MainWindow::openMailto);
     m_messageWindows.append(window);
     window->show();
 }
@@ -1638,12 +1992,9 @@ void MainWindow::loadSearchFolders()
             std::sort(folders.begin(), folders.end(), [](const SearchFolderInfo &a, const SearchFolderInfo &b) {
                 return a.name.localeAwareCompare(b.name) < 0;
             });
-            const QString current = m_folders->currentIndex().data(FolderModel::PathKeyRole).toString();
+            // Through reloadFolders: what was open and selected stays so
             m_folderModel->setSearchFolders(key, folders);
-            if (const QModelIndex again = m_folderModel->indexForPath(current); again.isValid()) {
-                const QSignalBlocker blocker(m_folders->selectionModel());
-                m_folders->setCurrentIndex(again);
-            }
+            reloadFolders();
         });
     }
 }
@@ -1709,6 +2060,8 @@ void MainWindow::folderMenu(const QPoint &pos)
     const QModelIndex index = m_folders->indexAt(pos);
     const QString key = index.data(FolderModel::MailboxKeyRole).toString();
     QMenu menu(this);
+    // Entries that follow Favorites
+    std::function<void(QMenu *)> tail;
     if (index.data(FolderModel::IsSearchGroupRole).toBool()) {
         menu.addAction(QIcon::fromTheme(QStringLiteral("folder-new")), i18nc("@action:inmenu", "New Search Folder..."), this, [this, key] {
             editSearchFolder(key, {}, {}, {});
@@ -1723,20 +2076,98 @@ void MainWindow::folderMenu(const QPoint &pos)
             deleteSearchFolder(key, id, name, true);
         });
     } else if (!key.isEmpty() && index.data(FolderModel::FolderIdRole).toLongLong() != 0) {
-        menu.addAction(QIcon::fromTheme(QStringLiteral("folder-saved-search")), i18nc("@action:inmenu", "New Search Folder..."), this, [this, key] {
-            editSearchFolder(key, {}, {}, {});
-        });
+        // Outlook on the web's folder menu: counts, new/rename/count, move/delete/empty, mark read
         const qint64 folder = index.data(FolderModel::FolderIdRole).toLongLong();
-        const QString name = index.data(Qt::DisplayRole).toString();
-        menu.addAction(QIcon::fromTheme(QStringLiteral("document-export")), i18nc("@action:inmenu", "Export to mbox..."), this, [this, key, folder, name] {
-            if (const QString file = askExportFile(name, true); !file.isEmpty()) {
-                exportFolder(key, folder, file);
+        const std::optional<FolderRow> row = m_mailboxes->store(key) ? m_mailboxes->store(key)->folder(folder) : std::nullopt;
+        if (!row) {
+            return;
+        }
+        const int unread = index.data(FolderModel::UnreadRole).toInt();
+        const bool own = row->wellKnown.isEmpty(); // Outlook's own folders keep their name and place
+        QAction *counts = menu.addAction(i18ncp("@info folder menu, %2 unread", "%1 item (%2 unread)", "%1 items (%2 unread)", row->total, unread));
+        counts->setEnabled(false);
+        menu.addSeparator();
+        menu.addAction(QIcon::fromTheme(QStringLiteral("folder-new")), i18nc("@action:inmenu", "New Folder..."), this, [this, key, folder] {
+            newFolder(key, folder);
+        });
+        if (own) {
+            menu.addAction(QIcon::fromTheme(QStringLiteral("edit-rename")), i18nc("@action:inmenu", "Rename Folder..."), this, [this, key, folder] {
+                renameFolder(key, folder);
+            });
+        }
+        QMenu *countMenu = menu.addMenu(QIcon::fromTheme(QStringLiteral("format-number-percent")), i18nc("@action:inmenu", "Change Folder Count"));
+        const bool total = FolderModel::showsTotal(key, row->graphId, row->wellKnown);
+        auto *countGroup = new QActionGroup(countMenu);
+        QAction *showUnread = countMenu->addAction(i18nc("@action:inmenu", "Show Unread Count"), this, [this, key, row] {
+            FolderModel::setShowsTotal(key, row->graphId, false);
+            m_folders->viewport()->update();
+        });
+        QAction *showTotal = countMenu->addAction(i18nc("@action:inmenu", "Show Total Count"), this, [this, key, row] {
+            FolderModel::setShowsTotal(key, row->graphId, true);
+            m_folders->viewport()->update();
+        });
+        for (QAction *choice : {showUnread, showTotal}) {
+            choice->setCheckable(true);
+            countGroup->addAction(choice);
+        }
+        (total ? showTotal : showUnread)->setChecked(true);
+        menu.addSeparator();
+        if (own) {
+            menu.addAction(QIcon::fromTheme(QStringLiteral("go-jump")), i18nc("@action:inmenu", "Move Folder..."), this, [this, key, folder] {
+                moveFolder(key, folder);
+            });
+            menu.addAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18nc("@action:inmenu", "Delete Folder"), this, [this, key, folder] {
+                deleteFolder(key, folder);
+            });
+        }
+        QAction *empty = menu.addAction(QIcon::fromTheme(QStringLiteral("edit-delete-shred")), i18nc("@action:inmenu", "Empty Folder"), this, [this, key, folder] {
+            emptyFolder(key, folder);
+        });
+        empty->setEnabled(row->total > 0);
+        menu.addSeparator();
+        QAction *read = menu.addAction(QIcon::fromTheme(QStringLiteral("mail-mark-read")), i18nc("@action:inmenu", "Mark All as Read"), this, [this, key, folder] {
+            markAllRead(key, folder);
+        });
+        read->setEnabled(unread > 0);
+        // Graph Mail's own extras, after Favorites
+        const QString name = row->name;
+        const std::optional<MailboxInfo> owner = m_mailboxes->mailbox(key);
+        tail = [this, key, folder, name, row, owner](QMenu *m) {
+            m->addSeparator();
+            // No Graph API for folder permissions: Outlook on the web has them
+            m->addAction(QIcon::fromTheme(QStringLiteral("system-users")), i18nc("@action:inmenu", "Sharing and Permissions (Outlook on the web)..."), this, [this, key] {
+                openOnlineArchive(key);
+                statusBar()->showMessage(i18nc("@info:status", "In Outlook on the web: right-click the folder, Sharing and permissions"), 10000);
+            });
+            m->addSeparator();
+            m->addAction(QIcon::fromTheme(QStringLiteral("folder-saved-search")), i18nc("@action:inmenu", "New Search Folder..."), this, [this, key] {
+                editSearchFolder(key, {}, {}, {});
+            });
+            m->addAction(QIcon::fromTheme(QStringLiteral("document-export")), i18nc("@action:inmenu", "Export to mbox..."), this, [this, key, folder, name] {
+                if (const QString file = MimeExport::askFile(this, name, true); !file.isEmpty()) {
+                    exportFolder(key, folder, file);
+                }
+            });
+            m->addAction(QIcon::fromTheme(QStringLiteral("document-export")), i18nc("@action:inmenu", "Export to Outlook Data File..."), this, [this, key, folder] {
+                exportPst(key, {folder});
+            });
+            // A folder's own cleanup setting (own mailboxes; never the folders cleanup leaves alone)
+            if (owner && owner->own && !Cleanup::excluded(m_mailboxes->store(key), *row)) {
+                m->addAction(QIcon::fromTheme(QStringLiteral("edit-clear-history")), i18nc("@action:inmenu", "Clean Up Settings..."), this, [this, key, row] {
+                    Cleanup::FolderDialog dialog(key, row->graphId, row->name, this);
+                    dialog.exec();
+                });
             }
+        };
+    } else if (const std::optional<MailboxInfo> box = m_mailboxes->mailbox(key); box && !box->own && index.data(FolderModel::IsMailboxRole).toBool()) {
+        menu.addAction(QIcon::fromTheme(QStringLiteral("folder-new")), i18nc("@action:inmenu", "New Folder..."), this, [this, key] {
+            newFolder(key, 0);
         });
-        menu.addAction(QIcon::fromTheme(QStringLiteral("document-export")), i18nc("@action:inmenu", "Export to Outlook Data File..."), this, [this, key, folder] {
-            exportPst(key, {folder});
+    } else if (box && box->own && index.data(FolderModel::IsMailboxRole).toBool()) {
+        menu.addAction(QIcon::fromTheme(QStringLiteral("folder-new")), i18nc("@action:inmenu", "New Folder..."), this, [this, key] {
+            newFolder(key, 0);
         });
-    } else if (const std::optional<MailboxInfo> box = m_mailboxes->mailbox(key); box && box->own && index.data(FolderModel::IsMailboxRole).toBool()) {
+        menu.addSeparator();
         menu.addAction(QIcon::fromTheme(QStringLiteral("document-import")), i18nc("@action:inmenu", "Import Outlook Data File..."), this, [this, key] {
             importPst(key);
         });
@@ -1754,9 +2185,48 @@ void MainWindow::folderMenu(const QPoint &pos)
             });
         }
     }
+    // Favorites (docs/PHASE9B.md 9b.27)
+    if (const QString graphId = index.data(FolderModel::FolderIdRole).toLongLong() != 0 && !key.isEmpty() && m_mailboxes->store(key)
+            ? m_mailboxes->store(key)->folder(index.data(FolderModel::FolderIdRole).toLongLong()).value_or(FolderRow()).graphId
+            : QString();
+        !graphId.isEmpty()) {
+        const bool favorite = FolderModel::favorites().contains(key + QLatin1Char('|') + graphId);
+        if (!menu.isEmpty()) {
+            menu.addSeparator();
+        }
+        menu.addAction(QIcon::fromTheme(favorite ? QStringLiteral("non-starred-symbolic") : QStringLiteral("starred-symbolic")),
+                       favorite ? i18nc("@action:inmenu", "Remove from Favorites") : i18nc("@action:inmenu", "Add to Favorites"), this, [this, key, graphId, favorite] {
+                           m_folderModel->setFavorite(key, graphId, !favorite);
+                           reloadFolders();
+                       });
+    }
+    if (tail) {
+        tail(&menu);
+    }
+    if (index.data(FolderModel::IsMailboxRole).toBool() && m_mailboxes->mailbox(key)) {
+        if (!menu.isEmpty()) {
+            menu.addSeparator();
+        }
+        menu.addAction(QIcon::fromTheme(QStringLiteral("folder-html")), i18nc("@action:inmenu", "Open Online Archive in Browser"), this, [this, key] {
+            openOnlineArchive(key);
+        });
+    }
     if (!menu.isEmpty()) {
         menu.exec(m_folders->viewport()->mapToGlobal(pos));
     }
+}
+
+void MainWindow::openOnlineArchive(const QString &mailboxKey)
+{
+    // Graph gives no content of the online archive (docs/DESIGN.md), Outlook on the web shows it
+    // as "In-Place Archive" in the folder pane. A shared mailbox opens by its address.
+    const std::optional<MailboxInfo> box = m_mailboxes->mailbox(mailboxKey);
+    QUrl url(QStringLiteral("https://outlook.office.com/mail/"));
+    if (box && !box->own && !box->address.isEmpty()) {
+        url.setPath(QStringLiteral("/mail/") + box->address + QLatin1Char('/'));
+    }
+    QDesktopServices::openUrl(url);
+    statusBar()->showMessage(i18nc("@info:status", "Outlook on the web shows the online archive as \"In-Place Archive\" in its folder list"), 8000);
 }
 
 void MainWindow::editSearchFolder(const QString &mailboxKey, const QString &id, const QString &name, const QString &filter)
@@ -2193,22 +2663,195 @@ void MainWindow::messageMenu(const QPoint &pos)
     if (!m_messages->indexAt(pos).isValid()) {
         return;
     }
+    // In the order of Outlook on the web's menu
     QMenu menu(this);
-    static const char *const items[] = {"reply", "reply_all", "forward", nullptr, "mark_read", "mark_unread", "flag", nullptr, "move", "archive", "delete",
-                                        nullptr, "focus_move", "focus_always", "report_junk", "ignore_conversation"};
-    for (const char *name : items) {
-        if (!name) {
-            menu.addSeparator();
-            continue;
-        }
+    const auto add = [this](QMenu *to, const char *name) {
         if (QAction *a = actionCollection()->action(QLatin1String(name)); a && a->isVisible()) {
-            menu.addAction(a);
+            to->addAction(a);
         }
+    };
+    for (const char *name : {"reply", "reply_all", "forward"}) {
+        add(&menu, name);
     }
-    // Categorize as a submenu, the same as the toolbar's
+    menu.addSeparator();
+    add(&menu, "delete");
+    add(&menu, "archive");
+    QMenu *move = menu.addMenu(QIcon::fromTheme(QStringLiteral("go-jump")), i18nc("@title:menu", "Move"));
+    fillFolderMenu(move, false);
+    QMenu *copy = menu.addMenu(QIcon::fromTheme(QStringLiteral("edit-copy")), i18nc("@title:menu", "Copy"));
+    fillFolderMenu(copy, true);
+    menu.addSeparator();
+    add(&menu, "toggle_read");
     QMenu *categorize = menu.addMenu(QIcon::fromTheme(QStringLiteral("tag")), i18nc("@title:menu", "Categorize"));
     fillCategorizeMenu(categorize);
+    add(&menu, "flag");
+    QMenu *rules = menu.addMenu(QIcon::fromTheme(QStringLiteral("view-filter")), i18nc("@title:menu", "Rules"));
+    add(rules, "create_rule");
+    add(rules, "rules");
+    menu.addSeparator();
+    add(&menu, "report_junk");
+    add(&menu, "report_phishing");
+    add(&menu, "ignore_conversation");
+    add(&menu, "sweep");
+    menu.addSeparator();
+    QMenu *related = menu.addMenu(QIcon::fromTheme(QStringLiteral("edit-find")), i18nc("@title:menu", "Find Related"));
+    related->addAction(i18nc("@action:inmenu", "Messages from This Sender"), this, [this] {
+        findRelated(false);
+    });
+    related->addAction(i18nc("@action:inmenu", "Messages in This Conversation"), this, [this] {
+        findRelated(true);
+    });
+    QMenu *view = menu.addMenu(QIcon::fromTheme(QStringLiteral("view-preview")), i18nc("@title:menu", "View"));
+    view->addAction(QIcon::fromTheme(QStringLiteral("window-new")), i18nc("@action:inmenu", "Open in a New Window"), this, [this] {
+        openMessageWindow(m_messages->currentIndex());
+    });
+    add(view, "message_details");
+    QMenu *more = menu.addMenu(i18nc("@title:menu", "More Actions"));
+    for (const char *name : {"forward_as_attachment", "edit_as_new", "reply_with_meeting", "focus_move", "focus_always", "file_save_as", "save_pdf"}) {
+        add(more, name);
+    }
     menu.exec(m_messages->viewport()->mapToGlobal(pos));
+}
+
+void MainWindow::fillFolderMenu(QMenu *menu, bool copy)
+{
+    // The folders used last in this mailbox, then any other
+    const Store *store = m_mailboxes->store(m_mailboxKey);
+    const QList<qint64> recent = m_recentFolders.value(m_mailboxKey);
+    for (qint64 folder : recent) {
+        const std::optional<FolderRow> row = store ? store->folder(folder) : std::nullopt;
+        if (!row || folder == m_folder) {
+            continue;
+        }
+        menu->addAction(QIcon::fromTheme(QStringLiteral("folder")), row->name, this, [this, folder, copy] {
+            copy ? copySelected(folder) : moveSelected(folder);
+        });
+    }
+    if (!menu->isEmpty()) {
+        menu->addSeparator();
+    }
+    menu->addAction(i18nc("@action:inmenu", "Other Folder..."), this, [this, copy] {
+        if (copy) {
+            actionCollection()->action(QStringLiteral("copy_to"))->trigger();
+        } else {
+            moveToFolder();
+        }
+    });
+}
+
+void MainWindow::rememberFolder(const QString &mailboxKey, qint64 folder)
+{
+    QList<qint64> &recent = m_recentFolders[mailboxKey];
+    recent.removeAll(folder);
+    recent.prepend(folder);
+    while (recent.size() > 5) {
+        recent.removeLast();
+    }
+}
+
+void MainWindow::copySelected(qint64 folder)
+{
+    rememberFolder(m_mailboxKey, folder);
+    const QString account = m_mailboxKey.section(QLatin1Char('/'), 0, 0);
+    const QString mailbox = m_mailboxKey.section(QLatin1Char('/'), 1);
+    const QList<qint64> ids = selectedMessages();
+    auto failed = std::make_shared<int>(0);
+    auto left = std::make_shared<int>(int(ids.size()));
+    for (qint64 id : ids) {
+        const QJsonObject args{{QStringLiteral("message"), id}, {QStringLiteral("folder"), folder}};
+        m_daemon->query(account, mailbox, QStringLiteral("copy"), QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)), this,
+                        [this, failed, left, total = int(ids.size())](const QString &json) {
+                            if (!QJsonDocument::fromJson(json.toUtf8()).object().value(QLatin1String("ok")).toBool()) {
+                                ++*failed;
+                            }
+                            if (--*left == 0) {
+                                m_status->setText(*failed == 0 ? i18ncp("@info:status", "%1 message copied.", "%1 messages copied.", total)
+                                                               : i18ncp("@info:status", "%1 message could not be copied.", "%1 messages could not be copied.", *failed));
+                            }
+                        });
+    }
+}
+
+void MainWindow::reportPhishing()
+{
+    const QList<qint64> ids = selectedMessages();
+    if (ids.isEmpty()
+        || KMessageBox::warningContinueCancel(this,
+                                              i18ncp("@info",
+                                                     "Report this message to Microsoft as phishing? It moves to Deleted Items.",
+                                                     "Report these %1 messages to Microsoft as phishing? They move to Deleted Items.",
+                                                     int(ids.size())),
+                                              i18nc("@title:window", "Report Phishing"),
+                                              KGuiItem(i18nc("@action:button", "Report"), QStringLiteral("security-low")))
+            != KMessageBox::Continue) {
+        return;
+    }
+    const QString account = m_mailboxKey.section(QLatin1Char('/'), 0, 0);
+    const QString mailbox = m_mailboxKey.section(QLatin1Char('/'), 1);
+    for (qint64 id : ids) {
+        m_daemon->query(account, mailbox, QStringLiteral("phish"), QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("message"), id}}).toJson(QJsonDocument::Compact)), this,
+                        [this](const QString &json) {
+                            const QJsonObject answer = QJsonDocument::fromJson(json.toUtf8()).object();
+                            m_status->setText(answer.value(QLatin1String("ok")).toBool()
+                                                  ? i18nc("@info:status", "Reported as phishing to Microsoft; the message moved to Deleted Items.")
+                                                  : accessProblemText(answer.isEmpty() ? QStringLiteral("network") : answer.value(QLatin1String("problem")).toString(), m_mailboxKey));
+                        });
+    }
+}
+
+void MainWindow::findRelated(bool conversation)
+{
+    const Store *store = m_mailboxes->store(m_mailboxKey);
+    const QList<qint64> ids = selectedMessages();
+    const std::optional<MessageRow> row = store && !ids.isEmpty() ? store->message(ids.constFirst()) : std::nullopt;
+    if (!row) {
+        return;
+    }
+    if (!conversation) {
+        // The search field, as typed: from the sender, in the whole mailbox
+        m_searchField->setText(QStringLiteral("from:") + row->senderAddress);
+        search();
+        return;
+    }
+    // The conversation in every folder of the mailbox, newest first
+    MailboxSet *mailboxes = m_mailboxes;
+    const QString key = m_mailboxKey;
+    const QString conversationId = row->conversation;
+    m_messageModel->setResults([mailboxes, key, conversationId]() {
+        QList<SearchHit> hits;
+        const Store *s = mailboxes->store(key);
+        if (!s || conversationId.isEmpty()) {
+            return hits;
+        }
+        const QList<ListRow> rows = s->search(SearchQuery(), {}, 1000, s->conversation(conversationId));
+        for (const ListRow &r : rows) {
+            const std::optional<FolderRow> folder = s->folder(r.folder);
+            hits.append({key, r, folder ? folder->name : QString()});
+        }
+        std::stable_sort(hits.begin(), hits.end(), [](const SearchHit &a, const SearchHit &b) {
+            return a.row.received > b.row.received;
+        });
+        return hits;
+    });
+    applyListModel();
+    m_messages->scrollToTop();
+    showResults(m_messageModel->rowCount(), false, i18nc("@info", "the conversation, in every folder"));
+}
+
+void MainWindow::createRuleFromMessage()
+{
+    const Store *store = m_mailboxes->store(m_mailboxKey);
+    const QList<qint64> ids = selectedMessages();
+    const std::optional<MessageRow> row = store && !ids.isEmpty() ? store->message(ids.constFirst()) : std::nullopt;
+    if (!row) {
+        return;
+    }
+    // Outlook's Create rule: from this sender, the rest chosen in the editor
+    const QJsonObject from{{QStringLiteral("emailAddress"), QJsonObject{{QStringLiteral("name"), row->senderName}, {QStringLiteral("address"), row->senderAddress}}}};
+    const QJsonObject draft{{QStringLiteral("displayName"), row->senderName.isEmpty() ? row->senderAddress : row->senderName},
+                            {QStringLiteral("isEnabled"), true},
+                            {QStringLiteral("conditions"), QJsonObject{{QStringLiteral("fromAddresses"), QJsonArray{from}}}}};
+    openRules(m_mailboxKey)->createFrom(draft);
 }
 
 void MainWindow::categoryForTests(const QString &action, const QString &name, const QString &preset)
@@ -2500,7 +3143,9 @@ void MainWindow::searchOnline()
 
 void MainWindow::moveSelected(qint64 folder)
 {
+    rememberFolder(m_mailboxKey, folder);
     const QList<qint64> ids = selectedMessages();
+    rememberForUndo(m_mailboxKey, ids, false);
     for (qint64 id : ids) {
         m_daemon->move(account(), mailbox(), id, folder);
     }
@@ -2693,7 +3338,12 @@ void MainWindow::folderChanged()
         updateActions();
         return;
     }
-    if (!index.isValid() || index.data(FolderModel::IsMailboxRole).toBool() || index.data(FolderModel::IsSearchGroupRole).toBool()) {
+    if (index.data(FolderModel::IsAllInboxesRole).toBool()) {
+        showAllInboxes();
+        return;
+    }
+    if (!index.isValid() || index.data(FolderModel::IsMailboxRole).toBool() || index.data(FolderModel::IsSearchGroupRole).toBool()
+        || index.data(FolderModel::IsFavoritesGroupRole).toBool()) {
         m_mailboxKey = index.data(FolderModel::MailboxKeyRole).toString();
         m_folder = 0;
         m_messageModel->clear();
@@ -2733,6 +3383,51 @@ void MainWindow::folderChanged()
     updateActions();
 }
 
+void MainWindow::showAllInboxes()
+{
+    // The Inboxes of every mailbox with mail in one list, newest first (Outlook's All Inboxes);
+    // a row's actions work in its own mailbox, as with search results
+    MailboxSet *mailboxes = m_mailboxes;
+    const QList<MailboxInfo> boxes = m_mailboxes->mailboxes();
+    QStringList keys;
+    for (const MailboxInfo &box : boxes) {
+        if (box.mail) {
+            keys.append(box.key());
+        }
+    }
+    m_folder = 0;
+    m_mailboxKey = keys.value(0);
+    m_folderMailboxKey = m_mailboxKey;
+    m_folderWellKnown = QStringLiteral("inbox");
+    m_showRecipients = false;
+    m_messageModel->setResults([mailboxes, keys]() {
+        QList<SearchHit> hits;
+        for (const QString &key : keys) {
+            const Store *store = mailboxes->store(key);
+            const std::optional<FolderRow> inbox = store ? store->folderByWellKnown(QStringLiteral("inbox")) : std::nullopt;
+            if (!inbox) {
+                continue;
+            }
+            const std::optional<MailboxInfo> box = mailboxes->mailbox(key);
+            const QList<ListRow> rows = store->listPage(inbox->id, std::nullopt, 300);
+            for (const ListRow &row : rows) {
+                hits.append({key, row, box ? box->label() : inbox->name});
+            }
+        }
+        std::stable_sort(hits.begin(), hits.end(), [](const SearchHit &a, const SearchHit &b) {
+            return a.row.received != b.row.received ? a.row.received > b.row.received : a.row.id > b.row.id;
+        });
+        if (hits.size() > 1000) {
+            hits.resize(1000);
+        }
+        return hits;
+    });
+    applyListModel();
+    m_messages->scrollToTop();
+    setCaption(i18nc("@item folder pane, the Inboxes of every mailbox", "All Inboxes"));
+    updateActions();
+}
+
 void MainWindow::messageChanged()
 {
     // One row: show it (a conversation row shows its newest message)
@@ -2765,17 +3460,37 @@ void MainWindow::collectionChanged(const QString &account, const QString &mailbo
     }
     if (collection.startsWith(QLatin1String("folder:"))) {
         m_folderModel->updateCounts(key);
+        m_badgeTimer.start();
         if (key == m_mailboxKey && collection.mid(7).toLongLong() == m_folder) {
-            if (m_messages->model() == m_conversationModel) {
-                m_conversationModel->refresh();
-            } else {
-                m_messageModel->refresh();
-            }
+            refreshList();
         }
         if (key == m_mailboxKey) {
             showCategoryLabels();
         }
     }
+}
+
+void MainWindow::updateUnreadBadge()
+{
+    // The unread messages in the Inboxes of the own mailboxes on the task manager's icon, as KMail
+    // shows them (Unity's LauncherEntry, which Plasma's task manager follows)
+    int unread = 0;
+    const QList<MailboxInfo> boxes = m_mailboxes->mailboxes();
+    for (const MailboxInfo &box : boxes) {
+        const Store *store = box.own ? m_mailboxes->store(box.key()) : nullptr;
+        if (const std::optional<FolderRow> inbox = store ? store->folderByWellKnown(QStringLiteral("inbox")) : std::nullopt) {
+            unread += inbox->unread;
+        }
+    }
+    if (unread == m_badge) {
+        return;
+    }
+    m_badge = unread;
+    QDBusMessage update = QDBusMessage::createSignal(QStringLiteral("/io/github/nvaert1986/graphmail/UnityLauncher"), QStringLiteral("com.canonical.Unity.LauncherEntry"),
+                                                     QStringLiteral("Update"));
+    update << QStringLiteral("application://io.github.nvaert1986.graphmail.desktop")
+           << QVariantMap{{QStringLiteral("count"), qint64(unread)}, {QStringLiteral("count-visible"), unread > 0}};
+    QDBusConnection::sessionBus().send(update);
 }
 
 void MainWindow::reloadFolders()
@@ -2793,6 +3508,10 @@ void MainWindow::reloadFolders()
     };
     collect({});
     const QString current = m_folders->currentIndex().data(FolderModel::PathKeyRole).toString();
+    // Favorites stay open unless the user closed them
+    if (!m_favoritesClosed) {
+        expanded.append(QStringLiteral("favorites"));
+    }
     {
         // The same folder stays selected: no need to reload the list
         const QSignalBlocker blocker(m_folders->selectionModel());
@@ -2913,6 +3632,43 @@ bool MainWindow::conversationView() const
     return m_conversations && m_searchField->text().trimmed().isEmpty();
 }
 
+void MainWindow::refreshList()
+{
+    // The list reloads (a message came, went or changed): the selected message stays selected;
+    // when it left the folder (deleted, moved), the one that takes its place is selected, as in
+    // Outlook, so Delete can be pressed again for the next one
+    QAbstractItemModel *model = m_messages->model();
+    QModelIndex current = m_messages->currentIndex();
+    while (current.parent().isValid()) {
+        current = current.parent();
+    }
+    const bool hadSelection = m_messages->selectionModel() && m_messages->selectionModel()->hasSelection() && current.isValid();
+    const int row = current.row();
+    const qint64 id = current.data(MessageListModel::IdRole).toLongLong();
+    const int scroll = m_messages->verticalScrollBar()->value();
+    if (model == m_conversationModel) {
+        m_conversationModel->refresh();
+    } else {
+        m_messageModel->refresh();
+    }
+    const int rows = model->rowCount();
+    if (!hadSelection || rows == 0 || (m_messages->selectionModel()->hasSelection() && m_messages->currentIndex().isValid())) {
+        return;
+    }
+    // The same message if it is still there, else the row where it was
+    int target = std::min(row, rows - 1);
+    for (int r = 0; r < rows; ++r) {
+        if (model->index(r, 0).data(MessageListModel::IdRole).toLongLong() == id) {
+            target = r;
+            break;
+        }
+    }
+    m_messages->verticalScrollBar()->setValue(scroll);
+    const QModelIndex next = model->index(target, 0);
+    m_messages->selectionModel()->setCurrentIndex(next, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    m_messages->scrollTo(next);
+}
+
 void MainWindow::applyListModel()
 {
     QAbstractItemModel *wanted = conversationView() ? static_cast<QAbstractItemModel *>(m_conversationModel) : m_messageModel;
@@ -2927,6 +3683,40 @@ void MainWindow::applyListModel()
 void MainWindow::updateActions()
 {
     const bool any = !selectedMessages().isEmpty();
+    // The toolbar follows the folder, as Outlook's does: Drafts discard and do not answer, Deleted
+    // Items and Junk Email can be emptied
+    const bool drafts = m_folderWellKnown == QLatin1String("drafts") && m_folder != 0;
+    const bool outgoing = drafts || (m_folderWellKnown == QLatin1String("outbox") && m_folder != 0);
+    if (QAction *a = actionCollection()->action(QStringLiteral("delete"))) {
+        a->setText(drafts ? i18nc("@action", "Discard Draft") : i18nc("@action", "Delete"));
+    }
+    for (const QString &name : {QStringLiteral("reply"), QStringLiteral("reply_all"), QStringLiteral("forward")}) {
+        if (QAction *a = actionCollection()->action(name)) {
+            a->setVisible(!outgoing);
+        }
+    }
+    if (QAction *a = actionCollection()->action(QStringLiteral("toggle_read"))) {
+        const Store *store = m_mailboxes->store(m_mailboxKey);
+        const QList<qint64> ids = selectedMessages();
+        const std::optional<MessageRow> first = store && !ids.isEmpty() ? store->message(ids.constFirst()) : std::nullopt;
+        const bool read = first && first->isRead;
+        a->setEnabled(any);
+        a->setText(read ? i18nc("@action", "Mark as Unread") : i18nc("@action", "Mark as Read"));
+        a->setIcon(QIcon::fromTheme(read ? QStringLiteral("mail-mark-unread") : QStringLiteral("mail-mark-read")));
+    }
+    for (const QString &name : {QStringLiteral("report_phishing"), QStringLiteral("copy_to"), QStringLiteral("create_rule"), QStringLiteral("sweep")}) {
+        if (QAction *a = actionCollection()->action(name)) {
+            a->setEnabled(any);
+        }
+    }
+    if (QAction *a = actionCollection()->action(QStringLiteral("report_phishing"))) {
+        a->setVisible(m_folderWellKnown != QLatin1String("sentitems") && m_folderWellKnown != QLatin1String("drafts") && m_folderWellKnown != QLatin1String("outbox"));
+    }
+    if (QAction *a = actionCollection()->action(QStringLiteral("empty_folder"))) {
+        const bool emptiable = m_folder != 0 && (m_folderWellKnown == QLatin1String("deleteditems") || m_folderWellKnown == QLatin1String("junkemail"));
+        a->setVisible(emptiable);
+        a->setEnabled(emptiable);
+    }
     for (const QString &name :
          {QStringLiteral("mark_read"), QStringLiteral("mark_unread"), QStringLiteral("flag"), QStringLiteral("delete"), QStringLiteral("move"), QStringLiteral("archive")}) {
         if (QAction *action = actionCollection()->action(name)) {
@@ -2934,7 +3724,8 @@ void MainWindow::updateActions()
         }
     }
     const bool one = m_messages->selectionModel() && m_messages->selectionModel()->selectedRows().size() == 1;
-    for (const QString &name : {QStringLiteral("reply"), QStringLiteral("reply_all"), QStringLiteral("forward")}) {
+    for (const QString &name : {QStringLiteral("reply"), QStringLiteral("reply_all"), QStringLiteral("forward"), QStringLiteral("forward_as_attachment"),
+                                QStringLiteral("edit_as_new"), QStringLiteral("reply_with_meeting")}) {
         if (QAction *action = actionCollection()->action(name)) {
             action->setEnabled(one);
         }
@@ -2954,6 +3745,7 @@ void MainWindow::updateActions()
     }
     if (QAction *a = actionCollection()->action(QStringLiteral("report_junk"))) {
         a->setEnabled(any && m_folderWellKnown != QLatin1String("sentitems") && m_folderWellKnown != QLatin1String("drafts"));
+        a->setVisible(!outgoing && m_folderWellKnown != QLatin1String("sentitems"));
         a->setText(m_folderWellKnown == QLatin1String("junkemail") ? i18nc("@action", "Not Junk") : i18nc("@action", "Report Junk"));
     }
     if (QAction *a = actionCollection()->action(QStringLiteral("ignore_conversation"))) {
@@ -3062,7 +3854,7 @@ void MainWindow::runQuickStep(const QJsonObject &step)
     } else if (has("delete")) {
         deleteSelected();
     }
-    qWarning() << "quick step test:" << step.value(QLatin1String("name")).toString() << ids.size() << "messages";
+    qCInfo(GRAPHMAIL) << "quick step:" << step.value(QLatin1String("name")).toString() << ids.size() << "messages";
 }
 
 bool MainWindow::runQuickStepForTests(const QString &name)
@@ -3210,8 +4002,11 @@ void MainWindow::markSelected(bool read)
     const QString account = m_mailboxKey.section(QLatin1Char('/'), 0, 0);
     const QString mailbox = m_mailboxKey.section(QLatin1Char('/'), 1);
     const QList<qint64> ids = selectedMessages();
+    const Store *store = m_mailboxes->store(m_mailboxKey);
     for (qint64 id : ids) {
-        m_daemon->markRead(account, mailbox, id, read);
+        const bool receipt = read && store
+            && ReadReceipts::decide(ReadReceipts::mode(), store->readReceiptRequested(id), true) == ReadReceipts::Decision::Send;
+        m_daemon->markRead(account, mailbox, id, read, receipt || !read);
     }
     // Marking by hand wins over the automatic mark-as-read
     m_markReadTimer.stop();
@@ -3237,13 +4032,459 @@ void MainWindow::deleteSelected()
     const QString account = m_mailboxKey.section(QLatin1Char('/'), 0, 0);
     const QString mailbox = m_mailboxKey.section(QLatin1Char('/'), 1);
     const QList<qint64> ids = selectedMessages();
+    // In Deleted Items a delete is for good (Ctrl+Z cannot bring it back): asked first, as Outlook does
+    const Store *store = m_mailboxes->store(m_mailboxKey);
+    const std::optional<FolderRow> deleted = store ? store->folderByWellKnown(QStringLiteral("deleteditems")) : std::nullopt;
+    const int permanent = int(std::count_if(ids.cbegin(), ids.cend(), [store, &deleted](qint64 id) {
+        const std::optional<MessageRow> row = store ? store->message(id) : std::nullopt;
+        return row && deleted && row->folder == deleted->id;
+    }));
+    if (permanent > 0
+        && KMessageBox::warningContinueCancel(this,
+                                              i18ncp("@info", "Permanently delete this message?", "Permanently delete these %1 messages?", permanent),
+                                              i18nc("@title:window", "Delete Permanently"),
+                                              KStandardGuiItem::del())
+            != KMessageBox::Continue) {
+        return;
+    }
+    rememberForUndo(m_mailboxKey, ids, true);
     for (qint64 id : ids) {
         m_daemon->remove(account, mailbox, id);
     }
 }
 
+void MainWindow::sweep()
+{
+    const Store *store = m_mailboxes->store(m_mailboxKey);
+    const std::optional<MessageRow> row = store ? store->message(shownMessage()) : std::nullopt;
+    if (!row || row->senderAddress.isEmpty()) {
+        return;
+    }
+    const std::optional<FolderRow> folder = store->folder(row->folder);
+    const QList<qint64> ids = store->messagesFrom(row->folder, row->senderAddress);
+    const std::optional<MailboxInfo> box = m_mailboxes->mailbox(m_mailboxKey);
+    const QString sender = row->senderName.isEmpty() ? row->senderAddress : QStringLiteral("%1 <%2>").arg(row->senderName, row->senderAddress);
+    SweepDialog dialog(m_folderModel, m_mailboxKey, sender, folder ? folder->name : QString(), int(ids.size()), box && box->own, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        sweepMessages(m_mailboxKey, shownMessage(), int(dialog.scope()), dialog.target());
+    }
+}
+
+void MainWindow::sweepMessages(const QString &mailboxKey, qint64 message, int scope, qint64 target)
+{
+    const Store *store = m_mailboxes->store(mailboxKey);
+    const std::optional<MessageRow> row = store ? store->message(message) : std::nullopt;
+    if (!row || row->senderAddress.isEmpty()) {
+        return;
+    }
+    QList<qint64> ids = store->messagesFrom(row->folder, row->senderAddress);
+    if (SweepDialog::Scope(scope) == SweepDialog::Scope::KeepNewest && !ids.isEmpty()) {
+        ids.removeFirst();
+    }
+    const QString account = mailboxKey.section(QLatin1Char('/'), 0, 0);
+    const QString mailbox = mailboxKey.section(QLatin1Char('/'), 1);
+    rememberForUndo(mailboxKey, ids, target == 0);
+    for (qint64 id : std::as_const(ids)) {
+        if (target == 0) {
+            m_daemon->remove(account, mailbox, id);
+        } else if (id != 0) {
+            m_daemon->move(account, mailbox, id, target);
+        }
+    }
+    m_status->setText(i18ncp("@info:status", "Swept %1 message.", "Swept %1 messages.", int(ids.size())));
+    if (SweepDialog::Scope(scope) != SweepDialog::Scope::AllAndFuture) {
+        return;
+    }
+    // Future messages: an Inbox rule after the existing ones
+    const std::optional<FolderRow> targetFolder = target != 0 ? store->folder(target) : std::nullopt;
+    const QString address = row->senderAddress;
+    m_daemon->query(account, mailbox, QStringLiteral("messageRules"), QStringLiteral("{}"), this, [this, account, mailbox, address, targetFolder](const QString &json) {
+        int last = 0;
+        const QJsonArray rules = QJsonDocument::fromJson(json.toUtf8()).object().value(QLatin1String("body")).toObject().value(QLatin1String("value")).toArray();
+        for (const QJsonValue &v : rules) {
+            last = std::max(last, v.toObject().value(QLatin1String("sequence")).toInt());
+        }
+        const QJsonObject args{{QStringLiteral("rule"), SweepDialog::rule(address, targetFolder ? targetFolder->graphId : QString(), last + 1)}};
+        m_daemon->query(account, mailbox, QStringLiteral("messageRuleCreate"), QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)), this,
+                        [this, address](const QString &answer) {
+                            const bool ok = QJsonDocument::fromJson(answer.toUtf8()).object().value(QLatin1String("ok")).toBool();
+                            m_status->setText(ok ? i18nc("@info:status", "Future messages from %1 will be swept too (a rule in Rules).", address)
+                                                 : i18nc("@info:status", "The rule for future messages from %1 could not be made.", address));
+                        });
+    });
+}
+
+void MainWindow::runCleanup(bool interactive, bool notify)
+{
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const QList<Cleanup::Candidate> candidates = Cleanup::plan(m_mailboxes, now);
+    if (interactive) {
+        Cleanup::ReportDialog report(candidates, this);
+        if (report.exec() != QDialog::Accepted) {
+            return;
+        }
+    }
+    Cleanup::setLastRun(now);
+    const Cleanup::Settings settings = Cleanup::settings();
+    int moved = 0;
+    int deleted = 0;
+    int reported = 0;
+    QStringList problems;
+    QHash<QString, QList<Cleanup::Candidate>> exports;
+    for (const Cleanup::Candidate &c : candidates) {
+        const QString account = c.mailboxKey.section(QLatin1Char('/'), 0, 0);
+        const QString mailbox = c.mailboxKey.section(QLatin1Char('/'), 1);
+        switch (c.action) {
+        case Cleanup::Action::Archive: {
+            const qint64 target = archiveFolder(c.mailboxKey);
+            if (target == 0 || target == c.folder) {
+                problems.append(i18nc("@info %1 a folder", "%1: no Archive folder to move to", c.folderName));
+                break;
+            }
+            rememberForUndo(c.mailboxKey, c.messages, false);
+            for (qint64 id : c.messages) {
+                m_daemon->move(account, mailbox, id, target);
+            }
+            moved += int(c.messages.size());
+            break;
+        }
+        case Cleanup::Action::Delete:
+            rememberForUndo(c.mailboxKey, c.messages, true);
+            for (qint64 id : c.messages) {
+                m_daemon->remove(account, mailbox, id);
+            }
+            deleted += int(c.messages.size());
+            break;
+        case Cleanup::Action::ExportPst:
+            exports[c.mailboxKey].append(c);
+            break;
+        case Cleanup::Action::Report:
+            reported += int(c.messages.size());
+            break;
+        }
+    }
+    QStringList done;
+    if (moved > 0) {
+        done.append(i18ncp("@info", "%1 message moved to the Archive folder.", "%1 messages moved to the Archive folder.", moved));
+    }
+    if (deleted > 0) {
+        done.append(i18ncp("@info", "%1 message deleted.", "%1 messages deleted.", deleted));
+    }
+    if (reported > 0) {
+        done.append(i18ncp("@info", "%1 old message could be cleaned up (Settings > Clean Up Old Mail).", "%1 old messages could be cleaned up (Settings > Clean Up Old Mail).", reported));
+    }
+    const auto tell = [this, interactive, notify](const QString &text) {
+        m_status->setText(text);
+        // A scheduled run happens unseen: the desktop says what it did
+        if (!interactive && notify && !text.isEmpty()) {
+            auto *notification = new KNotification(QStringLiteral("cleanup"));
+            notification->setComponentName(QStringLiteral("plasma-graphmail-linux"));
+            notification->setTitle(i18nc("@title notification", "Old mail cleaned up"));
+            notification->setText(text);
+            notification->setIconName(QStringLiteral("edit-clear-history"));
+            notification->sendEvent();
+        }
+    };
+    tell((done + problems).join(QLatin1Char(' ')));
+    // Export to PST, then remove: one file per mailbox; only what is in the file goes
+    for (auto it = exports.cbegin(); it != exports.cend(); ++it) {
+        const QString key = it.key();
+        const std::optional<MailboxInfo> box = m_mailboxes->mailbox(key);
+        QList<qint64> folders;
+        QSet<qint64> messages;
+        for (const Cleanup::Candidate &c : it.value()) {
+            folders.append(c.folder);
+            for (qint64 id : c.messages) {
+                messages.insert(id);
+            }
+        }
+        QDir().mkpath(settings.pstFolder);
+        static const QRegularExpression unsafe(QStringLiteral("[/\\\\:*?\"<>|]"));
+        QString name = i18nc("@info file name, %1 a mailbox, %2 a date", "Old mail %1 %2", box ? box->label() : key, QDate::currentDate().toString(Qt::ISODate));
+        name.replace(unsafe, QStringLiteral("_"));
+        QString file = QDir(settings.pstFolder).filePath(name + QStringLiteral(".pst"));
+        for (int n = 2; QFileInfo::exists(file); ++n) {
+            file = QDir(settings.pstFolder).filePath(QStringLiteral("%1 (%2).pst").arg(name).arg(n));
+        }
+        auto *exporter = new PstExporter(m_mailboxes, m_daemon, key, folders, file, interactive ? this : nullptr);
+        exporter->setMessages(messages);
+        const int planned = int(messages.size());
+        connect(exporter, &PstExporter::finished, this, [this, key, exporter, planned, tell](bool ok, int, int, int, const QString &path, const QString &error) {
+            if (!ok) {
+                tell(i18nc("@info %1 a file, %2 the reason", "Old mail was not removed: %1 could not be written (%2).", path, error));
+                return;
+            }
+            // Only messages whose full original is in the file go; one rebuilt from the cache (it may
+            // lack its body or attachments) or skipped stays in the mailbox
+            const QList<qint64> ids = exporter->savedOriginals();
+            if (ids.size() < planned) {
+                tell(i18ncp("@info", "%1 old message could not be saved completely and stays in the mailbox.", "%1 old messages could not be saved completely and stay in the mailbox.",
+                            planned - int(ids.size())));
+            }
+            if (ids.isEmpty()) {
+                return;
+            }
+            rememberForUndo(key, ids, true);
+            for (qint64 id : ids) {
+                m_daemon->remove(key.section(QLatin1Char('/'), 0, 0), key.section(QLatin1Char('/'), 1), id);
+            }
+            tell(i18ncp("@info %2 a file", "%1 old message saved in %2 and removed from the mailbox.", "%1 old messages saved in %2 and removed from the mailbox.",
+                        int(ids.size()), path));
+        });
+        exporter->start();
+    }
+}
+
+void MainWindow::emptyFolder(const QString &mailboxKey, qint64 folder)
+{
+    const Store *store = m_mailboxes->store(mailboxKey);
+    const std::optional<FolderRow> row = store && folder != 0 ? store->folder(folder) : std::nullopt;
+    if (!row) {
+        return;
+    }
+    QList<qint64> ids;
+    std::optional<PageCursor> cursor;
+    for (;;) {
+        const QList<ListRow> page = store->listPage(folder, cursor, 1000);
+        for (const ListRow &r : page) {
+            ids.append(r.id);
+        }
+        if (page.size() < 1000) {
+            break;
+        }
+        cursor = PageCursor{page.constLast().received, page.constLast().id};
+    }
+    // Graph lists only mail: calendar items, tasks, contacts and some other kinds in the folder stay
+    // (its total counts them); Outlook on the web can remove those
+    const int hidden = std::max(0, row->total - int(ids.size()));
+    const auto offerWeb = [this, mailboxKey, row, hidden] {
+        const QString text = i18ncp("@info %2 a folder",
+                                    "%2 still holds %1 item that Graph Mail cannot see or remove (a calendar item, task, contact or another kind Microsoft Graph does not show). Empty the folder in Outlook on the web to remove it.",
+                                    "%2 still holds %1 items that Graph Mail cannot see or remove (calendar items, tasks, contacts or other kinds Microsoft Graph does not show). Empty the folder in Outlook on the web to remove them.",
+                                    hidden,
+                                    row->name);
+        if (KMessageBox::questionTwoActions(this, text, i18nc("@title:window", "Empty Folder"), KGuiItem(i18nc("@action:button", "Open Outlook on the web"), QStringLiteral("internet-web-browser")), KStandardGuiItem::close())
+            == KMessageBox::PrimaryAction) {
+            const std::optional<MailboxInfo> box = m_mailboxes->mailbox(mailboxKey);
+            QUrl url(QStringLiteral("https://outlook.office.com/mail/"));
+            const QString folder = row->wellKnown.isEmpty() ? QString() : row->wellKnown;
+            url.setPath(QStringLiteral("/mail/") + (box && !box->own && !box->address.isEmpty() ? box->address + QLatin1Char('/') : QString()) + folder);
+            QDesktopServices::openUrl(url);
+        }
+    };
+    if (ids.isEmpty()) {
+        m_status->setText(i18nc("@info:status %1 a folder", "%1 is empty.", row->name));
+        if (hidden > 0) {
+            offerWeb();
+        }
+        return;
+    }
+    // Deleted Items: gone for good (Exchange keeps them a while in Recoverable Items); any other
+    // folder (Junk Email): to Deleted Items, as Outlook's Empty Folder does, and Ctrl+Z works
+    const bool permanent = row->wellKnown == QLatin1String("deleteditems");
+    const QString question = permanent
+        ? i18ncp("@info %2 a folder", "Permanently delete the %1 message in %2?", "Permanently delete all %1 messages in %2?", int(ids.size()), row->name)
+        : i18ncp("@info %2 a folder", "Move the %1 message in %2 to Deleted Items?", "Move all %1 messages in %2 to Deleted Items?", int(ids.size()), row->name);
+    if (KMessageBox::warningContinueCancel(this, question, i18nc("@title:window", "Empty Folder"), KGuiItem(i18nc("@action:button", "Empty Folder"), QStringLiteral("edit-delete-shred")))
+        != KMessageBox::Continue) {
+        return;
+    }
+    if (!permanent) {
+        rememberForUndo(mailboxKey, ids, true);
+    }
+    for (qint64 id : std::as_const(ids)) {
+        m_daemon->remove(mailboxKey.section(QLatin1Char('/'), 0, 0), mailboxKey.section(QLatin1Char('/'), 1), id);
+    }
+    m_status->setText(permanent ? i18ncp("@info:status", "%1 message deleted for good.", "%1 messages deleted for good.", int(ids.size()))
+                                : i18ncp("@info:status", "%1 message moved to Deleted Items.", "%1 messages moved to Deleted Items.", int(ids.size())));
+    if (hidden > 0) {
+        offerWeb();
+    }
+}
+
+void MainWindow::folderChange(const QString &mailboxKey, const QString &kind, const QJsonObject &args, const QString &done)
+{
+    m_daemon->query(mailboxKey.section(QLatin1Char('/'), 0, 0), mailboxKey.section(QLatin1Char('/'), 1), kind, QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)), this,
+                    [this, mailboxKey, done](const QString &json) {
+                        const QJsonObject answer = QJsonDocument::fromJson(json.toUtf8()).object();
+                        if (answer.value(QLatin1String("ok")).toBool()) {
+                            m_status->setText(done);
+                            return;
+                        }
+                        const QString problem = answer.isEmpty() ? QStringLiteral("network") : answer.value(QLatin1String("problem")).toString();
+                        const QString detail = answer.value(QLatin1String("detail")).toString();
+                        // ErrorFolderExists, a move into its own subfolder, ...: Exchange's words
+                        KMessageBox::error(this,
+                                           problem.isEmpty() || problem == QLatin1String("other") ? detail : accessProblemText(problem, mailboxKey),
+                                           i18nc("@title:window", "Folder"));
+                    });
+}
+
+void MainWindow::newFolder(const QString &mailboxKey, qint64 parent)
+{
+    const Store *store = m_mailboxes->store(mailboxKey);
+    const std::optional<FolderRow> under = store && parent != 0 ? store->folder(parent) : std::nullopt;
+    if (parent != 0 && !under) {
+        return;
+    }
+    bool ok = false;
+    const QString name = QInputDialog::getText(this,
+                                               i18nc("@title:window", "New Folder"),
+                                               under ? i18nc("@label:textbox %1 a folder", "Name of the new folder in %1:", under->name)
+                                                     : i18nc("@label:textbox", "Name of the new folder:"),
+                                               QLineEdit::Normal,
+                                               {},
+                                               &ok)
+                             .trimmed();
+    if (!ok || name.isEmpty()) {
+        return;
+    }
+    folderChange(mailboxKey,
+                 QStringLiteral("folderCreate"),
+                 {{QStringLiteral("parent"), under ? under->graphId : QStringLiteral("msgfolderroot")}, {QStringLiteral("name"), name}, {QStringLiteral("unique"), true}},
+                 i18nc("@info:status %1 a folder", "Folder %1 created.", name));
+}
+
+void MainWindow::renameFolder(const QString &mailboxKey, qint64 folder)
+{
+    const Store *store = m_mailboxes->store(mailboxKey);
+    const std::optional<FolderRow> row = store ? store->folder(folder) : std::nullopt;
+    if (!row || !row->wellKnown.isEmpty()) {
+        return;
+    }
+    bool ok = false;
+    const QString name = QInputDialog::getText(this, i18nc("@title:window", "Rename Folder"), i18nc("@label:textbox", "New name:"), QLineEdit::Normal, row->name, &ok).trimmed();
+    if (!ok || name.isEmpty() || name == row->name) {
+        return;
+    }
+    folderChange(mailboxKey,
+                 QStringLiteral("folderChange"),
+                 {{QStringLiteral("folder"), folder}, {QStringLiteral("action"), QStringLiteral("rename")}, {QStringLiteral("name"), name}},
+                 i18nc("@info:status %1 a folder", "Folder renamed to %1.", name));
+}
+
+void MainWindow::moveFolder(const QString &mailboxKey, qint64 folder)
+{
+    const Store *store = m_mailboxes->store(mailboxKey);
+    const std::optional<FolderRow> row = store ? store->folder(folder) : std::nullopt;
+    if (!row || !row->wellKnown.isEmpty()) {
+        return;
+    }
+    MoveDialog dialog(m_folderModel, mailboxKey, this);
+    dialog.setWindowTitle(i18nc("@title:window %1 a folder", "Move Folder %1", row->name));
+    if (dialog.exec() != QDialog::Accepted || (dialog.folder() == 0 && !dialog.mailboxChosen()) || dialog.folder() == folder) {
+        return;
+    }
+    const std::optional<FolderRow> target = dialog.folder() != 0 ? store->folder(dialog.folder()) : std::nullopt;
+    folderChange(mailboxKey,
+                 QStringLiteral("folderChange"),
+                 {{QStringLiteral("folder"), folder}, {QStringLiteral("action"), QStringLiteral("move")}, {QStringLiteral("target"), dialog.folder()}},
+                 target ? i18nc("@info:status %1 a folder, %2 another", "Folder %1 moved to %2.", row->name, target->name)
+                        : i18nc("@info:status %1 a folder", "Folder %1 moved to the top of the mailbox.", row->name));
+}
+
+void MainWindow::deleteFolder(const QString &mailboxKey, qint64 folder)
+{
+    const Store *store = m_mailboxes->store(mailboxKey);
+    const std::optional<FolderRow> row = store ? store->folder(folder) : std::nullopt;
+    if (!row || !row->wellKnown.isEmpty()) {
+        return;
+    }
+    // Inside Deleted Items it goes for good (Exchange keeps it a while in Recoverable Items)
+    bool inDeleted = false;
+    for (std::optional<FolderRow> up = store->folderByGraphId(row->parentGraphId); up && !inDeleted; up = store->folderByGraphId(up->parentGraphId)) {
+        inDeleted = up->wellKnown == QLatin1String("deleteditems");
+    }
+    const QString question = inDeleted ? i18nc("@info %1 a folder", "Permanently delete the folder %1 and everything in it?", row->name)
+                                       : i18nc("@info %1 a folder", "Move the folder %1 and everything in it to Deleted Items?", row->name);
+    if (KMessageBox::warningContinueCancel(this, question, i18nc("@title:window", "Delete Folder"), KStandardGuiItem::del()) != KMessageBox::Continue) {
+        return;
+    }
+    folderChange(mailboxKey,
+                 QStringLiteral("folderChange"),
+                 {{QStringLiteral("folder"), folder}, {QStringLiteral("action"), QStringLiteral("delete")}},
+                 inDeleted ? i18nc("@info:status %1 a folder", "Folder %1 deleted for good.", row->name)
+                           : i18nc("@info:status %1 a folder", "Folder %1 moved to Deleted Items.", row->name));
+}
+
+void MainWindow::markAllRead(const QString &mailboxKey, qint64 folder)
+{
+    const Store *store = m_mailboxes->store(mailboxKey);
+    const std::optional<FolderRow> row = store ? store->folder(folder) : std::nullopt;
+    if (!row) {
+        return;
+    }
+    folderChange(mailboxKey,
+                 QStringLiteral("folderChange"),
+                 {{QStringLiteral("folder"), folder}, {QStringLiteral("action"), QStringLiteral("markAllRead")}},
+                 i18nc("@info:status %1 a folder", "Everything in %1 is marked as read.", row->name));
+}
+
+void MainWindow::rememberForUndo(const QString &mailboxKey, const QList<qint64> &messages, bool deleting)
+{
+    const Store *store = m_mailboxes->store(mailboxKey);
+    if (!store) {
+        return;
+    }
+    const std::optional<FolderRow> deleted = store->folderByWellKnown(QStringLiteral("deleteditems"));
+    UndoStep step{mailboxKey, {}};
+    for (qint64 message : messages) {
+        const std::optional<MessageRow> row = store->message(message);
+        if (row && !(deleting && deleted && row->folder == deleted->id)) {
+            step.moves.append({message, row->folder});
+        }
+    }
+    if (step.moves.isEmpty()) {
+        return;
+    }
+    m_undoSteps.append(step);
+    // Outlook keeps a few steps; older ones fall off
+    while (m_undoSteps.size() > 20) {
+        m_undoSteps.removeFirst();
+    }
+    m_undoAction->setEnabled(true);
+}
+
+void MainWindow::undoLast()
+{
+    if (m_undoSteps.isEmpty()) {
+        return;
+    }
+    const UndoStep step = m_undoSteps.takeLast();
+    m_undoAction->setEnabled(!m_undoSteps.isEmpty());
+    const Store *store = m_mailboxes->store(step.mailboxKey);
+    int moved = 0;
+    for (const auto &[message, folder] : step.moves) {
+        // Still in the cache and somewhere else: back to where it was
+        const std::optional<MessageRow> row = store ? store->message(message) : std::nullopt;
+        if (row && row->folder != folder && store->folder(folder)) {
+            m_daemon->move(step.mailboxKey.section(QLatin1Char('/'), 0, 0), step.mailboxKey.section(QLatin1Char('/'), 1), message, folder);
+            ++moved;
+        }
+    }
+    m_status->setText(moved > 0 ? i18ncp("@info:status", "Undone: %1 message moved back.", "Undone: %1 messages moved back.", moved)
+                                : i18nc("@info:status", "Nothing to undo: the messages are no longer there."));
+}
+
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    if (watched == m_messages->viewport() && (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove || event->type() == QEvent::Drop)) {
+        // Only files from outside; messages of the list itself are not dropped back on it
+        auto *drop = static_cast<QDropEvent *>(event);
+        const qint64 folder = m_folders->currentIndex().data(FolderModel::FolderIdRole).toLongLong();
+        const bool files = folder != 0 && drop->mimeData()->hasUrls() && !drop->mimeData()->hasFormat(MessageListModel::mimeType());
+        const QStringList paths = files ? FolderModel::messageFiles(drop->mimeData()) : QStringList();
+        if (paths.isEmpty()) {
+            drop->ignore();
+            return true;
+        }
+        drop->setDropAction(Qt::CopyAction);
+        drop->accept();
+        if (event->type() == QEvent::Drop) {
+            importMessageFiles(m_mailboxKey, folder, paths);
+        }
+        return true;
+    }
     if (watched == m_messages && event->type() == QEvent::KeyPress) {
         const int key = static_cast<QKeyEvent *>(event)->key();
         if ((key == Qt::Key_Return || key == Qt::Key_Enter) && m_messages->currentIndex().isValid()) {
@@ -3286,6 +4527,8 @@ void MainWindow::openMessageWindow(const QModelIndex &index)
     // The pane's timer is not needed any more: the window marks it read
     m_markReadTimer.stop();
     auto *window = new MessageWindow(m_mailboxes, m_daemon, m_folderModel, m_mailboxKey, message, m_markReadEnabled);
+    connect(window, &MessageWindow::replyWithMeetingRequested, this, &MainWindow::replyWithMeeting);
+    connect(window, &MessageWindow::mailtoRequested, this, &MainWindow::openMailto);
     m_messageWindows.append(window);
     window->show();
 }

@@ -6,6 +6,7 @@
 #include "collectionsync.h"
 #include "outgoing.h"
 
+#include <QHash>
 #include <QObject>
 
 #include <functional>
@@ -61,6 +62,9 @@ private:
     void putChunk(const OutgoingAttachment &attachment, const QByteArray &data, const QString &url, qint64 offset);
     void uploaded(const QString &key, const QString &graphId);
     void sendDraft();
+    // @mentions onto the draft (beta), then postSend()
+    void addMentions();
+    void postSend();
     void learn(const QString &mailbox, const QString &internetMessageId, int attemptsLeft);
 
     void discard();
@@ -77,6 +81,8 @@ private:
     bool m_busy = false;
     Outgoing m_run;
     bool m_recreated = false;
+    // Held for Undo send: uuid -> the revision already in Exchange
+    QHash<QString, int> m_held;
     // Attachments were added or removed in this run: the draft's version changed with them
     bool m_attachmentsChanged = false;
     int m_learnDelayMs = 5000;

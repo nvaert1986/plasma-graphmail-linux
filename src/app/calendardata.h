@@ -82,6 +82,8 @@ public:
     void setShown(const QString &key, bool shown);
     // Shown calendars' events on these local days (inclusive), sorted by start
     QList<DisplayEvent> events(QDate from, QDate to) const;
+    // One calendar's events, shown or not (File > Export Calendar)
+    QList<DisplayEvent> eventsOf(const QString &mailboxKey, qint64 calendar, QDate from, QDate to) const;
     std::optional<DisplayEvent> eventById(const QString &mailboxKey, qint64 id) const;
     // Calendars the user can add events to (the default one first)
     QList<CalendarInfo> writable() const;
@@ -96,10 +98,15 @@ public:
     void setCategoryList(class CategoryList *categories);
     // An event's categories (an occurrence has its series master's)
     QStringList categoriesOf(const DisplayEvent &event) const;
+    // The Teams link: an ordinary occurrence of a series has none of its own (Graph gives it only
+    // on the series and on changed occurrences), so the series' is taken
+    QString joinUrlOf(const DisplayEvent &event) const;
 
     // Colleagues whose calendar is not shared with the user (docs/PHASE7.md): shown as their
     // free/busy times from getSchedule, kept in graphmailrc [Calendar][FreeBusy <address>]
     static bool isFreeBusy(const QString &mailboxKey);
+    // The holidays of Calendar Options' region (docs/PHASE9B.md 9b.16): read only, like free/busy
+    static bool isHoliday(const QString &mailboxKey);
     void addFreeBusy(const QString &account, const QString &address, const QString &name);
     void removeFreeBusy(const QString &address);
     // Shown free/busy people (by account) whose times for these days are not known (or older

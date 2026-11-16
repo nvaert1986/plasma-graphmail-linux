@@ -124,8 +124,12 @@ void DaemonClient::fetchAttachment(const QString &account, const QString &mailbo
     call(QStringLiteral("FetchAttachment"), {account, mailbox, qlonglong(attachment)});
 }
 
-void DaemonClient::markRead(const QString &account, const QString &mailbox, qint64 message, bool read)
+void DaemonClient::markRead(const QString &account, const QString &mailbox, qint64 message, bool read, bool receipt)
 {
+    if (read && !receipt) {
+        call(QStringLiteral("MarkReadWithoutReceipt"), {account, mailbox, qlonglong(message)});
+        return;
+    }
     call(QStringLiteral("MarkRead"), {account, mailbox, qlonglong(message), read});
 }
 
@@ -256,6 +260,18 @@ void DaemonClient::checkMailbox(const QString &account, const QString &address, 
     call.setArguments({account, address});
     // A few round trips to Graph, each with its own retries
     auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(call, 90000), context);
+    connect(watcher, &QDBusPendingCallWatcher::finished, context, [done](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusPendingReply<QString> reply = *w;
+        done(reply.isValid() ? reply.value() : QString());
+    });
+}
+
+void DaemonClient::orgChart(const QString &account, const QString &user, QObject *context, const std::function<void(const QString &)> &done)
+{
+    QDBusMessage call = QDBusMessage::createMethodCall(service(), QString::fromLatin1(path), service(), QStringLiteral("OrgChart"));
+    call.setArguments({account, user});
+    auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(call, 60000), context);
     connect(watcher, &QDBusPendingCallWatcher::finished, context, [done](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         const QDBusPendingReply<QString> reply = *w;

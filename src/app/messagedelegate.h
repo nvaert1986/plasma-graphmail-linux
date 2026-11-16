@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "conditionalformat.h"
+
 #include <QStyledItemDelegate>
 
 namespace GraphMail
@@ -21,6 +23,8 @@ public:
     using QStyledItemDelegate::QStyledItemDelegate;
     // Category labels in their colours (docs/PHASE9.md)
     void setCategories(CategoryList *categories);
+    // Conditional formatting (docs/PHASE9B.md 9b.27): read again after the rules changed
+    void reloadFormatting();
     // A category label (also the reading pane's): the name on a rounded patch of its colour;
     // returns its width
     static int drawCategory(QPainter *painter, const QRect &line, int right, const QString &name, const QColor &color, const QFontMetrics &fm);
@@ -33,6 +37,7 @@ public:
 
 private:
     CategoryList *m_categories = nullptr;
+    QList<ConditionalFormat::Rule> m_formatting;
 };
 
 // A folder: name and, when there is unread mail, the count after it in bold accent colour

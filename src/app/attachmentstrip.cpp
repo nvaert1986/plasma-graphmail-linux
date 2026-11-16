@@ -94,6 +94,9 @@ void AttachmentStrip::contextMenuEvent(QContextMenuEvent *event)
     const qint64 id = item ? item->data(idRole).toLongLong() : 0;
     QMenu menu(this);
     if (id != 0) {
+        menu.addAction(QIcon::fromTheme(QStringLiteral("document-preview")), i18nc("@action:inmenu", "Preview"), this, [this, id] {
+            Q_EMIT previewRequested(id);
+        });
         menu.addAction(QIcon::fromTheme(QStringLiteral("document-open")), i18nc("@action:inmenu", "Open"), this, [this, id] {
             Q_EMIT openRequested(id);
         });

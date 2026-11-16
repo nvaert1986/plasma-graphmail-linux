@@ -3,6 +3,8 @@
 
 #include "eventdialog.h"
 #include "accesstext.h"
+#include "calendaroptions.h"
+#include "calendarviews.h"
 #include "daemonclient.h"
 #include "mailboxset.h"
 #include "recipientedit.h"
@@ -32,7 +34,9 @@
 #include <QMenu>
 #include <QPainter>
 #include <QPushButton>
+#include <QSplitter>
 #include <QTextEdit>
+#include <QToolButton>
 #include <QTimeEdit>
 #include <QTimeZone>
 #include <QVBoxLayout>
@@ -42,12 +46,6 @@ namespace GraphMail
 
 namespace
 {
-const QList<int> &reminderMinutes()
-{
-    static const QList<int> minutes{-1, 0, 5, 10, 15, 30, 60, 120, 24 * 60, 7 * 24 * 60};
-    return minutes;
-}
-
 const QStringList &showAsNames()
 {
     static const QStringList names{QStringLiteral("free"), QStringLiteral("tentative"), QStringLiteral("busy"), QStringLiteral("oof"), QStringLiteral("workingElsewhere")};
@@ -60,6 +58,57 @@ QString windowsZone()
     return windows.isEmpty() ? QStringLiteral("UTC") : QString::fromLatin1(windows);
 }
 
+// Graph's dateTimeTimeZone for a time in a zone of its own (Windows names, as Exchange keeps them)
+QJsonObject graphTime(const QDateTime &time, const QTimeZone &zone)
+{
+    const QByteArray windows = QTimeZone::ianaIdToWindowsId(zone.id());
+    if (windows.isEmpty() || windows == "UTC") {
+        return {{QStringLiteral("dateTime"), time.toUTC().toString(QStringLiteral("yyyy-MM-ddTHH:mm:ss"))}, {QStringLiteral("timeZone"), QStringLiteral("UTC")}};
+    }
+    return {{QStringLiteral("dateTime"), time.toTimeZone(zone).toString(QStringLiteral("yyyy-MM-ddTHH:mm:ss"))}, {QStringLiteral("timeZone"), QString::fromLatin1(windows)}};
+}
+
+// The zones the pickers offer: those Exchange knows (they have a Windows name), by offset
+QList<QPair<QString, QByteArray>> zoneChoices()
+{
+    static QList<QPair<QString, QByteArray>> choices;
+    if (choices.isEmpty()) {
+        const QDateTime now = QDateTime::currentDateTimeUtc();
+        QList<QPair<int, QByteArray>> zones;
+        const QList<QByteArray> ids = QTimeZone::availableTimeZoneIds();
+        for (const QByteArray &id : ids) {
+            if (id.contains('/') && !QTimeZone::ianaIdToWindowsId(id).isEmpty()) {
+                zones.append({QTimeZone(id).offsetFromUtc(now), id});
+            }
+        }
+        std::sort(zones.begin(), zones.end());
+        for (const auto &[offset, id] : std::as_const(zones)) {
+            const QString sign = offset < 0 ? QStringLiteral("-") : QStringLiteral("+");
+            const int minutes = std::abs(offset) / 60;
+            const QString label = QStringLiteral("(UTC%1%2:%3) %4")
+                                      .arg(sign)
+                                      .arg(minutes / 60, 2, 10, QLatin1Char('0'))
+                                      .arg(minutes % 60, 2, 10, QLatin1Char('0'))
+                                      .arg(QString::fromLatin1(id).replace(QLatin1Char('_'), QLatin1Char(' ')));
+            choices.append({label, id});
+        }
+    }
+    return choices;
+}
+
+// The zone of Exchange's originalStartTimeZone / originalEndTimeZone (a Windows name)
+QTimeZone zoneOf(const QString &windows)
+{
+    if (windows.isEmpty()) {
+        return {};
+    }
+    QTimeZone zone(QTimeZone::windowsIdToDefaultIanaId(windows.toUtf8()));
+    if (!zone.isValid()) {
+        zone = QTimeZone(windows.toUtf8());
+    }
+    return zone;
+}
+
 // Graph's dateTimeTimeZone for a local time
 QJsonObject graphTime(const QDateTime &local)
 {
@@ -67,26 +116,6 @@ QJsonObject graphTime(const QDateTime &local)
         return {{QStringLiteral("dateTime"), local.toUTC().toString(QStringLiteral("yyyy-MM-ddTHH:mm:ss"))}, {QStringLiteral("timeZone"), QStringLiteral("UTC")}};
     }
     return {{QStringLiteral("dateTime"), local.toString(QStringLiteral("yyyy-MM-ddTHH:mm:ss"))}, {QStringLiteral("timeZone"), windowsZone()}};
-}
-
-QString reminderText(int minutes)
-{
-    if (minutes < 0) {
-        return i18nc("@item:inlistbox no reminder", "None");
-    }
-    if (minutes == 0) {
-        return i18nc("@item:inlistbox reminder", "At the start");
-    }
-    if (minutes < 60) {
-        return i18ncp("@item:inlistbox reminder", "%1 minute before", "%1 minutes before", minutes);
-    }
-    if (minutes < 24 * 60) {
-        return i18ncp("@item:inlistbox reminder", "%1 hour before", "%1 hours before", minutes / 60);
-    }
-    if (minutes < 7 * 24 * 60) {
-        return i18ncp("@item:inlistbox reminder", "%1 day before", "%1 days before", minutes / (24 * 60));
-    }
-    return i18ncp("@item:inlistbox reminder", "%1 week before", "%1 weeks before", minutes / (7 * 24 * 60));
 }
 
 QList<OutgoingRecipient> attendeesOfType(const QJsonObject &event, const QString &type)
@@ -181,8 +210,8 @@ EventDialog::EventDialog(MailboxSet *mailboxes, DaemonClient *daemon, CalendarDa
     m_location->setPlaceholderText(i18nc("@info:placeholder", "Add a location or a room"));
     m_showAs->addItems({i18nc("@item:inlistbox show as", "Free"), i18nc("@item:inlistbox show as", "Tentative"), i18nc("@item:inlistbox show as", "Busy"),
                         i18nc("@item:inlistbox show as", "Away"), i18nc("@item:inlistbox show as", "Working elsewhere")});
-    for (int minutes : reminderMinutes()) {
-        m_reminder->addItem(reminderText(minutes), minutes);
+    for (int minutes : CalendarOptions::reminderChoices()) {
+        m_reminder->addItem(CalendarOptions::reminderText(minutes), minutes);
     }
     m_repeat->addItems({i18nc("@item:inlistbox repeat", "Does not repeat"), i18nc("@item:inlistbox repeat", "Every day"),
                         i18nc("@item:inlistbox repeat", "Every weekday"), i18nc("@item:inlistbox repeat", "Every week"),
@@ -236,10 +265,47 @@ EventDialog::EventDialog(MailboxSet *mailboxes, DaemonClient *daemon, CalendarDa
     startRow->addWidget(m_startTime);
     startRow->addWidget(m_allDay);
     startRow->addStretch();
+    m_startZone = new QComboBox(this);
+    m_endZone = new QComboBox(this);
+    const QByteArray local = QTimeZone::systemTimeZoneId();
+    for (QComboBox *box : {m_startZone, m_endZone}) {
+        for (const auto &[label, id] : zoneChoices()) {
+            box->addItem(label, id);
+        }
+        box->setCurrentIndex(std::max(0, box->findData(local)));
+        box->setMaximumWidth(320);
+    }
+    // The start's zone goes to the end too, until the end gets one of its own
+    connect(m_startZone, &QComboBox::activated, this, [this](int index) {
+        if (!m_endZone->property("own").toBool()) {
+            m_endZone->setCurrentIndex(index);
+        }
+    });
+    connect(m_endZone, &QComboBox::activated, this, [this] {
+        m_endZone->setProperty("own", true);
+    });
+    m_zones = new QToolButton(this);
+    m_zones->setText(i18nc("@action:button", "Time Zones"));
+    m_zones->setIcon(QIcon::fromTheme(QStringLiteral("preferences-system-time")));
+    m_zones->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_zones->setCheckable(true);
+    connect(m_zones, &QToolButton::toggled, this, [this](bool on) {
+        showZones(on);
+        m_scheduleTimer.start();
+    });
+    for (QComboBox *box : {m_startZone, m_endZone}) {
+        connect(box, &QComboBox::activated, this, [this] {
+            m_scheduleTimer.start();
+        });
+    }
+    startRow->insertWidget(2, m_startZone);
+    startRow->insertWidget(4, m_zones);
     auto *endRow = new QHBoxLayout;
     endRow->addWidget(m_endDate);
     endRow->addWidget(m_endTime);
+    endRow->addWidget(m_endZone);
     endRow->addStretch();
+    showZones(false);
     auto *options = new QHBoxLayout;
     options->addWidget(new QLabel(i18nc("@label:listbox", "Show as:"), this));
     options->addWidget(m_showAs);
@@ -278,20 +344,44 @@ EventDialog::EventDialog(MailboxSet *mailboxes, DaemonClient *daemon, CalendarDa
     buttons->addButton(m_delete, QDialogButtonBox::DestructiveRole);
     connect(buttons, &QDialogButtonBox::accepted, this, &EventDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(m_required, &QLineEdit::textChanged, this, &EventDialog::updateSaveLabel);
+    connect(m_optional, &QLineEdit::textChanged, this, &EventDialog::updateSaveLabel);
     connect(m_delete, &QPushButton::clicked, this, [this] {
         Q_EMIT deleteRequested();
         QDialog::reject();
     });
     connect(m_join, &QPushButton::clicked, this, [this] {
-        QDesktopServices::openUrl(QUrl(m_original.value(QLatin1String("onlineMeeting")).toObject().value(QLatin1String("joinUrl")).toString()));
+        QDesktopServices::openUrl(QUrl(m_joinUrl));
     });
 
-    auto *layout = new QVBoxLayout(this);
+    auto *left = new QWidget(this);
+    auto *layout = new QVBoxLayout(left);
+    layout->setContentsMargins(0, 0, 0, 0);
     layout->addWidget(m_responseRow);
     layout->addLayout(form);
     layout->addWidget(m_description, 1);
-    layout->addWidget(buttons);
-    resize(760, 680);
+    m_day = new TimeGridView(this);
+    m_day->setMinimumWidth(240);
+    connect(m_day, &CalendarView::newEventRequested, this, [this](const QDateTime &start, const QDateTime &end, bool allDay) {
+        if (!m_startDate->isEnabled()) {
+            return;
+        }
+        m_allDay->setChecked(allDay);
+        m_startDate->setDate(start.date());
+        m_startTime->setTime(start.time());
+        m_endDate->setDate(allDay ? end.date().addDays(-1) : end.date());
+        m_endTime->setTime(end.time());
+    });
+    auto *split = new QSplitter(this);
+    split->addWidget(left);
+    split->addWidget(m_day);
+    split->setStretchFactor(0, 3);
+    split->setStretchFactor(1, 1);
+    split->setChildrenCollapsible(false);
+    auto *outer = new QVBoxLayout(this);
+    outer->addWidget(split, 1);
+    outer->addWidget(buttons);
+    resize(1080, 700);
 
     connect(m_allDay, &QCheckBox::toggled, this, &EventDialog::allDayToggled);
     connect(m_repeat, &QComboBox::activated, this, &EventDialog::repeatChosen);
@@ -336,9 +426,24 @@ EventDialog::EventDialog(MailboxSet *mailboxes, DaemonClient *daemon, CalendarDa
         m_endTime->setTime(m_request.end.time());
         m_allDay->setChecked(m_request.allDay);
         m_showAs->setCurrentIndex(m_request.allDay ? 0 : 2);
-        m_reminder->setCurrentIndex(std::max(0, m_reminder->findData(m_request.allDay ? 18 * 60 : 15)));
+        m_reminder->setCurrentIndex(std::max(0, m_reminder->findData(CalendarOptions::defaultReminder(m_request.allDay))));
         m_join->hide();
         m_delete->hide();
+        m_subject->setText(m_request.subject);
+        m_required->setRecipients(m_request.required);
+        m_optional->setRecipients(m_request.optional);
+        if (m_request.meeting) {
+            setWindowTitle(i18nc("@title:window", "New Meeting"));
+            m_required->setFocus();
+        } else if (!m_request.subject.isEmpty()) {
+            // Typed straight into the calendar: go on typing after it
+            m_subject->setFocus();
+            m_subject->deselect();
+            m_subject->setCursorPosition(int(m_subject->text().size()));
+        }
+        if (!m_request.description.isEmpty()) {
+            m_description->setPlainText(m_request.description);
+        }
     }
     if (!m_request.event) {
         form->setRowVisible(m_calendarLabel, false);
@@ -370,6 +475,23 @@ void EventDialog::fillFromEvent(const DisplayEvent &e)
             end = QDateTime(end.toUTC().date(), QTime(0, 0));
         }
     }
+    // Made in other zones (Exchange's originalStartTimeZone/originalEndTimeZone): shown in those
+    const QTimeZone originalStart = zoneOf(m_original.value(QLatin1String("originalStartTimeZone")).toString());
+    const QTimeZone originalEnd = zoneOf(m_original.value(QLatin1String("originalEndTimeZone")).toString());
+    const QByteArray local = QTimeZone::ianaIdToWindowsId(QTimeZone::systemTimeZoneId());
+    const auto foreign = [&local](const QTimeZone &zone) {
+        return zone.isValid() && QTimeZone::ianaIdToWindowsId(zone.id()) != local;
+    };
+    if (!e.allDay && (foreign(originalStart) || foreign(originalEnd))) {
+        const QTimeZone startIn = originalStart.isValid() ? originalStart : QTimeZone::systemTimeZone();
+        const QTimeZone endIn = originalEnd.isValid() ? originalEnd : startIn;
+        m_startZone->setCurrentIndex(std::max(0, m_startZone->findData(startIn.id())));
+        m_endZone->setCurrentIndex(std::max(0, m_endZone->findData(endIn.id())));
+        m_endZone->setProperty("own", true);
+        start = start.toTimeZone(startIn);
+        end = end.toTimeZone(endIn);
+        m_zones->setChecked(true);
+    }
     m_startDate->setProperty("was", start.date());
     m_startDate->setDate(start.date());
     m_startTime->setTime(start.time());
@@ -378,12 +500,13 @@ void EventDialog::fillFromEvent(const DisplayEvent &e)
     m_endTime->setTime(end.time());
     m_allDay->setChecked(e.allDay);
     m_location->setText(e.location);
-    m_teams->setChecked(e.online);
+    // An occurrence of a Teams series carries no flag of its own; unticked, a save would end Teams
+    m_teams->setChecked(e.online || !m_data->joinUrlOf(e).isEmpty());
     m_showAs->setCurrentIndex(std::max(0, int(showAsNames().indexOf(m_original.value(QLatin1String("showAs")).toString()))));
     const int minutes = m_original.value(QLatin1String("isReminderOn")).toBool() ? m_original.value(QLatin1String("reminderMinutesBeforeStart")).toInt() : -1;
     int index = m_reminder->findData(minutes);
     if (index < 0) {
-        m_reminder->addItem(reminderText(minutes), minutes);
+        m_reminder->addItem(CalendarOptions::reminderText(minutes), minutes);
         index = m_reminder->count() - 1;
     }
     m_reminder->setCurrentIndex(index);
@@ -412,8 +535,8 @@ void EventDialog::fillFromEvent(const DisplayEvent &e)
     if (e.recurring() && !m_request.series) {
         m_repeat->setItemText(0, i18nc("@item:inlistbox", "One occurrence of a series"));
     }
-    const QString joinUrl = m_original.value(QLatin1String("onlineMeeting")).toObject().value(QLatin1String("joinUrl")).toString();
-    m_join->setVisible(!joinUrl.isEmpty());
+    m_joinUrl = m_data->joinUrlOf(e);
+    m_join->setVisible(!m_joinUrl.isEmpty());
 
     // Who may change it: the organizer, in a calendar the user may edit
     const QString organizer = m_original.value(QLatin1String("organizer")).toObject().value(QLatin1String("emailAddress")).toObject().value(QLatin1String("address")).toString().toLower();
@@ -464,10 +587,63 @@ void EventDialog::setReadOnly(bool readOnly)
     }
 }
 
+void EventDialog::typeIntoSubject(const QString &text)
+{
+    // After what is there: nothing typed so far may be selected and replaced
+    m_subject->setCursorPosition(int(m_subject->text().size()));
+    m_subject->insert(text);
+    m_subject->setFocus();
+}
+
+void EventDialog::setTestZones(const QByteArray &start, const QByteArray &end)
+{
+    m_startZone->setCurrentIndex(std::max(0, m_startZone->findData(start)));
+    m_endZone->setCurrentIndex(std::max(0, m_endZone->findData(end)));
+    m_zones->setChecked(true);
+}
+
+QTimeZone EventDialog::startZone() const
+{
+    const QTimeZone zone(m_startZone->currentData().toByteArray());
+    return zone.isValid() ? zone : QTimeZone::systemTimeZone();
+}
+
+QTimeZone EventDialog::endZone() const
+{
+    const QTimeZone zone(m_endZone->currentData().toByteArray());
+    return zone.isValid() ? zone : startZone();
+}
+
+void EventDialog::showZones(bool on)
+{
+    m_startZone->setVisible(on && !m_allDay->isChecked());
+    m_endZone->setVisible(on && !m_allDay->isChecked());
+}
+
+void EventDialog::updateSaveLabel()
+{
+    auto *box = findChild<QDialogButtonBox *>();
+    QPushButton *save = box ? box->button(QDialogButtonBox::Save) : nullptr;
+    if (!save || m_attendee) {
+        return;
+    }
+    QStringList invalid;
+    const bool people = !m_required->recipients(&invalid).isEmpty() || !m_optional->recipients(&invalid).isEmpty() || !invalid.isEmpty();
+    // Outlook's Send / Send Update: with attendees the change goes out as an invitation
+    save->setText(people ? (m_request.event ? i18nc("@action:button", "Send Update") : i18nc("@action:button", "Send")) : i18nc("@action:button", "Save"));
+    save->setIcon(QIcon::fromTheme(people ? QStringLiteral("mail-send") : QStringLiteral("document-save")));
+}
+
 void EventDialog::allDayToggled(bool allDay)
 {
     m_startTime->setVisible(!allDay);
     m_endTime->setVisible(!allDay);
+    m_zones->setVisible(!allDay);
+    showZones(m_zones->isChecked());
+    // A new event still on the default reminder takes the default of the other kind, as Outlook does
+    if (!m_request.event && m_reminder->currentData().toInt() == CalendarOptions::defaultReminder(!allDay)) {
+        m_reminder->setCurrentIndex(std::max(0, m_reminder->findData(CalendarOptions::defaultReminder(allDay))));
+    }
     m_scheduleTimer.start();
 }
 
@@ -507,11 +683,41 @@ QStringList EventDialog::attendeeAddresses() const
     return result;
 }
 
-void EventDialog::updateSchedule()
+void EventDialog::updateDay()
 {
     const QDate day = m_startDate->date();
-    m_schedule->setSlot(QDateTime(day, m_allDay->isChecked() ? QTime(0, 0) : m_startTime->time()),
-                        QDateTime(m_endDate->date(), m_allDay->isChecked() ? QTime(23, 59) : m_endTime->time()));
+    QList<DisplayEvent> events = m_data->events(day, day);
+    if (m_request.event) {
+        // The event itself is the blue selection, not one of the others
+        events.erase(std::remove_if(events.begin(), events.end(),
+                                    [this](const DisplayEvent &e) {
+                                        return e.mailboxKey == m_request.event->mailboxKey && e.id == m_request.event->id;
+                                    }),
+                     events.end());
+    }
+    m_day->setEvents(day, day, events);
+    QDateTime start(day, m_allDay->isChecked() ? QTime(0, 0) : m_startTime->time());
+    QDateTime end(m_allDay->isChecked() ? m_endDate->date().addDays(1) : m_endDate->date(), m_allDay->isChecked() ? QTime(0, 0) : m_endTime->time());
+    if (m_zones->isChecked() && !m_allDay->isChecked()) {
+        start = QDateTime(start.date(), start.time(), startZone()).toLocalTime();
+        end = QDateTime(end.date(), end.time(), endZone()).toLocalTime();
+    }
+    m_day->setSelectedSlot({start, end.date() == start.date() || m_allDay->isChecked() ? end : QDateTime(start.date().addDays(1), QTime(0, 0)), m_allDay->isChecked()});
+    m_day->scrollToHour(std::max(0, start.time().hour() - 2));
+}
+
+void EventDialog::updateSchedule()
+{
+    updateDay();
+    const QDate day = m_startDate->date();
+    QDateTime start(day, m_allDay->isChecked() ? QTime(0, 0) : m_startTime->time());
+    QDateTime end(m_endDate->date(), m_allDay->isChecked() ? QTime(23, 59) : m_endTime->time());
+    if (m_zones->isChecked() && !m_allDay->isChecked()) {
+        // Times typed in other zones: the busy view is in local time
+        start = QDateTime(start.date(), start.time(), startZone()).toLocalTime();
+        end = QDateTime(end.date(), end.time(), endZone()).toLocalTime();
+    }
+    m_schedule->setSlot(start, end);
     QStringList addresses;
     const QString key = m_request.event ? m_request.event->mailboxKey : m_calendar->currentData().toString().section(QLatin1Char('|'), 0, 0);
     if (const std::optional<MailboxInfo> box = m_mailboxes->mailbox(key)) {
@@ -593,8 +799,19 @@ QJsonObject EventDialog::eventJson() const
     if (end <= start) {
         end = m_allDay->isChecked() ? start.addDays(1) : start.addSecs(1800);
     }
-    e.insert(QStringLiteral("start"), graphTime(start));
-    e.insert(QStringLiteral("end"), graphTime(end));
+    if (m_zones->isChecked() && !m_allDay->isChecked()) {
+        // The times as typed, each in its own zone
+        start.setTimeZone(startZone());
+        end.setTimeZone(endZone());
+        if (end <= start) {
+            end = start.addSecs(1800);
+        }
+        e.insert(QStringLiteral("start"), graphTime(start, startZone()));
+        e.insert(QStringLiteral("end"), graphTime(end, endZone()));
+    } else {
+        e.insert(QStringLiteral("start"), graphTime(start));
+        e.insert(QStringLiteral("end"), graphTime(end));
+    }
     e.insert(QStringLiteral("isAllDay"), m_allDay->isChecked());
     QJsonObject location{{QStringLiteral("displayName"), m_location->text().trimmed()}};
     if (!m_room.isEmpty() && m_room.value(QLatin1String("displayName")).toString() == m_location->text().trimmed()) {

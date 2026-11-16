@@ -128,6 +128,18 @@ private Q_SLOTS:
 
     // [MS-OXRTFCP] 3.2: compressing gives the spec's bytes exactly (the same as its decompression
     // samples), and anything compressed comes back as it was
+    // Nesting deeper than the decoder's stack: every '}' still closes its own '{', the text after
+    // the deep part is kept
+    void deepNesting()
+    {
+        QByteArray rtf = QByteArrayLiteral("{\\rtf1\\ansi before ");
+        rtf += QByteArray(1100, '{') + QByteArrayLiteral("deep") + QByteArray(1100, '}');
+        rtf += QByteArrayLiteral(" after}");
+        const Rtf::Body body = Rtf::deencapsulate(rtf);
+        QVERIFY2(body.content.contains(QLatin1String("before")), qPrintable(body.content.left(80)));
+        QVERIFY2(body.content.contains(QLatin1String("after")), qPrintable(body.content.right(80)));
+    }
+
     void compressSamples()
     {
         QCOMPARE(Rtf::compress(QByteArrayLiteral("{\\rtf1\\ansi\\ansicpg1252\\pard hello world}\r\n")),

@@ -84,4 +84,9 @@ qint64 MoveDialog::folder() const
     return m_tree->currentIndex().data(FolderModel::FolderIdRole).toLongLong();
 }
 
+bool MoveDialog::mailboxChosen() const
+{
+    return m_tree->currentIndex().data(FolderModel::IsMailboxRole).toBool();
+}
+
 }

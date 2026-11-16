@@ -237,7 +237,7 @@ public:
     enum class Mode { ReadWrite, ReadOnly };
     enum class Upsert { Inserted, Updated, Unchanged, Failed };
 
-    static constexpr int schemaVersion = 5;
+    static constexpr int schemaVersion = 7;
     // Each entry brings the database from version i to i + 1 (statements run in one transaction)
     static QList<QStringList> migrations();
 
@@ -286,6 +286,14 @@ public:
     // Bodies stored before schema 4, newest first: their text goes into the index in the background
     QList<BodyWithoutText> bodiesWithoutText(int limit) const;
     bool setBodyText(qint64 message, const QString &bodyText);
+    // A mailing list's List-Unsubscribe header (RFC 2369), taken with the body (schema 6); oneClick:
+    // List-Unsubscribe-Post says "List-Unsubscribe=One-Click" (RFC 8058). Null: not known (a body
+    // fetched before schema 6), empty: the message has none
+    bool setUnsubscribe(qint64 message, const QString &header, bool oneClick);
+    QString unsubscribe(qint64 message, bool *oneClick = nullptr) const;
+    // Whether the sender asked for a read receipt (schema 7, with the body); nullopt: not known
+    bool setReadReceiptRequested(qint64 message, bool requested);
+    std::optional<bool> readReceiptRequested(qint64 message) const;
     // Graph's search results (immutable ids) as cache rows; ids not in the cache are left out
     QHash<QString, qint64> messageIdsByGraphIds(const QStringList &graphIds) const;
     bool setRead(qint64 message, bool read);
@@ -302,6 +310,19 @@ public:
     QList<ListRow> search(const SearchQuery &query, const QList<qint64> &folders, int limit, const QList<qint64> &onlyIds = {}) const;
     QHash<qint64, int> unreadCounts() const;
     QList<qint64> conversation(const QString &conversationId) const;
+    // Messages of these conversations outside the given folders, in one query (Ignore Conversation's
+    // sweep after every sync): id, folder and whether an operation is pending
+    struct ConversationMessage {
+        qint64 id = 0;
+        qint64 folder = 0;
+        bool pending = false;
+    };
+    QList<ConversationMessage> conversationMessages(const QStringList &conversations, const QSet<qint64> &skipFolders) const;
+    // Sweep (docs/PHASE9B.md 9b.23): the messages from this address in a folder, newest first
+    QList<qint64> messagesFrom(qint64 folder, const QString &address) const;
+    // Cleanup (docs/PHASE9B.md 9b.18): messages received before this time, oldest first; flagged
+    // (not completed) ones stay out, as Outlook keeps items marked for follow-up
+    QList<qint64> messagesBefore(qint64 folder, qint64 beforeMs) const;
     // Conversation view: conversations of a folder, newest first (keyset paging like listPage)
     QList<ConversationRow> conversationPage(qint64 folder, const std::optional<ConversationCursor> &after, int limit, int focus = -1) const;
     // The messages of one conversation in that folder, newest first
@@ -332,6 +353,9 @@ public:
     bool replaceAttachments(qint64 message, const QList<AttachmentRow> &attachments);
     QList<AttachmentRow> attachments(qint64 message) const;
     bool setAttachmentBlob(qint64 attachment, const QString &blob, const QString &contentId = {});
+    // The blob of a downloaded inline attachment with this Content-ID (with or without <>); empty
+    // when none is cached. A signature copied from Outlook on the web names its pictures so
+    QString blobOfContentId(const QString &contentId) const;
     std::optional<qint64> messageOfAttachment(qint64 attachment) const;
     // Drops bodies and inline images of messages received before `before`, except flagged ones;
     // returns the blobs to remove
@@ -392,6 +416,9 @@ public:
     bool removeParent(ItemKind kind, qint64 parent);
     Upsert upsertItem(ItemKind kind, qint64 parent, const ItemRow &item, int generation = 0);
     bool removeItem(ItemKind kind, const QString &graphId);
+    // After a complete calendar round (the delta brings every series with its occurrences):
+    // removes occurrences and exceptions whose series is no longer there; gives how many
+    int sweepOrphanOccurrences(qint64 calendar);
     int beginParentResync(ItemKind kind, qint64 parent);
     bool sweepItems(ItemKind kind, qint64 parent, int generation);
     qint64 itemCount(ItemKind kind, qint64 parent = 0) const;

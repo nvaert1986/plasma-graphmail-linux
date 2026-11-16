@@ -311,7 +311,8 @@ void FolderTreeSync::resolveArchiveSetting(bool complete)
             }
             m_ctx->store->setFolderWellKnown(id, QStringLiteral("archive"));
         }
-        if (complete && response.status < 500 && response.status != 0) {
+        // Throttled (429) or timed out (408): ask again next time, like a server error
+        if (complete && response.status < 500 && response.status != 0 && response.status != 429 && response.status != 408) {
             m_ctx->store->setMeta(QStringLiteral("well_known"), QStringLiteral("3"));
         }
         finish(m_result);
@@ -647,6 +648,9 @@ void CollectionSync::runItemChain(ItemKind kind,
             if (!store->meta(fullKey).isEmpty()) {
                 store->sweepItems(kind, parent.id, generation);
                 store->setMeta(fullKey, {});
+            }
+            if (kind == ItemKind::Event) {
+                m_changes += store->sweepOrphanOccurrences(parent.id);
             }
             next();
         } else if (end == ChainEnd::Gone && !retried) {

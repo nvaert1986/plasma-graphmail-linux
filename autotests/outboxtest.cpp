@@ -114,6 +114,19 @@ private:
     }
 
 private Q_SLOTS:
+    // Reply To: kept with the draft and sent as Graph's replyTo; absent when empty
+    void replyTo()
+    {
+        Outgoing o;
+        o.to = {{QStringLiteral("Jane"), QStringLiteral("jane@example.com")}};
+        QVERIFY(!o.graphMessage().contains(QLatin1String("replyTo")));
+        o.replyTo = {{QStringLiteral("Acme Support"), QStringLiteral("support@example.com")}};
+        const QJsonArray sent = o.graphMessage().value(QLatin1String("replyTo")).toArray();
+        QCOMPARE(sent.size(), 1);
+        QCOMPARE(sent.first().toObject().value(QLatin1String("emailAddress")).toObject().value(QLatin1String("address")).toString(), QStringLiteral("support@example.com"));
+        QCOMPARE(Outgoing::fromJson(o.toJson()).replyTo.size(), 1);
+    }
+
     void init()
     {
         GraphCore::Throttle::resetForTests();
@@ -546,7 +559,49 @@ private Q_SLOTS:
         clock = fixedNow + 10000;
         QCOMPARE(runEngine(engine), QStringLiteral("sent"));
         QVERIFY(calls().constLast().endsWith(QLatin1String("/send")));
+        // The draft went up before the hold: only the send now, no second PATCH of the whole draft
+        QCOMPARE(calls().size(), 1);
         QVERIFY(!store->outgoing(QStringLiteral("u20")));
+    }
+
+    // @mentions (beta): read what the draft has, add the missing one, then send; kept in the record
+    void mentionsBeforeSend()
+    {
+        Outgoing o = message(QStringLiteral("u30"));
+        o.send = true;
+        o.mentions = {{QStringLiteral("Example Colleague"), QStringLiteral("colleague@example.com")}, {QStringLiteral("Other Person"), QStringLiteral("other@example.com")}};
+        QVERIFY(store->saveOutgoing(o));
+        QCOMPARE(store->outgoing(QStringLiteral("u30"))->mentions.size(), 2);
+        QJsonObject added;
+        server->handler = [&](const FakeRequest &r) -> FakeReply {
+            const QByteArray path = pathOf(r);
+            if (r.verb == "POST" && path == "/v1.0/me/messages") {
+                return json(201, {{QStringLiteral("id"), QStringLiteral("d30")}});
+            }
+            if (r.verb == "GET" && path == "/beta/me/messages/d30") {
+                // The draft already has one of them (a send tried before)
+                return json(200, {{QStringLiteral("mentions"), QJsonArray{QJsonObject{{QStringLiteral("mentioned"), QJsonObject{{QStringLiteral("address"), QStringLiteral("Other@Example.com")}}}}}}});
+            }
+            if (r.verb == "POST" && path == "/beta/me/messages/d30/mentions") {
+                added = QJsonDocument::fromJson(r.body).object();
+                return json(201, {});
+            }
+            if (r.verb == "PATCH" || r.verb == "GET") {
+                return json(200, {{QStringLiteral("value"), QJsonArray()}});
+            }
+            if (r.verb == "POST" && path.endsWith("/send")) {
+                return jsonReply(202, "");
+            }
+            return jsonReply(404, R"({"error":{"code":"unexpected"}})");
+        };
+        OutboxEngine engine(&ctx);
+        QCOMPARE(runEngine(engine), QStringLiteral("sent"));
+        const QStringList list = calls();
+        const qsizetype mention = list.indexOf(QStringLiteral("POST /beta/me/messages/d30/mentions"));
+        QVERIFY(mention > 0);
+        QCOMPARE(list.count(QStringLiteral("POST /beta/me/messages/d30/mentions")), 1);
+        QVERIFY(list.constLast().endsWith(QLatin1String("/send")));
+        QCOMPARE(added.value(QLatin1String("mentioned")).toObject().value(QLatin1String("address")).toString(), QStringLiteral("colleague@example.com"));
     }
 
     // A delay taken away again: Graph cannot remove the property, a past time sends at once

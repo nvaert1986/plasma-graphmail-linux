@@ -167,6 +167,22 @@ BlobStore *MailboxSet::blobs(const QString &key) const
     return open ? open->blobs.get() : nullptr;
 }
 
+QByteArray MailboxSet::inlinePicture(const QString &contentId) const
+{
+    for (const MailboxInfo &box : mailboxes()) {
+        Store *s = store(box.key());
+        BlobStore *b = blobs(box.key());
+        const QString blob = s && b ? s->blobOfContentId(contentId) : QString();
+        if (!blob.isEmpty()) {
+            QString error;
+            if (const std::optional<QByteArray> data = b->get(blob, &error)) {
+                return *data;
+            }
+        }
+    }
+    return {};
+}
+
 QImage MailboxSet::photo(const QString &key) const
 {
     return m_photos.value(key);

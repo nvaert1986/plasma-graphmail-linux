@@ -2,19 +2,25 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "messagewindow.h"
+#include "mainwindow.h"
+#include "readreceipts.h"
 #include "printing.h"
 #include "composer.h"
 #include "daemonclient.h"
 #include "foldermodel.h"
 #include "mailboxset.h"
 #include "mailview.h"
+#include "messagedetails.h"
+#include "mimeexport.h"
 #include "movedialog.h"
 #include "readingpane.h"
 #include "store.h"
 
 #include <KActionCollection>
 #include <KLocalizedString>
+#include <KMessageBox>
 #include <KStandardAction>
+#include <KToggleAction>
 
 #include <QAction>
 #include <QIcon>
@@ -47,6 +53,13 @@ MessageWindow::MessageWindow(MailboxSet *mailboxes,
     connect(m_reading, &ReadingPane::bodyNeeded, this, [this](qint64 id) {
         m_daemon->fetchBody(account(), mailbox(), id);
     });
+    connect(m_reading, &ReadingPane::mailtoRequested, this, &MessageWindow::mailtoRequested);
+    // Print... in the message's right-click menu: the window's own Print
+    connect(m_reading, &ReadingPane::printRequested, this, [this] {
+        if (QAction *print = actionCollection()->action(KStandardAction::name(KStandardAction::Print))) {
+            print->trigger();
+        }
+    });
     connect(m_reading, &ReadingPane::attachmentNeeded, this, [this](qint64 attachment) {
         m_daemon->fetchAttachment(account(), mailbox(), attachment);
     });
@@ -76,7 +89,13 @@ MessageWindow::MessageWindow(MailboxSet *mailboxes,
     // Opening a message is reading it (Outlook does the same)
     const Store *store = m_mailboxes->store(m_mailboxKey);
     if (const std::optional<MessageRow> row = store ? store->message(m_message) : std::nullopt; markRead && row && !row->isRead) {
-        m_daemon->markRead(account(), mailbox(), m_message, true);
+        // A read receipt the user is asked about waits for the reading pane's answer
+        const ReadReceipts::Decision decision = ReadReceipts::decide(ReadReceipts::mode(), store->readReceiptRequested(m_message), false);
+        if (decision == ReadReceipts::Decision::Wait) {
+            m_reading->markReadWhenKnown();
+        } else if (decision != ReadReceipts::Decision::Ask) {
+            m_daemon->markRead(account(), mailbox(), m_message, true, decision == ReadReceipts::Decision::Send);
+        }
     }
 }
 
@@ -104,16 +123,78 @@ QString MessageWindow::mailbox() const
 
 void MessageWindow::setupActions()
 {
+    // View > Zoom and the dark message background (docs/PHASE9B.md 9b.25)
+    KStandardAction::zoomIn(this, [this] {
+        m_reading->zoom(1);
+    }, actionCollection());
+    KStandardAction::zoomOut(this, [this] {
+        m_reading->zoom(-1);
+    }, actionCollection());
+    KStandardAction::actualSize(this, [this] {
+        m_reading->zoom(0);
+    }, actionCollection());
+    auto *dark = new KToggleAction(QIcon::fromTheme(QStringLiteral("color-mode-invert-text")), i18nc("@action", "Dark Background for Messages"), this);
+    actionCollection()->addAction(QStringLiteral("dark_messages"), dark);
+    dark->setChecked(MailView::darkMessages());
+    dark->setVisible(MailView::darkTheme());
+    connect(dark, &KToggleAction::toggled, this, [this](bool on) {
+        MailView::setDarkMessages(on);
+        m_reading->reload();
+    });
     // File > Print, as from the main window (docs/PHASE9B.md)
     KStandardAction::print(
         this,
         [this] {
             const std::optional<MailboxInfo> box = m_mailboxes->mailbox(m_mailboxKey);
-            Printing::printMessage(this, m_mailboxes->store(m_mailboxKey), m_mailboxes->blobs(m_mailboxKey), m_message, false,
+            Printing::printMessage(this, m_mailboxes->store(m_mailboxKey), m_mailboxes->blobs(m_mailboxKey), m_message, m_reading->remoteAllowed(),
                                    box ? (box->displayName.isEmpty() ? box->address : box->displayName) : QString());
         },
         actionCollection());
     KActionCollection *actions = actionCollection();
+
+    // File > Save As (.eml or .msg), Save as PDF and Message Details, as in the main window
+    KStandardAction::saveAs(
+        this,
+        [this] {
+            const Store *store = m_mailboxes->store(m_mailboxKey);
+            const std::optional<MessageRow> row = store ? store->message(m_message) : std::nullopt;
+            const QString file = MimeExport::askFile(this, row ? row->subject : QString(), false);
+            if (file.isEmpty()) {
+                return;
+            }
+            auto *exporter = new MimeExporter(m_mailboxes, m_daemon, m_mailboxKey, {m_message}, file, false, this);
+            connect(exporter, &MimeExporter::finished, this, [this](bool ok, int, int, const QString &path) {
+                if (!ok) {
+                    KMessageBox::error(this, i18nc("@info:status %1 a file", "Could not save %1.", path));
+                }
+            });
+            exporter->start();
+        },
+        actions);
+    QAction *savePdf = actions->addAction(QStringLiteral("save_pdf"));
+    savePdf->setText(i18nc("@action", "Save as PDF..."));
+    savePdf->setIcon(QIcon::fromTheme(QStringLiteral("application-pdf")));
+    connect(savePdf, &QAction::triggered, this, [this] {
+        const Store *store = m_mailboxes->store(m_mailboxKey);
+        const std::optional<MessageRow> row = store ? store->message(m_message) : std::nullopt;
+        const QString file = MimeExport::askPdfFile(this, row ? row->subject : QString());
+        if (file.isEmpty()) {
+            return;
+        }
+        const std::optional<MailboxInfo> box = m_mailboxes->mailbox(m_mailboxKey);
+        Printing::printMessage(this, m_mailboxes->store(m_mailboxKey), m_mailboxes->blobs(m_mailboxKey), m_message, m_reading->remoteAllowed(),
+                               box ? (box->displayName.isEmpty() ? box->address : box->displayName) : QString(), file, [this, file](bool ok) {
+                                   if (!ok) {
+                                       KMessageBox::error(this, i18nc("@info:status %1 a file", "Could not save %1.", file));
+                                   }
+                               });
+    });
+    QAction *details = actions->addAction(QStringLiteral("message_details"));
+    details->setText(i18nc("@action", "Message Details..."));
+    details->setIcon(QIcon::fromTheme(QStringLiteral("document-properties")));
+    connect(details, &QAction::triggered, this, [this] {
+        MessageDetailsDialog::open(this, m_mailboxes, m_daemon, m_mailboxKey, m_message);
+    });
 
     QAction *markUnread = actions->addAction(QStringLiteral("mark_unread"));
     markUnread->setText(i18nc("@action", "Mark as Unread"));
@@ -138,6 +219,9 @@ void MessageWindow::setupActions()
     remove->setIcon(QIcon::fromTheme(QStringLiteral("edit-delete")));
     actions->setDefaultShortcut(remove, Qt::Key_Delete);
     connect(remove, &QAction::triggered, this, [this] {
+        if (MainWindow *main = MainWindow::instance()) {
+            main->rememberForUndo(m_mailboxKey, {m_message}, true);
+        }
         m_daemon->remove(account(), mailbox(), m_message);
         close();
     });
@@ -172,7 +256,9 @@ void MessageWindow::setupActions()
         QKeySequence shortcut;
     } answers[] = {{"reply", "reply", "mail-reply-sender", QKeySequence(Qt::CTRL | Qt::Key_R)},
                    {"reply_all", "replyAll", "mail-reply-all", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R)},
-                   {"forward", "forward", "mail-forward", QKeySequence(Qt::CTRL | Qt::Key_F)}};
+                   {"forward", "forward", "mail-forward", QKeySequence(Qt::CTRL | Qt::Key_F)},
+                   {"forward_as_attachment", "forwardAsAttachment", "mail-forward", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_F)},
+                   {"edit_as_new", "editAsNew", "mail-message-new", QKeySequence()}};
     for (const auto &answer : answers) {
         QAction *action = actions->addAction(QLatin1String(answer.name));
         action->setIcon(QIcon::fromTheme(QLatin1String(answer.icon)));
@@ -189,6 +275,15 @@ void MessageWindow::setupActions()
     actions->action(QStringLiteral("reply"))->setText(i18nc("@action", "Reply"));
     actions->action(QStringLiteral("reply_all"))->setText(i18nc("@action", "Reply All"));
     actions->action(QStringLiteral("forward"))->setText(i18nc("@action", "Forward"));
+    actions->action(QStringLiteral("forward_as_attachment"))->setText(i18nc("@action", "Forward as Attachment"));
+    actions->action(QStringLiteral("edit_as_new"))->setText(i18nc("@action Outlook's Resend", "Edit as New Message"));
+    QAction *meeting = actions->addAction(QStringLiteral("reply_with_meeting"));
+    meeting->setText(i18nc("@action", "Reply with Meeting"));
+    meeting->setIcon(QIcon::fromTheme(QStringLiteral("appointment-new")));
+    actions->setDefaultShortcut(meeting, QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_R));
+    connect(meeting, &QAction::triggered, this, [this] {
+        Q_EMIT replyWithMeetingRequested(m_mailboxKey, m_message);
+    });
 
     // Escape closes the message, as in Outlook
     QAction *closeWindow = KStandardAction::close(this, &QWidget::close, actions);
@@ -200,6 +295,9 @@ void MessageWindow::moveTo(qint64 folder)
     const Store *store = m_mailboxes->store(m_mailboxKey);
     const std::optional<MessageRow> row = store ? store->message(m_message) : std::nullopt;
     if (row && row->folder != folder) {
+        if (MainWindow *main = MainWindow::instance()) {
+            main->rememberForUndo(m_mailboxKey, {m_message}, false);
+        }
         m_daemon->move(account(), mailbox(), m_message, folder);
     }
     close();

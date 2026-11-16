@@ -19,3 +19,6 @@ find_package(SharedMimeInfo)
 if(SharedMimeInfo_FOUND)
     update_xdg_mimetypes(${KDE_INSTALL_MIMEDIR})
 endif()
+
+# KRunner's mail search (graphmaild's /runner object)
+install(FILES io.github.nvaert1986.graphmail-runner.desktop DESTINATION ${KDE_INSTALL_DATADIR}/krunner/dbusplugins)

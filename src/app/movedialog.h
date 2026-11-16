@@ -25,6 +25,8 @@ public:
 
     // 0 when nothing was chosen
     qint64 folder() const;
+    // The mailbox itself was chosen (the top of the folder tree; Move Folder only)
+    bool mailboxChosen() const;
 
 private:
     QSortFilterProxyModel *m_proxy;

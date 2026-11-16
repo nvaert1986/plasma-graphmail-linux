@@ -1,70 +1,96 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<gui name="plasma-graphmail-linux-composer" version="2"
+<gui name="plasma-graphmail-linux-composer" version="9"
      xmlns="http://www.kde.org/standards/kxmlgui/1.0"
      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
      xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0 http://www.kde.org/standards/kxmlgui/1.0/kxmlgui.xsd">
   <MenuBar>
+    <Menu name="file">
+      <Action name="file_print"/>
+    </Menu>
     <Menu name="message">
       <text>&amp;Message</text>
       <Action name="send"/>
+      <Action name="delay_delivery"/>
       <Action name="save_draft"/>
       <Action name="discard"/>
       <Separator/>
-      <Action name="attach"/>
-      <Action name="signature"/>
-      <Separator/>
+      <Action name="check_names"/>
       <Action name="importance_high"/>
       <Action name="importance_low"/>
       <Separator/>
       <Action name="save_template"/>
     </Menu>
-    <Menu name="options">
-      <text>O&amp;ptions</text>
-      <Action name="delivery_receipt"/>
-      <Action name="read_receipt"/>
+    <Menu name="insert">
+      <text>&amp;Insert</text>
+      <Action name="attach"/>
+      <Action name="manage_link"/>
+      <Action name="signature"/>
       <Separator/>
-      <Action name="sensitivity"/>
+      <Action name="add_image"/>
+      <Action name="insert_table_dialog"/>
+      <Action name="insert_table"/>
+      <Action name="insert_emoji"/>
+      <Action name="insert_horizontal_rule"/>
       <Separator/>
-      <Action name="delay_delivery"/>
-    </Menu>
-    <Menu name="view">
-      <text>&amp;View</text>
-      <Action name="show_bcc"/>
+      <Action name="paste_quoted"/>
+      <Action name="paste_without_formatting"/>
     </Menu>
     <Menu name="format">
-      <text>F&amp;ormat</text>
-      <Action name="plain_text"/>
-      <Separator/>
+      <text>F&amp;ormat Text</text>
       <Action name="format_text_bold"/>
       <Action name="format_text_italic"/>
       <Action name="format_text_underline"/>
       <Action name="format_text_strikeout"/>
+      <Action name="format_text_subscript"/>
+      <Action name="format_text_superscript"/>
+      <Action name="text_color"/>
+      <Action name="highlight_color"/>
       <Separator/>
       <Action name="format_list_style"/>
+      <Action name="format_list_checkbox"/>
       <Action name="format_list_indent_more"/>
       <Action name="format_list_indent_less"/>
+      <Action name="format_heading_level"/>
       <Separator/>
       <Action name="format_align_left"/>
       <Action name="format_align_center"/>
       <Action name="format_align_right"/>
+      <Action name="format_align_justify"/>
       <Separator/>
-      <Action name="manage_link"/>
-      <Action name="add_image"/>
-      <Action name="insert_horizontal_rule"/>
-      <Action name="insert_table"/>
-      <Separator/>
-      <Action name="paste_without_formatting"/>
+      <Action name="format_painter"/>
       <Action name="format_reset"/>
+      <Separator/>
+      <Action name="plain_text"/>
+    </Menu>
+    <Menu name="options">
+      <text>&amp;Options</text>
+      <Action name="show_bcc"/>
+      <Action name="show_reply_to"/>
+      <Separator/>
+      <Action name="delivery_receipt"/>
+      <Action name="read_receipt"/>
+      <Separator/>
+      <Action name="sensitivity"/>
+      <Action name="delay_delivery"/>
     </Menu>
   </MenuBar>
   <ToolBar name="mainToolBar" iconText="textbesideicon">
     <text>Main Toolbar</text>
     <Action name="send"/>
     <Separator/>
+    <Action name="edit_undo"/>
+    <Action name="edit_redo"/>
+    <Separator/>
     <Action name="attach"/>
+    <Action name="manage_link"/>
+    <Action name="add_image"/>
+    <Action name="insert_table_dialog"/>
+    <Action name="insert_emoji"/>
     <Action name="signature"/>
+    <Separator/>
+    <Action name="check_names"/>
     <Separator/>
     <Action name="importance_high"/>
     <Action name="importance_low"/>
@@ -72,15 +98,19 @@
     <Action name="save_draft"/>
     <Action name="discard"/>
   </ToolBar>
-  <ToolBar name="formatToolBar" iconText="icononly">
+  <ToolBar name="formatToolBar" iconText="icononly" newline="true">
     <text>Formatting Toolbar</text>
     <Action name="format_font_family"/>
     <Action name="format_font_size"/>
     <Action name="format_text_bold"/>
     <Action name="format_text_italic"/>
     <Action name="format_text_underline"/>
-    <Action name="format_text_foreground_color"/>
-    <Action name="format_text_background_color"/>
+    <Action name="format_text_strikeout"/>
+    <Action name="format_text_subscript"/>
+    <Action name="format_text_superscript"/>
+    <Action name="text_color"/>
+    <Action name="highlight_color"/>
+    <Action name="format_reset"/>
     <Separator/>
     <Action name="format_list_style"/>
     <Action name="format_list_indent_less"/>
@@ -89,8 +119,6 @@
     <Action name="format_align_left"/>
     <Action name="format_align_center"/>
     <Action name="format_align_right"/>
-    <Separator/>
-    <Action name="manage_link"/>
-    <Action name="add_image"/>
+    <Action name="format_align_justify"/>
   </ToolBar>
 </gui>

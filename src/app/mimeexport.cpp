@@ -12,6 +12,8 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocale>
@@ -20,6 +22,7 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QTimeZone>
+#include <QDateTime>
 #include <QUuid>
 
 namespace GraphMail
@@ -34,6 +37,7 @@ bool isAscii(const QString &text)
     });
 }
 
+
 // "Name <address>; Name <address>" (the cache's lists) with the names encoded where needed
 QByteArray addressList(const QString &list)
 {
@@ -42,7 +46,7 @@ QByteArray addressList(const QString &list)
     for (const QString &entry : entries) {
         const int open = entry.lastIndexOf(QLatin1Char('<'));
         if (open > 0 && entry.endsWith(QLatin1Char('>'))) {
-            parts.append(MimeExport::encodeWord(entry.left(open).trimmed()) + " " + entry.mid(open).toUtf8());
+            parts.append(MimeExport::displayName(entry.left(open).trimmed()) + " " + entry.mid(open).toUtf8());
         } else {
             parts.append(entry.trimmed().toUtf8());
         }
@@ -67,12 +71,120 @@ QByteArray rfc2822Date(qint64 ms)
 }
 }
 
+QString MimeExport::safeFileName(QString name)
+{
+    // Without what file systems refuse
+    static const QRegularExpression unsafe(QStringLiteral("[/\\\\:*?\"<>|]"));
+    name.replace(unsafe, QStringLiteral("_"));
+    if (name.trimmed().isEmpty()) {
+        name = i18nc("@item file name of an exported message", "message");
+    }
+    return name;
+}
+
+QString MimeExport::askFile(QWidget *parent, QString name, bool mbox)
+{
+    const QString base = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QLatin1Char('/') + safeFileName(name);
+    if (mbox) {
+        return QFileDialog::getSaveFileName(parent, i18nc("@title:window", "Save Messages"), base + QStringLiteral(".mbox"),
+                                            i18nc("@item:inlistbox file type", "Mailbox file (*.mbox)"));
+    }
+    // One message: Outlook's .msg or the Internet's .eml, by the chosen type
+    const QString msgFilter = i18nc("@item:inlistbox file type", "Outlook message (*.msg)");
+    const QString emlFilter = i18nc("@item:inlistbox file type", "Mail message (*.eml)");
+    QString chosen = emlFilter;
+    QString file = QFileDialog::getSaveFileName(parent, i18nc("@title:window", "Save Message"), base + QStringLiteral(".eml"),
+                                                emlFilter + QStringLiteral(";;") + msgFilter, &chosen);
+    if (!file.isEmpty() && chosen == msgFilter && !file.endsWith(QLatin1String(".msg"), Qt::CaseInsensitive)) {
+        if (file.endsWith(QLatin1String(".eml"), Qt::CaseInsensitive)) {
+            file.chop(4);
+        }
+        file += QStringLiteral(".msg");
+    }
+    return file;
+}
+
+QString MimeExport::askPdfFile(QWidget *parent, QString name)
+{
+    QString file = QFileDialog::getSaveFileName(parent, i18nc("@title:window", "Save as PDF"),
+                                                QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QLatin1Char('/') + safeFileName(name) + QStringLiteral(".pdf"),
+                                                i18nc("@item:inlistbox file type", "PDF document (*.pdf)"));
+    if (!file.isEmpty() && !file.endsWith(QLatin1String(".pdf"), Qt::CaseInsensitive)) {
+        file += QStringLiteral(".pdf");
+    }
+    return file;
+}
+
+void MimeExport::fetch(MailboxSet *mailboxes, DaemonClient *daemon, const QString &mailboxKey, qint64 message, QObject *context,
+                       const std::function<void(const QByteArray &mime, bool original)> &done)
+{
+    const auto rebuilt = [mailboxes, mailboxKey, message, done] {
+        done(rebuild(mailboxes->store(mailboxKey), mailboxes->blobs(mailboxKey), message), false);
+    };
+    if (!daemon->isRunning()) {
+        rebuilt();
+        return;
+    }
+    const QString temp = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/fetch-") + QUuid::createUuid().toString(QUuid::Id128) + QStringLiteral(".eml");
+    QDir().mkpath(QFileInfo(temp).absolutePath());
+    const QJsonObject args{{QStringLiteral("message"), message}, {QStringLiteral("file"), temp}};
+    daemon->query(mailboxKey.section(QLatin1Char('/'), 0, 0), mailboxKey.section(QLatin1Char('/'), 1), QStringLiteral("messageMime"),
+                  QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)), context, [temp, done, rebuilt](const QString &json) {
+                      QFile file(temp);
+                      if (QJsonDocument::fromJson(json.toUtf8()).object().value(QLatin1String("ok")).toBool() && file.open(QIODevice::ReadOnly)) {
+                          const QByteArray mime = file.readAll();
+                          file.close();
+                          file.remove();
+                          done(mime, true);
+                      } else {
+                          file.remove();
+                          rebuilt();
+                      }
+                  });
+}
+
 QByteArray MimeExport::encodeWord(const QString &text)
 {
     if (isAscii(text)) {
         return text.toUtf8();
     }
     return "=?UTF-8?B?" + text.toUtf8().toBase64() + "?=";
+}
+
+// A display name for a header: encoded when it is not ASCII, quoted when it holds one of
+// RFC 5322's specials ("Doe, John" would otherwise read as two addresses)
+QByteArray MimeExport::displayName(const QString &name)
+{
+    if (!isAscii(name)) {
+        return MimeExport::encodeWord(name);
+    }
+    static const QString specials = QStringLiteral("()<>[]:;@\\,.\"");
+    const bool special = std::any_of(name.cbegin(), name.cend(), [](QChar c) {
+        return specials.contains(c);
+    });
+    if (!special) {
+        return name.toUtf8();
+    }
+    QString quoted = name;
+    quoted.replace(QLatin1Char('\\'), QStringLiteral("\\\\"));
+    quoted.replace(QLatin1Char('"'), QStringLiteral("\\\""));
+    return '"' + quoted.toUtf8() + '"';
+}
+
+QString MimeExport::workDirectory(const QString &prefix)
+{
+    const QString cache = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    const QDateTime now = QDateTime::currentDateTime();
+    const QFileInfoList old = QDir(cache).entryInfoList({prefix + QStringLiteral("-*")}, QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QFileInfo &info : old) {
+        if (info.lastModified().secsTo(now) > 24 * 3600) {
+            QDir(info.filePath()).removeRecursively();
+        }
+    }
+    const QString dir = cache + QLatin1Char('/') + prefix + QLatin1Char('-') + QUuid::createUuid().toString(QUuid::Id128);
+    QDir().mkpath(dir);
+    QFile::setPermissions(dir, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+    return dir;
 }
 
 QByteArray MimeExport::rebuild(Store *store, BlobStore *blobs, qint64 message)
@@ -169,8 +281,7 @@ MimeExporter::MimeExporter(MailboxSet *mailboxes, DaemonClient *daemon, const QS
 void MimeExporter::start()
 {
     // The daemon writes each original here first
-    m_tempDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/export-") + QUuid::createUuid().toString(QUuid::Id128);
-    QDir().mkpath(m_tempDir);
+    m_tempDir = MimeExport::workDirectory(QStringLiteral("export"));
     if (m_messages.size() > 1 && m_parent) {
         m_progress = new QProgressDialog(i18nc("@info:progress", "Exporting messages..."), i18nc("@action:button", "Cancel"), 0, int(m_messages.size()), m_parent);
         m_progress->setWindowModality(Qt::WindowModal);
@@ -208,8 +319,11 @@ void MimeExporter::next()
                             file.close();
                             file.remove();
                         } else {
-                            // No answer (offline, an outage): the rest from the cache at once
-                            m_offline = true;
+                            // No answer at all (offline, an outage): the rest from the cache at once.
+                            // One message refused (moved or deleted meanwhile): only that one from the cache
+                            if (answer.isEmpty()) {
+                                m_offline = true;
+                            }
                             add(MimeExport::rebuild(m_mailboxes->store(m_mailboxKey), m_mailboxes->blobs(m_mailboxKey), message), message, false);
                         }
                         next();

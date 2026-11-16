@@ -53,6 +53,11 @@ void MessageDelegate::setCategories(CategoryList *categories)
     m_categories = categories;
 }
 
+void MessageDelegate::reloadFormatting()
+{
+    m_formatting = ConditionalFormat::rules();
+}
+
 int MessageDelegate::drawCategory(QPainter *painter, const QRect &line, int right, const QString &name, const QColor &color, const QFontMetrics &fm)
 {
     const QString text = fm.elidedText(name, Qt::ElideRight, 110);
@@ -113,7 +118,7 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     const QPalette &palette = opt.palette;
     const QColor text = palette.color(selected ? QPalette::HighlightedText : QPalette::Text);
     QColor dim = palette.color(selected ? QPalette::HighlightedText : QPalette::PlaceholderText);
-    const QColor accent = selected ? text : palette.color(QPalette::Highlight);
+    QColor accent = selected ? text : palette.color(QPalette::Highlight);
 
     painter->save();
     const QRect r = opt.rect;
@@ -166,10 +171,19 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     if (index.data(MessageListModel::ImportanceRole).toInt() == 2) {
         drawIcon(QStringLiteral("mail-mark-important"));
     }
+    // A conditional formatting rule colours the sender and subject (not while selected)
+    const std::optional<QColor> ruleColor = selected ? std::nullopt
+                                                     : ConditionalFormat::colorFor(m_formatting,
+                                                                                   index.data(MessageListModel::SenderNameRole).toString(),
+                                                                                   index.data(MessageListModel::SenderAddressRole).toString(),
+                                                                                   index.data(MessageListModel::SubjectRole).toString());
+    if (ruleColor) {
+        accent = *ruleColor;
+    }
     QFont senderFont = opt.font;
     senderFont.setBold(unread);
     painter->setFont(senderFont);
-    painter->setPen(text);
+    painter->setPen(ruleColor.value_or(text));
     const QFontMetrics sfm(senderFont);
     QString sender = !recipients.isEmpty() ? recipients : (name.isEmpty() ? address : name);
     // Conversation view: how many messages, as in Outlook
@@ -186,7 +200,7 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     subjectFont.setBold(unread);
     const QFontMetrics subfm(subjectFont);
     painter->setFont(opt.font);
-    painter->setPen(unread ? accent : text);
+    painter->setPen(unread || ruleColor ? accent : text);
     const int dateWidth = fm.horizontalAdvance(date);
     painter->drawText(QRect(right - dateWidth, y, dateWidth, fm.height()), Qt::AlignRight | Qt::AlignVCenter, date);
     painter->setFont(subjectFont);
@@ -246,6 +260,22 @@ void FolderDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option
     initStyleOption(&opt, index);
     if (index.data(FolderModel::IsMailboxRole).toBool()) {
         opt.font.setBold(true);
+    }
+    // Change Folder Count: the total in brackets, in the normal text colour (Outlook's Drafts [12])
+    if (index.data(FolderModel::ShowsTotalRole).toBool()) {
+        const int total = index.data(FolderModel::TotalRole).toInt();
+        QStyledItemDelegate::paint(painter, opt, index);
+        if (total > 0) {
+            const QString count = QStringLiteral("[%1]").arg(total);
+            const int countWidth = QFontMetrics(opt.font).horizontalAdvance(count) + 8;
+            const bool selected = opt.state & QStyle::State_Selected;
+            painter->save();
+            painter->setFont(opt.font);
+            painter->setPen(opt.palette.color(selected ? QPalette::HighlightedText : QPalette::Text));
+            painter->drawText(QRect(opt.rect.right() - countWidth, opt.rect.top(), countWidth - 4, opt.rect.height()), Qt::AlignRight | Qt::AlignVCenter, count);
+            painter->restore();
+        }
+        return;
     }
     if (unread <= 0) {
         QStyledItemDelegate::paint(painter, opt, index);

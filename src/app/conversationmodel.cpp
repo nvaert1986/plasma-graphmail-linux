@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "conversationmodel.h"
+#include "messagedrag.h"
 #include "messagelistmodel.h"
 
 #include <QMimeData>
@@ -226,16 +227,11 @@ QStringList ConversationModel::mimeTypes() const
 QMimeData *ConversationModel::mimeData(const QModelIndexList &indexes) const
 {
     // Dragging a conversation moves all its messages, as in Outlook
-    QStringList lines{m_mailboxKey};
+    QList<qint64> ids;
     for (const QModelIndex &index : indexes) {
-        const QList<qint64> ids = messagesOf(index);
-        for (qint64 id : ids) {
-            lines.append(QString::number(id));
-        }
+        ids += messagesOf(index);
     }
-    auto *data = new QMimeData;
-    data->setData(MessageListModel::mimeType(), lines.join(QLatin1Char('\n')).toLatin1());
-    return data;
+    return new MessageDragData(m_mailboxKey, ids);
 }
 
 }

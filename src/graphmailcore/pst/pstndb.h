@@ -124,7 +124,7 @@ private:
     // The trees with the highest level a block may have there (2 at the top, 1 below an XXBLOCK;
     // 1 for a subnode tree's top, 0 below an SIBLOCK), so a damaged tree cannot recurse forever
     std::optional<QByteArray> treeDataBelow(quint64 bid, int maxLevel);
-    std::optional<QList<QByteArray>> treeBlocksBelow(quint64 bid, int maxLevel);
+    std::optional<QList<QByteArray>> treeBlocksBelow(quint64 bid, int maxLevel, qint64 &total);
     std::optional<QHash<quint32, SubnodeEntry>> subnodesBelow(quint64 bidSub, int maxLevel);
     bool fail(const QString &text);
     // Leaf entries of the NBT (ptype 0x81) or BBT (0x80) for a key, or all of them

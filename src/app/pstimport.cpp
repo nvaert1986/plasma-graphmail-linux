@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "pstimport.h"
+#include "mimeexport.h"
 #include "daemonclient.h"
 #include "mimemapi.h"
 #include "msg/msgfile.h"
@@ -246,8 +247,7 @@ void PstImporter::start()
             m_total += int(ids->size());
         }
     }
-    m_tempDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/import-") + QUuid::createUuid().toString(QUuid::Id128);
-    QDir().mkpath(m_tempDir);
+    m_tempDir = MimeExport::workDirectory(QStringLiteral("import"));
     if (m_parent) {
         m_progress = new QProgressDialog(i18nc("@info:progress", "Importing the Outlook data file..."), i18nc("@action:button", "Cancel"), 0, std::max(1, m_total), m_parent);
         m_progress->setWindowModality(Qt::WindowModal);
@@ -520,8 +520,7 @@ MessageFileImporter::MessageFileImporter(DaemonClient *daemon, const QString &ma
 
 void MessageFileImporter::start()
 {
-    m_tempDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/import-") + QUuid::createUuid().toString(QUuid::Id128);
-    QDir().mkpath(m_tempDir);
+    m_tempDir = MimeExport::workDirectory(QStringLiteral("import"));
     if (m_parent && m_files.size() > 1) {
         m_progress = new QProgressDialog(i18nc("@info:progress", "Importing messages..."), i18nc("@action:button", "Cancel"), 0, int(m_files.size()), m_parent);
         m_progress->setWindowModality(Qt::WindowModal);

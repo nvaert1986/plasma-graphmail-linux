@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "composer.h"
+#include "maileditor.h"
+#include "pastedimages.h"
+#include "coloraction.h"
 #include "accesstext.h"
 #include "avatar.h"
 #include "blobstore.h"
@@ -10,8 +13,10 @@
 #include "mailboxworker.h"
 #include "mailview.h"
 #include "mainwindow.h"
+#include "mimeexport.h"
 #include "quote.h"
 #include "recipientedit.h"
+#include "replyoptions.h"
 #include "signaturedialog.h"
 #include "signatures.h"
 #include "store.h"
@@ -29,6 +34,8 @@
 #include <KPIMTextEdit/RichTextComposerImages>
 #include <KSharedConfig>
 #include <KStandardAction>
+#include <KStandardShortcut>
+#include <TextEmoticonsWidgets/EmoticonTextEditAction>
 #include <KSelectAction>
 #include <KToggleAction>
 
@@ -38,13 +45,16 @@
 #include <QComboBox>
 #include <QDateTimeEdit>
 #include <QDialogButtonBox>
+#include <QFile>
 #include <QInputDialog>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QImage>
+#include <QImageReader>
 #include <QJsonArray>
+#include <QKeyEvent>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -54,10 +64,24 @@
 #include <QMenu>
 #include <QMimeData>
 #include <QMimeDatabase>
+#include <QPointer>
+#include <QPrinter>
+#include <QPrintDialog>
 #include <QRegularExpression>
 #include <QSplitter>
+#include <QStandardPaths>
+#include <QStringListModel>
 #include <QTextBlock>
 #include <QTextDocument>
+#include <QApplication>
+#include <QAbstractItemView>
+#include <QCompleter>
+#include <QDialog>
+#include <QTextTable>
+#include <QMouseEvent>
+#include <QAbstractTextDocumentLayout>
+#include <QScrollBar>
+#include <KToolBar>
 #include <QUuid>
 #include <QVBoxLayout>
 
@@ -120,9 +144,11 @@ ComposerWindow::ComposerWindow(MailboxSet *mailboxes, DaemonClient *daemon, cons
     , m_cc(new RecipientEdit(m_book, this))
     , m_bcc(new RecipientEdit(m_book, this))
     , m_bccLabel(new QLabel(i18nc("@label:textbox", "Bcc:"), this))
+    , m_replyTo(new RecipientEdit(m_book, this))
+    , m_replyToLabel(new QLabel(i18nc("@label:textbox", "Reply to:"), this))
     , m_subject(new QLineEdit(this))
     , m_attachmentList(new QListWidget(this))
-    , m_editor(new KPIMTextEdit::RichTextComposer(this))
+    , m_editor(new MailEditor(this))
     , m_splitter(new QSplitter(Qt::Vertical, this))
     , m_quoteBox(new QWidget(this))
     , m_quoteHeader(new QLabel(this))
@@ -148,6 +174,7 @@ ComposerWindow::ComposerWindow(MailboxSet *mailboxes, DaemonClient *daemon, cons
     form->addRow(i18nc("@label:textbox", "To:"), m_to);
     form->addRow(i18nc("@label:textbox", "Cc:"), m_cc);
     form->addRow(m_bccLabel, m_bcc);
+    form->addRow(m_replyToLabel, m_replyTo);
     form->addRow(i18nc("@label:textbox", "Subject:"), m_subject);
 
     m_attachmentList->setFlow(QListView::LeftToRight);
@@ -171,6 +198,21 @@ ComposerWindow::ComposerWindow(MailboxSet *mailboxes, DaemonClient *daemon, cons
     m_editor->setCheckSpellingEnabled(true);
     m_editor->document()->setDefaultFont(mailFont());
     m_editor->activateRichText();
+    // Pictures pasted from a web page (Outlook on the web) point at the web: brought into the mail
+    auto *pasted = new PastedImages(m_editor);
+    pasted->setContentIdResolver([this](const QString &contentId) {
+        return m_mailboxes->inlinePicture(contentId);
+    });
+    connect(pasted, &PastedImages::unavailable, this, [this](int count) {
+        KMessageBox::information(this,
+                                 i18ncp("@info",
+                                        "%1 picture could not be copied. The browser copies some pictures as links that only work inside it: save the picture there and add it with Insert Image.",
+                                        "%1 pictures could not be copied. The browser copies some pictures as links that only work inside it: save them there and add them with Insert Image.",
+                                        count),
+                                 i18nc("@title:window", "Pasted Pictures"));
+    });
+    // @mentions
+    connect(m_editor, &QTextEdit::cursorPositionChanged, this, &ComposerWindow::updateMention);
 
     // The original under an answer: shown as it is, not edited
     auto *quoteLayout = new QVBoxLayout(m_quoteBox);
@@ -208,6 +250,25 @@ ComposerWindow::ComposerWindow(MailboxSet *mailboxes, DaemonClient *daemon, cons
     setupActions();
     setupGUI(QSize(900, 760), ToolBar | Keys | Save | Create, QStringLiteral("graphmailcomposerui.rc"));
     setAutoSaveSettings(QStringLiteral("ComposerWindow"));
+    // The formatting on a row of its own, as in Outlook: next to Send it went into the toolbar's
+    // overflow arrow as soon as the window was a little narrow (also over a saved layout)
+    if (KToolBar *format = toolBar(QStringLiteral("formatToolBar")); format && !toolBarBreak(format)) {
+        insertToolBarBreak(format);
+    }
+    // KDE's standard Print, Cut, Copy and Paste land in front of Send on their own: menus only
+    if (KToolBar *main = toolBar(QStringLiteral("mainToolBar"))) {
+        for (const char *name : {"file_print", "edit_cut", "edit_copy", "edit_paste"}) {
+            if (QAction *action = actionCollection()->action(QLatin1String(name))) {
+                main->removeAction(action);
+            }
+        }
+    }
+    // The main row stays short: the less used buttons show only their icon (the tooltip names them)
+    for (const char *name : {"importance_high", "importance_low", "save_draft", "discard", "manage_link", "add_image", "insert_table_dialog", "insert_emoji", "edit_redo"}) {
+        if (QAction *action = actionCollection()->action(QLatin1String(name))) {
+            action->setPriority(QAction::LowPriority);
+        }
+    }
 
     setupFrom();
 
@@ -238,10 +299,13 @@ ComposerWindow::ComposerWindow(MailboxSet *mailboxes, DaemonClient *daemon, cons
     }
 
     connect(m_editor, &QTextEdit::textChanged, this, &ComposerWindow::setDirty);
-    for (QLineEdit *edit : {static_cast<QLineEdit *>(m_to), static_cast<QLineEdit *>(m_cc), static_cast<QLineEdit *>(m_bcc), m_subject}) {
+    m_editor->installEventFilter(this);
+    // Files dropped on the text: the editor would take them as text
+    m_editor->viewport()->installEventFilter(this);
+    for (QLineEdit *edit : {static_cast<QLineEdit *>(m_to), static_cast<QLineEdit *>(m_cc), static_cast<QLineEdit *>(m_bcc), static_cast<QLineEdit *>(m_replyTo), m_subject}) {
         connect(edit, &QLineEdit::textEdited, this, &ComposerWindow::setDirty);
     }
-    for (RecipientEdit *edit : {m_to, m_cc, m_bcc}) {
+    for (RecipientEdit *edit : {m_to, m_cc, m_bcc, m_replyTo}) {
         connect(edit, &QLineEdit::textChanged, &m_mailTipsTimer, qOverload<>(&QTimer::start));
     }
     connect(m_subject, &QLineEdit::textChanged, this, &ComposerWindow::updateTitle);
@@ -256,6 +320,9 @@ ComposerWindow::ComposerWindow(MailboxSet *mailboxes, DaemonClient *daemon, cons
         if (message == m_quoteSource && account + QLatin1Char('/') + mailbox == m_mailboxKey && m_quoteHtml.isEmpty()) {
             buildQuote();
             showQuote();
+        }
+        if (message != 0 && message == m_asNewSource && account + QLatin1Char('/') + mailbox == m_mailboxKey) {
+            fillAsNew();
         }
     });
     connect(m_daemon, &DaemonClient::sendRightLearned, this, &ComposerWindow::updateSendMenu);
@@ -297,6 +364,21 @@ void ComposerWindow::setupActions()
     actions->addAction(QStringLiteral("send"), m_send);
     actions->setDefaultShortcut(m_send, QKeySequence(Qt::CTRL | Qt::Key_Return));
     connect(m_send, &QAction::triggered, this, [this] {
+        // Names typed without an address are checked first, as Outlook does on Send
+        QStringList invalid;
+        m_to->recipients(&invalid);
+        m_cc->recipients(&invalid);
+        m_bcc->recipients(&invalid);
+        if (!invalid.isEmpty()) {
+            checkNames([this](bool resolved) {
+                if (resolved) {
+                    m_send->trigger();
+                } else {
+                    validate();
+                }
+            });
+            return;
+        }
         if (validate()) {
             save(true);
             m_closing = true;
@@ -312,6 +394,14 @@ void ComposerWindow::setupActions()
     m_sendMenu = new QMenu(this);
     m_sendModes = new QActionGroup(this);
     m_sendModes->setExclusive(true);
+
+    QAction *checkNamesAction = actions->addAction(QStringLiteral("check_names"));
+    checkNamesAction->setText(i18nc("@action", "Check Names"));
+    checkNamesAction->setIcon(QIcon::fromTheme(QStringLiteral("im-user")));
+    actions->setDefaultShortcut(checkNamesAction, QKeySequence(Qt::CTRL | Qt::Key_K));
+    connect(checkNamesAction, &QAction::triggered, this, [this] {
+        checkNames();
+    });
 
     QAction *saveDraft = actions->addAction(QStringLiteral("save_draft"));
     saveDraft->setText(i18nc("@action", "Save Draft"));
@@ -403,6 +493,14 @@ void ComposerWindow::setupActions()
     });
     m_bcc->setVisible(false);
     m_bccLabel->setVisible(false);
+    m_showReplyTo = new KToggleAction(i18nc("@action", "Show Reply To"), this);
+    actions->addAction(QStringLiteral("show_reply_to"), m_showReplyTo);
+    connect(m_showReplyTo, &QAction::toggled, this, [this](bool on) {
+        m_replyTo->setVisible(on);
+        m_replyToLabel->setVisible(on);
+    });
+    m_replyTo->setVisible(false);
+    m_replyToLabel->setVisible(false);
 
     m_signatureMenu = new KActionMenu(QIcon::fromTheme(QStringLiteral("document-sign")), i18nc("@action", "Signature"), this);
     m_signatureMenu->setPopupMode(QToolButton::InstantPopup);
@@ -430,6 +528,91 @@ void ComposerWindow::setupActions()
 
     // The editor's formatting (bold, lists, fonts, links, pictures, ...)
     m_editor->composerActions()->createActions(actions);
+    // The editor was switched to rich text before its actions existed; the table menu only learns the
+    // mode from that switch and does nothing in plain text
+    m_editor->composerActions()->textModeChanged(m_editor->textMode());
+    // Insert Table opens the table dialog at once: the editor's own Table is a menu of menus
+    // (Insert > Table..., rows, columns, joining), kept for working on a table
+    QAction *insertTable = actions->addAction(QStringLiteral("insert_table_dialog"));
+    insertTable->setText(i18nc("@action", "Insert Table..."));
+    insertTable->setIconText(i18nc("@action short toolbar text", "Table"));
+    insertTable->setIcon(QIcon::fromTheme(QStringLiteral("insert-table")));
+    connect(insertTable, &QAction::triggered, this, [this] {
+        auto *tables = qobject_cast<KActionMenu *>(actionCollection()->action(QStringLiteral("insert_table")));
+        QAction *insert = tables ? tables->menu()->actions().value(0) : nullptr;
+        if (QAction *table = insert && insert->menu() ? insert->menu()->actions().value(0) : nullptr) {
+            const auto tablesNow = [this] {
+                QList<QTextTable *> list;
+                for (QTextFrame *frame : m_editor->document()->rootFrame()->childFrames()) {
+                    if (auto *t = qobject_cast<QTextTable *>(frame)) {
+                        list.append(t);
+                    }
+                }
+                return list;
+            };
+            const QList<QTextTable *> before = tablesNow();
+            table->trigger();
+            // The cursor into the first cell of the new table, as in Outlook
+            for (QTextTable *inserted : tablesNow()) {
+                if (!before.contains(inserted)) {
+                    m_editor->setTextCursor(inserted->cellAt(0, 0).firstCursorPosition());
+                    m_editor->setFocus();
+                    break;
+                }
+            }
+        }
+    });
+    // Outlook's Font Color and Highlight: the last colour on the button, a palette under the arrow
+    // (KPIMTextEdit's own buttons show only a square of the colour)
+    for (const ColorAction::Kind kind : {ColorAction::Kind::Text, ColorAction::Kind::Highlight}) {
+        auto *color = new ColorAction(kind, this);
+        actions->addAction(kind == ColorAction::Kind::Text ? QStringLiteral("text_color") : QStringLiteral("highlight_color"), color);
+        connect(color, &ColorAction::colorChosen, this, [this, kind](const QColor &chosen) {
+            const bool text = kind == ColorAction::Kind::Text;
+            if (!chosen.isValid()) {
+                clearTextColor(!text);
+            } else if (text) {
+                m_editor->composerControler()->setTextForegroundColor(chosen);
+            } else {
+                m_editor->composerControler()->setTextBackgroundColor(chosen);
+            }
+            m_editor->setFocus();
+        });
+    }
+
+    // Outlook's emoji button: KDE's picker, the emoji goes in where the cursor is
+    auto *emoji = new TextEmoticonsWidgets::EmoticonTextEditAction(this);
+    emoji->setText(i18nc("@action", "Insert Emoji"));
+    emoji->setIcon(QIcon::fromTheme(QStringLiteral("smiley-add")));
+    actions->addAction(QStringLiteral("insert_emoji"), emoji);
+    connect(emoji, &TextEmoticonsWidgets::EmoticonTextEditAction::insertEmoticon, this, [this](const QString &text) {
+        m_editor->insertPlainText(text);
+        m_editor->setFocus();
+    });
+
+    // Undo and Redo of the text, Print Draft (Outlook on the web's Format text and Options)
+    QAction *undo = KStandardAction::undo(this, [this] {
+        undoText(true);
+    }, actions);
+    QAction *redo = KStandardAction::redo(this, [this] {
+        undoText(false);
+    }, actions);
+    undo->setEnabled(false);
+    redo->setEnabled(false);
+    connect(m_editor, &QTextEdit::undoAvailable, undo, &QAction::setEnabled);
+    connect(m_editor, &QTextEdit::redoAvailable, redo, &QAction::setEnabled);
+    KStandardAction::cut(m_editor, &QTextEdit::cut, actions);
+    KStandardAction::copy(m_editor, &QTextEdit::copy, actions);
+    KStandardAction::paste(m_editor, &QTextEdit::paste, actions);
+    QAction *printDraft = KStandardAction::print(this, [this] {
+        QPrinter printer;
+        QPrintDialog dialog(&printer, this);
+        dialog.setWindowTitle(i18nc("@title:window", "Print Draft"));
+        if (dialog.exec() == QDialog::Accepted) {
+            m_editor->document()->print(&printer);
+        }
+    }, actions);
+    printDraft->setText(i18nc("@action", "Print Draft..."));
 
     KStandardAction::close(this, &QWidget::close, actions);
 }
@@ -534,10 +717,44 @@ void ComposerWindow::setOtherFromForTests(const QString &address, const QString 
     fromChanged();
 }
 
+void ComposerWindow::addOriginalAttachments(const MessageRow &original)
+{
+    // The original's attachments come along; the user may remove them
+    const QList<AttachmentRow> rows = m_store ? m_store->attachments(original.id) : QList<AttachmentRow>();
+    for (const AttachmentRow &row : rows) {
+        if (row.isInline) {
+            continue;
+        }
+        Item item;
+        item.attachment.key = QStringLiteral("original:") + row.name;
+        item.attachment.name = row.name;
+        item.attachment.size = row.size;
+        item.fromOriginal = true;
+        m_items.append(item);
+    }
+    refreshAttachmentList();
+}
+
 void ComposerWindow::startFrom(const MessageRow *original)
 {
     m_record.kind = m_request.kind;
-    const bool answer = original && m_request.kind != QLatin1String("new") && m_request.kind != QLatin1String("draft");
+    if (original && m_request.kind == QLatin1String("editAsNew")) {
+        startAsNew(*original);
+        fromChanged();
+        return;
+    }
+    // How the original comes along (Settings > Reply and Forward)
+    const bool forward = m_request.kind == QLatin1String("forward");
+    const ReplyOptions::Mode mode = forward ? ReplyOptions::forForwards() : ReplyOptions::forReplies();
+    if (original && (m_request.kind == QLatin1String("forwardAsAttachment") || (forward && mode == ReplyOptions::Mode::Attach))) {
+        // A new message with the original attached as a mail file (.eml), as Outlook's Forward
+        // as Attachment
+        m_record.kind = QStringLiteral("new");
+        m_subject->setText(Quote::subject(QStringLiteral("forward"), original->subject));
+        attachOriginal(*original);
+    }
+    const bool answer = original && m_record.kind != QLatin1String("new")
+        && (m_request.kind == QLatin1String("reply") || m_request.kind == QLatin1String("replyAll") || forward);
     if (answer) {
         m_record.source = original->graphId;
         m_subject->setText(Quote::subject(m_request.kind, original->subject));
@@ -555,24 +772,16 @@ void ComposerWindow::startFrom(const MessageRow *original)
             m_to->setRecipients(to);
             m_cc->setRecipients(cc);
         } else {
-            // The original's attachments come along; the user may remove them
-            const QList<AttachmentRow> rows = m_store ? m_store->attachments(original->id) : QList<AttachmentRow>();
-            for (const AttachmentRow &row : rows) {
-                if (row.isInline) {
-                    continue;
-                }
-                Item item;
-                item.attachment.key = QStringLiteral("original:") + row.name;
-                item.attachment.name = row.name;
-                item.attachment.size = row.size;
-                item.fromOriginal = true;
-                m_items.append(item);
-            }
-            refreshAttachmentList();
+            addOriginalAttachments(*original);
         }
-        m_quoteSource = original->id;
-        buildQuote();
-        showQuote();
+        if (mode == ReplyOptions::Mode::Attach) {
+            attachOriginal(*original);
+        } else if (mode != ReplyOptions::Mode::None) {
+            m_quotePrefixed = mode == ReplyOptions::Mode::Prefix;
+            m_quoteSource = original->id;
+            buildQuote();
+            showQuote();
+        }
     } else if (!m_request.to.isEmpty()) {
         m_to->setRecipients(m_request.to);
     } else if (original && m_request.kind == QLatin1String("draft")) {
@@ -595,6 +804,56 @@ void ComposerWindow::startFrom(const MessageRow *original)
         m_editor->moveCursor(QTextCursor::Start);
     }
     fromChanged();
+    // The prepared text (empty lines, signature, quote) is where undo stops, as in Outlook
+    m_editor->document()->clearUndoRedoStacks();
+}
+
+void ComposerWindow::attachOriginal(const MessageRow &original)
+{
+    // The original as a mail file (.eml); the daemon keeps the file once the draft is saved
+    const QString name = MimeExport::safeFileName(original.subject).left(80);
+    QPointer<ComposerWindow> self(this);
+    MimeExport::fetch(m_mailboxes, m_daemon, m_mailboxKey, original.id, this, [self, name](const QByteArray &mime, bool) {
+        if (!self || mime.isEmpty()) {
+            return;
+        }
+        const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/attached-") + QUuid::createUuid().toString(QUuid::Id128);
+        QDir().mkpath(dir);
+        QFile file(dir + QLatin1Char('/') + name + QStringLiteral(".eml"));
+        if (file.open(QIODevice::WriteOnly) && file.write(mime) == mime.size()) {
+            file.close();
+            self->addFiles({file.fileName()});
+        }
+    });
+}
+
+void ComposerWindow::startAsNew(const MessageRow &original)
+{
+    // Edit as New Message (Outlook's Resend): the original's subject, people, text and attachments
+    // in a new message. Sent as a forward of the original, so Exchange copies its attachments;
+    // the whole content is then replaced by what is written here
+    m_record.kind = QStringLiteral("forward");
+    m_record.source = original.graphId;
+    m_subject->setText(original.subject);
+    m_to->setRecipients(parseRecipients(original.toList));
+    m_cc->setRecipients(parseRecipients(original.ccList));
+    addOriginalAttachments(original);
+    m_asNewSource = original.id;
+    fillAsNew();
+}
+
+void ComposerWindow::fillAsNew()
+{
+    const std::optional<MessageRow> original = m_store ? m_store->message(m_asNewSource) : std::nullopt;
+    const QString html = original ? Quote::originalHtml(*original, m_blobs) : QString();
+    if (html.isEmpty()) {
+        // Not cached yet: the daemon fetches it and bodyReady comes back here
+        m_daemon->fetchBody(m_mailboxKey.section(QLatin1Char('/'), 0, 0), m_mailboxKey.section(QLatin1Char('/'), 1), m_asNewSource);
+        return;
+    }
+    m_editor->setHtml(html);
+    m_editor->moveCursor(QTextCursor::Start);
+    m_asNewSource = 0;
 }
 
 void ComposerWindow::buildQuote()
@@ -613,6 +872,12 @@ void ComposerWindow::buildQuote()
     }
     m_quoteHtml = html.isEmpty() ? QString() : Quote::headerHtml(*original) + html;
     m_quoteText = html.isEmpty() ? QString() : Quote::headerText(*original) + Quote::originalText(*original, m_blobs);
+    if (m_quotePrefixed && !html.isEmpty()) {
+        // Prefix each line: "> " in text, a quote bar in HTML (as mail programs show it)
+        m_quoteHtml = Quote::headerHtml(*original) + QStringLiteral("<blockquote style=\"margin:0 0 0 4px;padding-left:8px;border-left:2px solid #a0a0a0\">") + html
+            + QStringLiteral("</blockquote>");
+        m_quoteText = ReplyOptions::prefixLines(m_quoteText);
+    }
 }
 
 void ComposerWindow::showQuote()
@@ -625,7 +890,12 @@ void ComposerWindow::showQuote()
         return;
     }
     m_quoteHeader->setText(Quote::headerHtml(*original));
-    m_quoteView->showBody(m_store, m_blobs, m_quoteSource, false);
+    if (m_quotePrefixed) {
+        // As it is sent: every line prefixed
+        m_quoteView->showText(ReplyOptions::prefixLines(Quote::originalText(*original, m_blobs)));
+    } else {
+        m_quoteView->showBody(m_store, m_blobs, m_quoteSource, false);
+    }
     m_quoteBox->setVisible(true);
 }
 
@@ -640,6 +910,8 @@ void ComposerWindow::restore(const Outgoing &record)
     m_cc->setRecipients(record.cc);
     m_bcc->setRecipients(record.bcc);
     m_showBcc->setChecked(!record.bcc.isEmpty());
+    m_replyTo->setRecipients(record.replyTo);
+    m_showReplyTo->setChecked(!record.replyTo.isEmpty());
     m_high->setChecked(record.importance == 2);
     m_low->setChecked(record.importance == 0);
     m_readReceipt->setChecked(record.readReceipt);
@@ -651,6 +923,7 @@ void ComposerWindow::restore(const Outgoing &record)
     m_quoteHtml = ui.value(QLatin1String("quoteHtml")).toString();
     m_quoteText = ui.value(QLatin1String("quoteText")).toString();
     m_quoteSource = ui.value(QLatin1String("quoteSource")).toInteger();
+    m_quotePrefixed = ui.value(QLatin1String("quotePrefixed")).toBool();
     m_signatureId = ui.value(QLatin1String("signature")).toString();
     // Pictures in the text: back into the editor from the blob store
     const QJsonObject images = ui.value(QLatin1String("images")).toObject();
@@ -737,6 +1010,8 @@ void ComposerWindow::restoreFromServer(const QString &json, const MessageRow &dr
     m_cc->setRecipients(list(m.value(QLatin1String("ccRecipients"))));
     m_bcc->setRecipients(list(m.value(QLatin1String("bccRecipients"))));
     m_showBcc->setChecked(!m.value(QLatin1String("bccRecipients")).toArray().isEmpty());
+    m_replyTo->setRecipients(list(m.value(QLatin1String("replyTo"))));
+    m_showReplyTo->setChecked(!m.value(QLatin1String("replyTo")).toArray().isEmpty());
     const QString importance = m.value(QLatin1String("importance")).toString();
     m_high->setChecked(importance == QLatin1String("high"));
     m_low->setChecked(importance == QLatin1String("low"));
@@ -901,7 +1176,12 @@ void ComposerWindow::insertSignature(const QString &id)
 {
     const std::optional<Signature> signature = Signatures::find(id);
     QTextCursor cursor(m_editor->document());
-    if (!m_signatureStart.isNull() && !m_signatureEnd.isNull() && m_signatureEnd.position() > m_signatureStart.position()) {
+    // The old signature's place, if it still belongs to this text: the editor can rebuild its
+    // document (plain text and back), and a stale range would cut the wrong text
+    const int length = m_editor->document()->characterCount();
+    const bool known = !m_signatureStart.isNull() && !m_signatureEnd.isNull() && m_signatureStart.document() == m_editor->document()
+        && m_signatureEnd.document() == m_editor->document() && m_signatureEnd.position() > m_signatureStart.position() && m_signatureEnd.position() < length;
+    if (known) {
         // Swap the one there
         cursor.setPosition(m_signatureStart.position());
         cursor.setPosition(m_signatureEnd.position(), QTextCursor::KeepAnchor);
@@ -1004,6 +1284,8 @@ Outgoing ComposerWindow::record(bool send)
     o.to = m_to->recipients();
     o.cc = m_cc->recipients();
     o.bcc = m_bcc->recipients();
+    o.replyTo = m_replyTo->recipients();
+    o.mentions = m_plainText->isChecked() ? QList<OutgoingRecipient>() : mentionsInText();
     o.subject = m_subject->text();
     o.importance = m_high->isChecked() ? 2 : m_low->isChecked() ? 0 : 1;
     o.html = !m_plainText->isChecked();
@@ -1045,6 +1327,7 @@ Outgoing ComposerWindow::record(bool send)
     QJsonObject ui{{QStringLiteral("quoteHtml"), m_quoteHtml},
                    {QStringLiteral("quoteText"), m_quoteText},
                    {QStringLiteral("quoteSource"), m_quoteSource},
+                   {QStringLiteral("quotePrefixed"), m_quotePrefixed},
                    {QStringLiteral("signature"), m_signatureId},
                    {QStringLiteral("fromKey"), fromKey()},
                    {QStringLiteral("otherFrom"), otherFrom()}};
@@ -1094,6 +1377,255 @@ Outgoing ComposerWindow::record(bool send)
     }
     o.ui = ui;
     return o;
+}
+
+void ComposerWindow::checkNames(const std::function<void(bool)> &done)
+{
+    struct Part {
+        QPointer<RecipientEdit> edit;
+        QString text;
+    };
+    auto parts = std::make_shared<QList<Part>>();
+    for (RecipientEdit *edit : {m_to, m_cc, m_bcc, m_replyTo}) {
+        QStringList invalid;
+        edit->recipients(&invalid);
+        for (const QString &text : std::as_const(invalid)) {
+            parts->append({edit, text});
+        }
+    }
+    auto unresolved = std::make_shared<QStringList>();
+    auto next = std::make_shared<std::function<void()>>();
+    // One hit is taken, several are offered (in a test run the first), none is reported
+    const auto take = [this, unresolved](const Part &part, const QStringList &hits) {
+        QString chosen = hits.value(0);
+        if (hits.size() > 1 && !m_testMode) {
+            bool ok = false;
+            chosen = QInputDialog::getItem(this, i18nc("@title:window", "Check Names"), i18nc("@label:listbox", "More than one person matches \"%1\":", part.text), hits, 0, false, &ok);
+            if (!ok) {
+                chosen.clear();
+            }
+        }
+        const QList<OutgoingRecipient> parsed = parseRecipients(chosen);
+        if (parsed.isEmpty() || !part.edit) {
+            unresolved->append(part.text);
+            return;
+        }
+        part.edit->replacePart(part.text, parsed.first());
+    };
+    *next = [this, parts, unresolved, next, take, done] {
+        if (parts->isEmpty()) {
+            if (!unresolved->isEmpty()) {
+                m_notice->setMessageType(KMessageWidget::Error);
+                m_notice->setText(i18nc("@info", "No one was found for: %1", unresolved->join(QStringLiteral(", "))));
+                m_notice->animatedShow();
+            } else {
+                m_notice->animatedHide();
+            }
+            if (done) {
+                done(unresolved->isEmpty());
+            }
+            *next = nullptr;
+            return;
+        }
+        const Part part = parts->takeFirst();
+        if (const QStringList local = AddressBook::matches(m_book->model()->stringList(), part.text); !local.isEmpty()) {
+            take(part, local);
+            (*next)();
+            return;
+        }
+        // Not among the known people: the organisation's directory
+        const QString account = m_mailboxKey.section(QLatin1Char('/'), 0, 0);
+        m_daemon->query(account, QStringLiteral("me"), QStringLiteral("directory"),
+                        QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("text"), part.text}}).toJson(QJsonDocument::Compact)), this,
+                        [part, next, take](const QString &json) {
+                            QStringList hits;
+                            const QJsonArray value = QJsonDocument::fromJson(json.toUtf8()).object().value(QLatin1String("value")).toArray();
+                            for (const QJsonValue &v : value) {
+                                const QJsonObject o = v.toObject();
+                                const QString address = o.value(QLatin1String("mail")).toString();
+                                if (!address.isEmpty()) {
+                                    hits.append(formatRecipient({o.value(QLatin1String("displayName")).toString(), address}));
+                                }
+                            }
+                            take(part, hits);
+                            (*next)();
+                        });
+    };
+    (*next)();
+}
+
+QString ComposerWindow::recipientsForTests() const
+{
+    return m_to->text();
+}
+
+QStringList ComposerWindow::typeBodyForTests(const QString &text)
+{
+    m_editor->setFocus();
+    for (const QChar c : text) {
+        const int key = c == QLatin1Char(' ') ? Qt::Key_Space : c == QLatin1Char('\n') ? Qt::Key_Return : 0;
+        QKeyEvent press(QEvent::KeyPress, key, Qt::NoModifier, key == Qt::Key_Return ? QString() : QString(c));
+        QCoreApplication::sendEvent(m_editor, &press);
+    }
+    QStringList links;
+    for (QTextBlock block = m_editor->document()->begin(); block.isValid(); block = block.next()) {
+        for (auto it = block.begin(); !it.atEnd(); ++it) {
+            if (it.fragment().charFormat().isAnchor()) {
+                links.append(it.fragment().text() + QStringLiteral(" -> ") + it.fragment().charFormat().anchorHref());
+            }
+        }
+    }
+    return links;
+}
+
+QStringList ComposerWindow::keysForTests(const QString &script)
+{
+    // | is Enter, < is Shift+Left, # colours the selection red, ^ is the Font Color button, _ its
+    // Automatic, % is Insert Table, } picks the @mention list's entry, ~ is Ctrl+Z (logs the text)
+    m_editor->setFocus();
+    QStringList log;
+    const auto press = [this](int key, Qt::KeyboardModifiers modifiers, const QString &text) {
+        QKeyEvent override(QEvent::ShortcutOverride, key, modifiers, text);
+        QCoreApplication::sendEvent(m_editor, &override);
+        QKeyEvent event(QEvent::KeyPress, key, modifiers, text);
+        QCoreApplication::sendEvent(m_editor, &event);
+        QKeyEvent release(QEvent::KeyRelease, key, modifiers, text);
+        QCoreApplication::sendEvent(m_editor, &release);
+    };
+    for (const QChar c : script) {
+        if (c == QLatin1Char('|')) {
+            press(Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r"));
+        } else if (c == QLatin1Char('<')) {
+            press(Qt::Key_Left, Qt::ShiftModifier, QString());
+        } else if (c == QLatin1Char('#')) {
+            m_editor->composerControler()->setTextForegroundColor(Qt::red);
+        } else if (c == QLatin1Char('^') || c == QLatin1Char('_')) {
+            // ^ the Font Color button (its last colour), _ its "Automatic"; logs the selection's colour
+            if (c == QLatin1Char('^')) {
+                actionCollection()->action(QStringLiteral("text_color"))->trigger();
+            } else {
+                clearTextColor(false);
+            }
+            QTextCursor at = m_editor->textCursor();
+            at.setPosition(std::min(at.selectionStart(), at.selectionEnd()) + 1);
+            const QTextCharFormat format = at.charFormat();
+            log.append(format.hasProperty(QTextFormat::ForegroundBrush) ? QStringLiteral("color %1").arg(format.foreground().color().name()) : QStringLiteral("color automatic"));
+        } else if (c == QLatin1Char('}')) {
+            // The @mention list's first entry, as Enter takes it
+            const bool open = m_mention && m_mention->popup()->isVisible();
+            if (open) {
+                insertMention(m_mention->popup()->currentIndex().data().toString());
+            }
+            QStringList mentions;
+            for (const OutgoingRecipient &r : mentionsInText()) {
+                mentions.append(r.name + QStringLiteral(" <") + r.address + QLatin1Char('>'));
+            }
+            log.append(QStringLiteral("list %1; text [%2]; to [%3]; mentions [%4]")
+                           .arg(open ? QStringLiteral("open") : QStringLiteral("closed"),
+                                m_editor->toPlainText().section(QLatin1Char('\n'), 0, 0),
+                                m_to->text(),
+                                mentions.join(QStringLiteral(", "))));
+        } else if (c == QLatin1Char('%')) {
+            // Insert Table..., its dialog accepted as it opens
+            QTimer::singleShot(300, this, [] {
+                if (auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget())) {
+                    dialog->accept();
+                }
+            });
+            actionCollection()->action(QStringLiteral("insert_table_dialog"))->trigger();
+            const QList<QTextFrame *> frames = m_editor->document()->rootFrame()->childFrames();
+            const auto found = std::find_if(frames.cbegin(), frames.cend(), [](QTextFrame *frame) {
+                return qobject_cast<QTextTable *>(frame) != nullptr;
+            });
+            const QTextTable *table = found == frames.cend() ? nullptr : qobject_cast<QTextTable *>(*found);
+            log.append(table ? QStringLiteral("table %1x%2, cursor in it: %3").arg(table->rows()).arg(table->columns()).arg(m_editor->textCursor().currentTable() == table)
+                             : QStringLiteral("no table"));
+        } else if (c == QLatin1Char('~')) {
+            press(Qt::Key_Z, Qt::ControlModifier, QString());
+            log.append(QStringLiteral("undo -> [%1] cursor %2")
+                           .arg(m_editor->toPlainText().replace(QLatin1Char('\n'), QLatin1Char('|')))
+                           .arg(m_editor->textCursor().position()));
+        } else {
+            press(c == QLatin1Char(' ') ? Qt::Key_Space : Qt::Key_A, Qt::NoModifier, QString(c));
+        }
+        QCoreApplication::processEvents();
+    }
+    return log;
+}
+
+void ComposerWindow::insertHtmlForTests(const QString &html)
+{
+    // As a paste does (MailEditor::insertFromMimeData)
+    m_editor->textCursor().insertHtml(MailEditor::htmlForQt(html));
+}
+
+QStringList ComposerWindow::imagesForTests() const
+{
+    QStringList list;
+    for (QTextBlock block = m_editor->document()->begin(); block.isValid(); block = block.next()) {
+        for (auto it = block.begin(); !it.atEnd(); ++it) {
+            const QTextImageFormat format = it.fragment().charFormat().toImageFormat();
+            if (format.isValid()) {
+                const QImage image = m_editor->document()->resource(QTextDocument::ImageResource, QUrl(format.name())).value<QImage>();
+                list.append(format.name().left(40) + (image.isNull() ? QStringLiteral(" (not held)") : QStringLiteral(" (held %1x%2)").arg(image.width()).arg(image.height())));
+            }
+        }
+    }
+    return list;
+}
+
+QStringList ComposerWindow::dropFilesForTests(const QStringList &paths)
+{
+    QStringList result{QStringLiteral("undo steps before: %1").arg(m_editor->document()->availableUndoSteps())};
+    auto *data = new QMimeData;
+    QList<QUrl> urls;
+    for (const QString &path : paths) {
+        urls.append(QUrl::fromLocalFile(path));
+    }
+    data->setUrls(urls);
+    const QPointF at(20, 10);
+    QDragEnterEvent enter(at.toPoint(), Qt::CopyAction, data, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(m_editor->viewport(), &enter);
+    QDropEvent drop(at, Qt::CopyAction, data, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(m_editor->viewport(), &drop);
+    delete data;
+    for (const auto &image : m_editor->composerControler()->composerImages()->embeddedImages()) {
+        result.append(QStringLiteral("inline: ") + image->imageName);
+    }
+    for (const Item &item : std::as_const(m_items)) {
+        result.append(QStringLiteral("attached: ") + item.attachment.name);
+    }
+    result.append(QStringLiteral("accepted: %1").arg(drop.isAccepted()));
+    // A click in the middle of the first picture selects it
+    for (QTextBlock block = m_editor->document()->begin(); block.isValid(); block = block.next()) {
+        for (auto it = block.begin(); !it.atEnd(); ++it) {
+            if (it.fragment().charFormat().isImageFormat()) {
+                QTextCursor at(m_editor->document());
+                at.setPosition(it.fragment().position());
+                const QTextImageFormat image = it.fragment().charFormat().toImageFormat();
+                const QRect line = m_editor->cursorRect(at);
+                const QPoint middle(line.left() + int(image.width() / 2), line.bottom() - int(image.height() / 2));
+                QMouseEvent press(QEvent::MouseButtonPress, middle, m_editor->viewport()->mapToGlobal(middle), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+                QCoreApplication::sendEvent(m_editor->viewport(), &press);
+                QMouseEvent release(QEvent::MouseButtonRelease, middle, m_editor->viewport()->mapToGlobal(middle), Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+                QCoreApplication::sendEvent(m_editor->viewport(), &release);
+                const QTextCursor selected = m_editor->textCursor();
+                result.append(QStringLiteral("click at %1,%2 selects %3-%4, a picture: %5")
+                                  .arg(middle.x())
+                                  .arg(middle.y())
+                                  .arg(selected.selectionStart())
+                                  .arg(selected.selectionEnd())
+                                  .arg(selected.charFormat().isImageFormat()));
+                return result;
+            }
+        }
+    }
+    return result;
+}
+
+void ComposerWindow::typeRecipientsForTests(const QString &text)
+{
+    m_to->setText(text);
 }
 
 bool ComposerWindow::validate()
@@ -1201,15 +1733,16 @@ void ComposerWindow::askDelay()
 void ComposerWindow::showDelay()
 {
     m_delay->setChecked(m_deferUntil > 0);
-    m_delay->setText(m_deferUntil > 0 ? i18nc("@action %1 a date and time", "Delay Delivery (until %1)...",
+    // Outlook's Schedule send (classic Outlook: Delay Delivery)
+    m_delay->setText(m_deferUntil > 0 ? i18nc("@action %1 a date and time", "Schedule Send (%1)...",
                                               QLocale().toString(QDateTime::fromMSecsSinceEpoch(m_deferUntil), QLocale::ShortFormat))
-                                      : i18nc("@action", "Delay Delivery..."));
+                                      : i18nc("@action", "Schedule Send..."));
 }
 
 void ComposerWindow::askMailTips()
 {
     QStringList addresses;
-    for (RecipientEdit *edit : {m_to, m_cc, m_bcc}) {
+    for (RecipientEdit *edit : {m_to, m_cc, m_bcc, m_replyTo}) {
         const QList<OutgoingRecipient> list = edit->recipients();
         for (const OutgoingRecipient &r : list) {
             if (!addresses.contains(r.address, Qt::CaseInsensitive)) {
@@ -1418,6 +1951,26 @@ void ComposerWindow::setTestInput(const QString &to, const QString &subject, con
     addFiles(files);
 }
 
+void ComposerWindow::prefill(const QStringList &to, const QStringList &cc, const QStringList &bcc, const QString &subject, const QString &text, const QStringList &files)
+{
+    m_to->setRecipients(parseRecipients(to.join(QLatin1Char(';'))));
+    m_cc->setRecipients(parseRecipients(cc.join(QLatin1Char(';'))));
+    m_bcc->setRecipients(parseRecipients(bcc.join(QLatin1Char(';'))));
+    if (!bcc.isEmpty()) {
+        m_showBcc->setChecked(true);
+    }
+    if (!subject.isEmpty()) {
+        m_subject->setText(subject);
+    }
+    if (!text.isEmpty()) {
+        // Above the signature, where the user would start typing
+        QTextCursor cursor(m_editor->document());
+        cursor.movePosition(QTextCursor::Start);
+        cursor.insertText(text + QLatin1Char('\n'));
+    }
+    addFiles(files);
+}
+
 QString ComposerWindow::saveNow()
 {
     save(false);
@@ -1457,6 +2010,377 @@ void ComposerWindow::closeEvent(QCloseEvent *event)
     }
     m_autosave.stop();
     KXmlGuiWindow::closeEvent(event);
+}
+
+bool ComposerWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_editor->viewport() && (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove || event->type() == QEvent::Drop)) {
+        auto *drop = static_cast<QDropEvent *>(event);
+        QStringList paths;
+        const QList<QUrl> urls = drop->mimeData()->hasUrls() ? drop->mimeData()->urls() : QList<QUrl>();
+        for (const QUrl &url : urls) {
+            if (url.isLocalFile()) {
+                paths.append(url.toLocalFile());
+            }
+        }
+        if (!paths.isEmpty()) {
+            // The caret shows where an image lands
+            m_editor->setTextCursor(m_editor->cursorForPosition(drop->position().toPoint()));
+            if (event->type() == QEvent::Drop) {
+                dropFiles(paths);
+            }
+            drop->acceptProposedAction();
+            return true;
+        }
+    }
+    if (watched == m_editor->viewport() && event->type() == QEvent::MouseButtonPress) {
+        // A click on a picture selects it, as in Outlook; pressed again it can be dragged elsewhere
+        auto *mouse = static_cast<QMouseEvent *>(event);
+        if (mouse->button() == Qt::LeftButton && mouse->modifiers() == Qt::NoModifier && selectImageAt(mouse->position().toPoint())) {
+            m_clickedImage = m_editor->textCursor();
+        }
+    }
+    if (watched == m_editor->viewport() && event->type() == QEvent::MouseButtonRelease && !m_clickedImage.isNull() && !m_replayingKey) {
+        // Qt clears a selection that was clicked without dragging; the picture stays selected
+        const QTextCursor image = m_clickedImage;
+        m_clickedImage = QTextCursor();
+        m_replayingKey = true;
+        QCoreApplication::sendEvent(watched, event);
+        m_replayingKey = false;
+        QTextCursor check(m_editor->document());
+        check.setPosition(image.selectionStart());
+        check.setPosition(image.selectionEnd(), QTextCursor::KeepAnchor);
+        if (!m_editor->textCursor().hasSelection() && check.charFormat().isImageFormat()) {
+            m_editor->setTextCursor(check);
+        }
+        return true;
+    }
+    if (watched == m_editor && event->type() == QEvent::KeyPress && !m_replayingKey) {
+        auto *keyEvent = static_cast<QKeyEvent *>(event);
+        const int key = keyEvent->key();
+        // The @mention list open: Enter and Tab pick, Escape closes (the list handles them)
+        if (m_mention && m_mention->popup()->isVisible()
+            && (key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Tab || key == Qt::Key_Backtab || key == Qt::Key_Escape)) {
+            if (key == Qt::Key_Escape) {
+                endMention();
+            } else if (const QModelIndex current = m_mention->popup()->currentIndex(); current.isValid()) {
+                insertMention(current.data().toString());
+            }
+            return true;
+        }
+        const QKeySequence sequence(keyEvent->keyCombination());
+        if (KStandardShortcut::undo().contains(sequence) || KStandardShortcut::redo().contains(sequence)) {
+            undoText(KStandardShortcut::undo().contains(sequence));
+            return true;
+        }
+        if (key == Qt::Key_Space || key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Tab) {
+            linkTypedAddress();
+        }
+        const bool enter = key == Qt::Key_Return || key == Qt::Key_Enter;
+        const bool typing = !(keyEvent->modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier)) && (enter || !keyEvent->text().isEmpty())
+            && key != Qt::Key_Backspace && key != Qt::Key_Delete && key != Qt::Key_Escape;
+        if (typing) {
+            // Qt makes every Enter a step of its own. Here a typed line and its Enter are one step,
+            // so one Ctrl+Z takes back a line, as in Outlook: the keys of a line share an edit block
+            QTextDocument *document = m_editor->document();
+            const bool continues = !m_editor->textCursor().hasSelection() && document->availableUndoSteps() == m_typingSteps
+                && m_editor->textCursor().position() == m_typingEnd;
+            QTextCursor block = m_editor->textCursor();
+            if (continues && (enter || !m_lineEnded)) {
+                block.joinPreviousEditBlock();
+            } else {
+                block.beginEditBlock();
+            }
+            m_replayingKey = true;
+            QCoreApplication::sendEvent(m_editor, event);
+            m_replayingKey = false;
+            block.endEditBlock();
+            m_typingSteps = document->availableUndoSteps();
+            m_typingEnd = m_editor->textCursor().position();
+            m_lineEnded = enter;
+            return true;
+        }
+    }
+    return KXmlGuiWindow::eventFilter(watched, event);
+}
+
+void ComposerWindow::linkTypedAddress()
+{
+    if (m_editor->textMode() != KPIMTextEdit::RichTextComposer::Rich) {
+        return;
+    }
+    QTextCursor cursor = m_editor->textCursor();
+    if (cursor.hasSelection()) {
+        return;
+    }
+    // The word just typed, without punctuation after it
+    const QTextBlock block = cursor.block();
+    const QString text = block.text();
+    const int end = cursor.positionInBlock();
+    int start = end;
+    while (start > 0 && !text.at(start - 1).isSpace()) {
+        --start;
+    }
+    QString word = text.mid(start, end - start);
+    while (!word.isEmpty() && QStringLiteral(".,;:!?)]}'\"").contains(word.back())) {
+        word.chop(1);
+    }
+    static const QRegularExpression address(QStringLiteral(R"(^(https?://[^\s<>"]+|www\.[^\s<>"]+\.[^\s<>"]+)$)"), QRegularExpression::CaseInsensitiveOption);
+    if (word.isEmpty() || !address.match(word).hasMatch()) {
+        return;
+    }
+    QTextCursor link(m_editor->document());
+    link.setPosition(block.position() + start);
+    link.setPosition(block.position() + start + int(word.size()), QTextCursor::KeepAnchor);
+    if (link.charFormat().isAnchor()) {
+        return;
+    }
+    const QTextCharFormat before = cursor.charFormat();
+    QTextCharFormat format;
+    format.setAnchor(true);
+    format.setAnchorHref(word.startsWith(QLatin1String("www."), Qt::CaseInsensitive) ? QStringLiteral("https://") + word : word);
+    format.setForeground(m_editor->palette().color(QPalette::Link));
+    format.setFontUnderline(true);
+    link.mergeCharFormat(format);
+    // What is typed next is ordinary text again
+    m_editor->setCurrentCharFormat(before);
+}
+
+void ComposerWindow::updateMention()
+{
+    if (m_editor->textMode() != KPIMTextEdit::RichTextComposer::Rich) {
+        return;
+    }
+    const QTextCursor cursor = m_editor->textCursor();
+    if (cursor.hasSelection()) {
+        endMention();
+        return;
+    }
+    const QTextBlock block = cursor.block();
+    const QString text = block.text();
+    const int pos = cursor.positionInBlock();
+    if (m_mentionStart < 0) {
+        // An "@" just typed at the start of a word (not inside an address or a link)
+        if (pos > 0 && text.at(pos - 1) == QLatin1Char('@') && (pos == 1 || text.at(pos - 2).isSpace()) && !cursor.charFormat().isAnchor()) {
+            m_mentionStart = block.position() + pos - 1;
+            startMention();
+        } else {
+            return;
+        }
+    }
+    const int start = m_mentionStart - block.position();
+    if (start < 0 || start >= text.size() || pos <= start || text.at(start) != QLatin1Char('@')) {
+        endMention();
+        return;
+    }
+    const QString typed = text.mid(start + 1, pos - start - 1);
+    if (typed.size() > 40 || typed.contains(QStringLiteral("  "))) {
+        endMention();
+        return;
+    }
+    m_mention->setCompletionPrefix(typed);
+    if (m_mention->completionCount() == 0) {
+        m_mention->popup()->hide();
+        return;
+    }
+    QRect rect = m_editor->cursorRect();
+    rect.setWidth(380);
+    m_mention->complete(rect);
+    // Enter takes the first one, as in Outlook
+    m_mention->popup()->setCurrentIndex(m_mention->completionModel()->index(0, 0));
+}
+
+void ComposerWindow::startMention()
+{
+    // The people of the conversation first (the original's sender and recipients, the To and Cc
+    // lines), then the address book
+    QStringList entries;
+    QSet<QString> seen;
+    const auto add = [&entries, &seen](const OutgoingRecipient &r) {
+        if (!r.address.isEmpty() && !seen.contains(r.address.toLower())) {
+            seen.insert(r.address.toLower());
+            entries.append(r.name.isEmpty() ? r.address : QStringLiteral("%1 <%2>").arg(r.name, r.address));
+        }
+    };
+    if (const std::optional<MessageRow> original = (m_store && m_request.message != 0) ? m_store->message(m_request.message) : std::nullopt) {
+        add({original->senderName, original->senderAddress});
+        for (const OutgoingRecipient &r : parseRecipients(original->toList) + parseRecipients(original->ccList)) {
+            add(r);
+        }
+    }
+    for (const OutgoingRecipient &r : m_to->recipients() + m_cc->recipients()) {
+        add(r);
+    }
+    for (const QString &entry : m_book->model()->stringList()) {
+        const QList<OutgoingRecipient> parsed = parseRecipients(entry);
+        if (!parsed.isEmpty()) {
+            add(parsed.constFirst());
+        }
+    }
+    if (!m_mention) {
+        m_mention = new QCompleter(this);
+        m_mention->setWidget(m_editor);
+        m_mention->setCompletionMode(QCompleter::PopupCompletion);
+        m_mention->setCaseSensitivity(Qt::CaseInsensitive);
+        m_mention->setFilterMode(Qt::MatchContains);
+        m_mention->setMaxVisibleItems(8);
+        connect(m_mention, qOverload<const QString &>(&QCompleter::activated), this, &ComposerWindow::insertMention);
+    }
+    m_mention->setModel(new QStringListModel(entries, m_mention));
+}
+
+void ComposerWindow::endMention()
+{
+    m_mentionStart = -1;
+    if (m_mention) {
+        m_mention->popup()->hide();
+    }
+}
+
+void ComposerWindow::insertMention(const QString &entry)
+{
+    const QList<OutgoingRecipient> parsed = parseRecipients(entry);
+    if (parsed.isEmpty() || m_mentionStart < 0) {
+        endMention();
+        return;
+    }
+    const OutgoingRecipient person = parsed.constFirst();
+    QTextCursor cursor = m_editor->textCursor();
+    const QTextCharFormat plain = [&cursor] {
+        QTextCharFormat f = cursor.charFormat();
+        f.setAnchor(false);
+        f.setAnchorHref({});
+        return f;
+    }();
+    cursor.beginEditBlock();
+    cursor.setPosition(m_mentionStart, QTextCursor::KeepAnchor);
+    cursor.removeSelectedText();
+    // "@Name" as a mailto link in the link colour, as Outlook marks a mention
+    QTextCharFormat link = plain;
+    link.setAnchor(true);
+    link.setAnchorHref(QStringLiteral("mailto:") + person.address);
+    link.setForeground(m_editor->palette().color(QPalette::Link));
+    link.setFontUnderline(false);
+    cursor.insertText(QLatin1Char('@') + (person.name.isEmpty() ? person.address : person.name), link);
+    cursor.insertText(QStringLiteral(" "), plain);
+    cursor.endEditBlock();
+    m_editor->setTextCursor(cursor);
+    m_editor->setCurrentCharFormat(plain);
+    m_mentionStart = -1;
+    if (m_mention) {
+        m_mention->popup()->hide();
+    }
+    // Mentioned means addressed: on the To line unless already on the message
+    const QList<OutgoingRecipient> on = m_to->recipients() + m_cc->recipients() + m_bcc->recipients();
+    const bool present = std::any_of(on.cbegin(), on.cend(), [&person](const OutgoingRecipient &r) {
+        return r.address.compare(person.address, Qt::CaseInsensitive) == 0;
+    });
+    if (!present) {
+        m_to->setRecipients(m_to->recipients() + QList<OutgoingRecipient>{person});
+        setDirty();
+    }
+}
+
+QList<OutgoingRecipient> ComposerWindow::mentionsInText() const
+{
+    QList<OutgoingRecipient> list;
+    QSet<QString> seen;
+    for (QTextBlock block = m_editor->document()->begin(); block.isValid(); block = block.next()) {
+        for (auto it = block.begin(); !it.atEnd(); ++it) {
+            const QTextFragment fragment = it.fragment();
+            const QTextCharFormat format = fragment.charFormat();
+            const QString href = format.anchorHref();
+            if (format.isAnchor() && href.startsWith(QLatin1String("mailto:"), Qt::CaseInsensitive) && fragment.text().startsWith(QLatin1Char('@'))) {
+                const QString address = href.mid(7).section(QLatin1Char('?'), 0, 0);
+                if (!address.isEmpty() && !seen.contains(address.toLower())) {
+                    seen.insert(address.toLower());
+                    list.append({fragment.text().mid(1), address});
+                }
+            }
+        }
+    }
+    return list;
+}
+
+void ComposerWindow::clearTextColor(bool background)
+{
+    ColorAction::clearColor(m_editor, background);
+}
+
+void ComposerWindow::undoText(bool undo)
+{
+    QTextDocument *document = m_editor->document();
+    const QTextCursor before = m_editor->textCursor();
+    const QString text = document->toRawText();
+    // Qt's own cursor place adds up the lengths of a change recorded twice (a colour) and can lie
+    // past the end, which lands the cursor at the top; the place of the last change is used instead
+    int changed = -1;
+    const QMetaObject::Connection connection = connect(document, &QTextDocument::contentsChange, this, [&changed](int from, int removed, int added) {
+        Q_UNUSED(removed)
+        changed = from + added;
+    });
+    if (undo) {
+        document->undo();
+    } else {
+        document->redo();
+    }
+    disconnect(connection);
+    const int last = document->characterCount() - 1;
+    QTextCursor cursor(document);
+    if (document->toRawText() == text) {
+        // Only the look changed: the selection stays
+        cursor.setPosition(std::min(before.anchor(), last));
+        cursor.setPosition(std::min(before.position(), last), QTextCursor::KeepAnchor);
+    } else {
+        cursor.setPosition(std::clamp(changed, 0, last));
+    }
+    m_editor->setTextCursor(cursor);
+    m_editor->ensureCursorVisible();
+    m_typingSteps = -1;
+}
+
+bool ComposerWindow::selectImageAt(const QPoint &viewportPoint)
+{
+    QTextDocument *document = m_editor->document();
+    const QPointF point = viewportPoint + QPointF(m_editor->horizontalScrollBar()->value(), m_editor->verticalScrollBar()->value());
+    const int hit = document->documentLayout()->hitTest(point, Qt::ExactHit);
+    if (hit < 0) {
+        return false;
+    }
+    // The character at the hit, the picture itself (a format belongs to the character before a cursor)
+    QTextCursor image(document);
+    image.setPosition(hit);
+    image.setPosition(hit + 1, QTextCursor::KeepAnchor);
+    if (!image.charFormat().isImageFormat()) {
+        return false;
+    }
+    const QTextCursor current = m_editor->textCursor();
+    if (current.selectionStart() != image.selectionStart() || current.selectionEnd() != image.selectionEnd()) {
+        m_editor->setTextCursor(image);
+    }
+    return true;
+}
+
+void ComposerWindow::dropFiles(const QStringList &paths)
+{
+    // As Outlook: pictures go into the text (rich text only), everything else is attached
+    QStringList attach;
+    for (const QString &path : paths) {
+        QImageReader reader(path);
+        const QSize size = reader.size();
+        if (m_editor->textMode() != KPIMTextEdit::RichTextComposer::Rich || !reader.canRead() || !size.isValid()) {
+            attach.append(path);
+            continue;
+        }
+        // A photo at full size would be wider than any mail window
+        const int maxWidth = 800;
+        if (size.width() > maxWidth) {
+            m_editor->composerControler()->composerImages()->addImage(QUrl::fromLocalFile(path), maxWidth, size.height() * maxWidth / size.width());
+        } else {
+            m_editor->composerControler()->composerImages()->addImage(QUrl::fromLocalFile(path));
+        }
+    }
+    addFiles(attach);
 }
 
 void ComposerWindow::dragEnterEvent(QDragEnterEvent *event)

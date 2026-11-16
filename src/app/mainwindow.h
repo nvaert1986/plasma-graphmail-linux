@@ -13,6 +13,7 @@
 #include <QHash>
 #include <QJsonObject>
 #include <QTimer>
+#include <QUrl>
 
 #include <memory>
 #include <functional>
@@ -21,6 +22,7 @@ class KBusyIndicatorWidget;
 class KMessageWidget;
 class KToggleAction;
 class QTabBar;
+class QTemporaryDir;
 class QActionGroup;
 class QComboBox;
 class QMenu;
@@ -83,6 +85,8 @@ public:
     QWidget *openOutgoing(const QString &mailboxKey, const QString &uuid);
     // The calendar window (created once, raised afterwards)
     CalendarWindow *openCalendar();
+    // The calendar module, made when needed, without switching to it
+    CalendarWindow *calendarModule();
     // Tests: search folders ("create" name|filter, "open", "change" name|filter, "delete"); only
     // names marked [TEST Graph Mail]; logs the outcome
     void searchFolderForTests(const QString &action, const QString &name, const QString &filter);
@@ -109,6 +113,12 @@ public:
     RulesDialog *openRules(const QString &mailboxKey = {});
     // The main window, for windows that hand it something (the composer's undo send)
     static MainWindow *instance();
+    // Undo (Ctrl+Z, docs/PHASE9B.md 9b.21): called before messages are moved or deleted, keeps
+    // where they are now; a delete in Deleted Items is for good and is not kept
+    void rememberForUndo(const QString &mailboxKey, const QList<qint64> &messages, bool deleting);
+    // Sweep (docs/PHASE9B.md 9b.23) without the dialog (also tests): scope is SweepDialog::Scope,
+    // target 0 deletes
+    void sweepMessages(const QString &mailboxKey, qint64 message, int scope, qint64 target);
     // Undo send (docs/PHASE9.md): a bar with Undo while the message waits; Undo brings it back
     // as a draft in a composer
     void offerUndoSend(const QString &mailboxKey, const QString &uuid, const QString &subject, int seconds);
@@ -157,13 +167,33 @@ public:
     // Files given on the command line or from the file manager: .msg and .eml in the message
     // viewer, .pst and .ost into the import (for the mailbox shown)
     void openFiles(const QStringList &files);
+    // A mailto: link (the desktop's mail program): a new message from it; files it asks to attach
+    // only after the user agrees
+    QWidget *openMailto(const QString &link);
+    // Dragging messages out (docs/PHASE9B.md 9b.33): the messages as .eml files in a private
+    // folder that lives until the app quits; the original MIME from Exchange, else rebuilt
+    QList<QUrl> writeMessageFiles(const QString &mailboxKey, const QList<qint64> &messages);
+    // File > Message Details for the message shown (Internet headers); nullptr when none
+    QWidget *openMessageDetails();
+    // Reply with Meeting: a new meeting with the message's people and text
+    QWidget *replyWithMeeting(const QString &mailboxKey, qint64 message);
+    // A message dropped on Calendar or Tasks: an appointment / a task with its text
+    QWidget *newAppointmentFromMail(const QString &mailboxKey, qint64 message);
+    void newTaskFromMail(const QString &mailboxKey, qint64 message);
     // Tests: the selected messages
     QList<qint64> selectedMessageIds() const;
 private:
-    QString askExportFile(QString name, bool mbox);
     void runExport(const QString &mailboxKey, const QList<qint64> &messages, const QString &file, bool mbox, const std::function<void(bool)> &done);
 public:
     // The mailboxes' photos (docs/PHASE9.md)
+    MailboxSet *mailboxes() const
+    {
+        return m_mailboxes;
+    }
+    DaemonClient *daemon() const
+    {
+        return m_daemon;
+    }
     ProfilePhotos *photos() const
     {
         return m_photos;
@@ -192,6 +222,8 @@ private:
     void updateStatus();
     void updateActions();
     QList<qint64> selectedMessages() const;
+    // The message in the reading pane, else the first selected; 0 when none
+    qint64 shownMessage() const;
     void markSelected(bool read);
     void toggleFlag();
     void deleteSelected();
@@ -243,9 +275,16 @@ public:
     // Quick Steps (docs/PHASE9.md): the actions of a step on the selected messages; tests too
     void runQuickStep(const QJsonObject &step);
     bool runQuickStepForTests(const QString &name);
+    // The mailbox shown (account/mailbox)
+    QString mailboxKey() const
+    {
+        return m_mailboxKey;
+    }
 private:
     void showSearchFolder(const QString &mailboxKey, const QString &id, const QString &name);
     void folderMenu(const QPoint &pos);
+    // The online archive in Outlook on the web (the native one waits for Graph, docs/PHASE9B.md)
+    void openOnlineArchive(const QString &mailboxKey);
     void editSearchFolder(const QString &mailboxKey, const QString &id, const QString &name, const QString &filter);
     void deleteSearchFolder(const QString &mailboxKey, const QString &id, const QString &name, bool ask);
     // The mailboxes (and folders, empty = all) the scope covers
@@ -300,6 +339,57 @@ private:
     QStringList m_autoRepliesForTests;
     QTimer m_autoRepliesTimer;
     KMessageWidget *m_undoBar = nullptr;
+    std::unique_ptr<QTemporaryDir> m_dragFiles;
+    struct UndoStep {
+        QString mailboxKey;
+        // Message and the folder it was in
+        QList<QPair<qint64, qint64>> moves;
+    };
+    QList<UndoStep> m_undoSteps;
+    QAction *m_undoAction = nullptr;
+    void undoLast();
+    void sweep();
+    void showAllInboxes();
+    // Outlook on the web's message menu (2026-11-16): Copy, Report Phishing, Find Related,
+    // a rule from the message, Move and Copy with the folders used last
+    void reportPhishing();
+    void copySelected(qint64 folder);
+    void rememberFolder(const QString &mailboxKey, qint64 folder);
+    void fillFolderMenu(QMenu *menu, bool copy);
+    void findRelated(bool conversation);
+    void createRuleFromMessage();
+    QHash<QString, QList<qint64>> m_recentFolders;
+    void refreshList();
+    bool m_favoritesClosed = false;
+    // The unread count on the task manager icon (docs/PHASE9B.md 9b.31)
+    void updateUnreadBadge();
+    QTimer m_badgeTimer;
+    // Clean Up Old Mail (docs/PHASE9B.md 9b.18): interactive shows what would happen first
+    void runCleanup(bool interactive, bool notify = true);
+    // Empty Folder: Deleted Items for good, another folder (Junk Email) to Deleted Items
+    void emptyFolder(const QString &mailboxKey, qint64 folder);
+    // Outlook's folder pane: New (parent 0: the top of the mailbox), Rename, Move, Delete, Mark All
+    // as Read; through the daemon, the folder tree's sync shows the result
+    void newFolder(const QString &mailboxKey, qint64 parent);
+    void renameFolder(const QString &mailboxKey, qint64 folder);
+    void moveFolder(const QString &mailboxKey, qint64 folder);
+    void deleteFolder(const QString &mailboxKey, qint64 folder);
+    void markAllRead(const QString &mailboxKey, qint64 folder);
+    void folderChange(const QString &mailboxKey, const QString &kind, const QJsonObject &args, const QString &done);
+public:
+    // Tests: run the cleanup as the schedule does, without a desktop notification
+    void runCleanupForTests()
+    {
+        runCleanup(false, false);
+    }
+    void undoForTests()
+    {
+        undoLast();
+    }
+private:
+    QTimer m_cleanupTimer;
+    int m_badge = -1;
+    int m_drags = 0;
     KToggleAction *m_focusedInbox = nullptr;
     QTabBar *m_focusTabs = nullptr;
     QString m_folderWellKnown;

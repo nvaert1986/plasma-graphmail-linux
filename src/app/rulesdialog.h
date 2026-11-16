@@ -97,6 +97,8 @@ public:
     void runForTests(const QString &spec);
     // Tests: the editor for a new rule, filled as for "create", shown and not saved
     RuleEditor *editorForTests(const QString &name, const QString &subject);
+    // Create Rule from a message: the editor with this draft once the rules are in, then saved last
+    void createFrom(const QJsonObject &draft);
 
 Q_SIGNALS:
     void loadedForTests();

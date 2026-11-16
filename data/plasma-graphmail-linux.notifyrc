@@ -52,3 +52,11 @@ Comment=A change was not applied: the item was changed in the same place in Outl
 Comment[nl]=Een wijziging is niet doorgevoerd: het item is op dezelfde plek in Outlook of op een ander apparaat gewijzigd
 IconName=dialog-warning
 Action=Popup
+
+[Event/cleanup]
+Name=Old mail cleaned up
+Name[nl]=Oude e-mail opgeruimd
+Comment=A scheduled cleanup of old mail moved, saved or deleted messages, or found some to clean up
+Comment[nl]=Een geplande opruiming van oude e-mail heeft berichten verplaatst, bewaard of verwijderd, of er gevonden om op te ruimen
+IconName=edit-clear-history
+Action=Popup

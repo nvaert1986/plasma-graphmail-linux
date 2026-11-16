@@ -91,7 +91,7 @@ public Q_SLOTS:
     void setFolderOpen(qint64 folder, bool open);
     void fetchBody(qint64 message);
     void fetchAttachment(qint64 attachment);
-    void markRead(qint64 message, bool read);
+    void markRead(qint64 message, bool read, bool receipt = true);
     void setFlag(qint64 message, int flag, qint64 start = 0, qint64 due = 0);
     // Focused Inbox (docs/PHASE9.md): Move to Focused / Move to Other
     void setFocused(qint64 message, bool focused);
@@ -210,10 +210,13 @@ private:
     // Ignore Conversation (docs/PHASE9.md): Graph has no conversation actions, so the daemon moves
     // the ignored conversations' messages (also new ones) to Deleted Items itself
     QStringList ignoredConversations() const;
+    QString betaUrl() const;
     int sweepIgnored();
     qint64 m_nextOverdueCheck = 0;
     // Dismiss All is running: the next round once the queue has sent this one
     bool m_dismissingOverdue = false;
+    // Ignore Conversation skipped a message with a pending operation: one more sweep is planned
+    bool m_sweepAgain = false;
     int m_overdueRounds = 0;
     qint64 m_nextPeople = 0;
     QHash<QString, Entry> m_entries;

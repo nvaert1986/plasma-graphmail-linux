@@ -24,6 +24,8 @@ class AddressBook : public QObject
 public:
     AddressBook(MailboxSet *mailboxes, QObject *parent = nullptr);
     QStringListModel *model() const;
+    // Check Names: the entries ("Name <address>") holding every word typed, accents ignored
+    static QStringList matches(const QStringList &entries, const QString &typed);
 
 private:
     QStringListModel *m_model;
@@ -40,6 +42,8 @@ public:
 
     QList<OutgoingRecipient> recipients(QStringList *invalid = nullptr) const;
     void setRecipients(const QList<OutgoingRecipient> &recipients);
+    // Check Names: the typed part (as recipients() reports it invalid) becomes this recipient
+    void replacePart(const QString &part, const OutgoingRecipient &recipient);
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;

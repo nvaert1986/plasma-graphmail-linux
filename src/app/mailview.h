@@ -49,10 +49,28 @@ public:
     // Whether the HTML refers to anything on the internet (images, style sheets, backgrounds)
     static bool hasRemoteContent(const QByteArray &html);
 
+    // View > Zoom (docs/PHASE9B.md 9b.25): the size of every message, remembered
+    static double zoom();
+    static void setZoom(double factor);
+    // A dark desktop theme shows HTML mail dark too (colours inverted, pictures kept), unless the
+    // user turns it off; printing never
+    static bool darkTheme();
+    static bool darkMessages();
+    static void setDarkMessages(bool on);
+
+Q_SIGNALS:
+    // From the right-click menu: Print..., and New Message To... on an e-mail link
+    void printRequested();
+    void mailtoRequested(const QString &link);
+
 protected:
     void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:
+    // Save Image As... (ask where) or Open Image (a file in the cache, opened in the desktop's viewer)
+    void downloadImage(bool open);
+    bool m_openDownload = false;
+
     QWebEngineProfile *m_profile;
     MailSchemeHandler *m_handler;
     RemoteContentBlocker *m_blocker;

@@ -39,6 +39,8 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    // Messages dropped on Calendar or Tasks in the navigation bar (Outlook: drag a mail there)
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     void updateTitle();

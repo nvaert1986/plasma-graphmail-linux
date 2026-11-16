@@ -3,6 +3,9 @@
 
 #include "accounts.h"
 #include "calendarsharingdialog.h"
+#include "calendaroptions.h"
+#include "cleanup.h"
+#include "messagedrag.h"
 #include "calendarwindow.h"
 #include "composer.h"
 #include "contactswindow.h"
@@ -12,9 +15,11 @@
 #include "recurrence.h"
 #include "daemonclient.h"
 #include "mailboxset.h"
+#include "mailto.h"
 #include "mailview.h"
 #include "mailboxesdialog.h"
 #include "mainwindow.h"
+#include "signaturedialog.h"
 #include "shell.h"
 #include "profilephotos.h"
 #include "autorepliesdialog.h"
@@ -25,25 +30,96 @@
 #include "offlinedialog.h"
 #include "readingpane.h"
 
+#include <clocale>
 #include <KAboutData>
+#include <KActionCollection>
 #include <KDBusService>
 #include <KLocalizedString>
+#include <KNotifyConfigWidget>
 
 #include <QApplication>
+#include <QDateEdit>
+#include <QLineEdit>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QStandardPaths>
+#include <QSettings>
 #include <QCommandLineParser>
 #include <QElapsedTimer>
 #include <QDir>
 #include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPalette>
 #include <QPointer>
 #include <QFileInfo>
+#include <QPlainTextEdit>
 #include <QTimer>
 
+#include <execinfo.h>
 #include <memory>
+#include <unistd.h>
 
 namespace
 {
+// Debugging: GRAPHMAIL_TRACE_WARNINGS="<text>" writes a backtrace to stderr after every warning
+// containing that text, to find the code behind a warning such as QTextCursor::setPosition's
+QtMessageHandler previousHandler = nullptr;
+
+void traceWarnings(QtMsgType type, const QMessageLogContext &context, const QString &message)
+{
+    previousHandler(type, context, message);
+    static const QString pattern = qEnvironmentVariable("GRAPHMAIL_TRACE_WARNINGS");
+    if (type == QtWarningMsg && message.contains(pattern)) {
+        void *frames[64];
+        const int count = backtrace(frames, 64);
+        static const char header[] = "=== backtrace of the warning above ===\n";
+        (void)!write(STDERR_FILENO, header, sizeof(header) - 1);
+        backtrace_symbols_fd(frames, count, STDERR_FILENO);
+    }
+}
+
+// Tests: a window opened after the screenshot target was chosen (Forward as vCard)
+QPointer<QWidget> &lateShown()
+{
+    static QPointer<QWidget> widget;
+    return widget;
+}
+
+// The language chosen under Help > Switch Application Language (plasma-label-creator's fix). KXmlGui
+// applies it once the application exists, but Plasma's platform theme already loads the frameworks'
+// translations while the application is made: apply it before.
+void applyChosenLanguage()
+{
+    const QSettings overrides(QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + QStringLiteral("/klanguageoverridesrc"), QSettings::IniFormat);
+    const QByteArray chosen = overrides.value(QStringLiteral("Language/plasma-graphmail-linux")).toByteArray();
+    if (chosen.isEmpty()) {
+        return;
+    }
+    const QByteArray desktop = qgetenv("LANGUAGE");
+    qputenv("LANGUAGE", desktop.isEmpty() ? chosen : chosen + ':' + desktop);
+
+    // gettext ignores LANGUAGE when the locale for messages is C or POSIX (a desktop with LANG=C,
+    // as the user's laptop): then messages take another installed locale, the chosen language's
+    // own if there is one. Dates and numbers keep the desktop's formats.
+    if (!qEnvironmentVariableIsEmpty("LC_ALL")) {
+        return;
+    }
+    const char *current = std::setlocale(LC_MESSAGES, "");
+    const QByteArray messages = current ? QByteArray(current) : QByteArray("C");
+    if (messages != "C" && messages != "POSIX" && !messages.startsWith("C.")) {
+        return;
+    }
+    const QByteArray language = chosen.split(':').constFirst();
+    const QByteArray own = language.contains('_') ? language : language + '_' + language.toUpper();
+    for (const QByteArray &candidate : QByteArrayList{own + ".UTF-8", "en_US.UTF-8", "en_GB.UTF-8"}) {
+        if (std::setlocale(LC_MESSAGES, candidate.constData())) {
+            qputenv("LC_MESSAGES", candidate);
+            return;
+        }
+    }
+}
+
 // "<account>/<mailbox>/<message id>" from a notification's Open
 void openMessage(GraphMail::MainWindow *window, const QString &spec)
 {
@@ -52,6 +128,23 @@ void openMessage(GraphMail::MainWindow *window, const QString &spec)
         window->showMessage(parts.at(0) + QLatin1Char('/') + parts.at(1), parts.at(2).toLongLong());
     }
 }
+
+// Positional arguments: mailto: links (Graph Mail as the desktop's mail program), file:// URLs and
+// paths (.msg, .eml, .pst from the file manager), paths relative to where that start was made
+void openArguments(GraphMail::MainWindow *window, const QStringList &arguments, const QString &workingDirectory)
+{
+    QStringList files;
+    for (const QString &argument : arguments) {
+        if (GraphMail::Mailto::isMailto(argument)) {
+            window->openMailto(argument);
+        } else if (argument.startsWith(QLatin1String("file:"), Qt::CaseInsensitive)) {
+            files.append(QUrl(argument).toLocalFile());
+        } else {
+            files.append(QDir(workingDirectory).absoluteFilePath(argument));
+        }
+    }
+    window->openFiles(files);
+}
 }
 
 int main(int argc, char **argv)
@@ -59,8 +152,17 @@ int main(int argc, char **argv)
     // QtWebEngine: custom schemes and shared OpenGL contexts before the application exists
     GraphMail::MailView::registerSchemes();
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+    if (!qEnvironmentVariableIsEmpty("GRAPHMAIL_TRACE_WARNINGS")) {
+        previousHandler = qInstallMessageHandler(traceWarnings);
+    }
+    applyChosenLanguage();
     QApplication app(argc, argv);
     KLocalizedString::setApplicationDomain("plasma-graphmail-linux");
+    // Started from the build folder, before installing: its translations are in build/locale,
+    // next to build/bin (else the language dialog offers only US English)
+    if (const QString built = QCoreApplication::applicationDirPath() + QStringLiteral("/../locale"); QFileInfo::exists(built)) {
+        KLocalizedString::addDomainLocaleDir("plasma-graphmail-linux", built);
+    }
     // Accounts are shared by the suite; the app registration per account is this app's own
     GraphCore::Accounts::setApplication(QStringLiteral("plasma-graphmail-linux"));
 
@@ -71,19 +173,44 @@ int main(int argc, char **argv)
                      KAboutLicense::GPL_V3,
                      i18n("Not affiliated with or endorsed by Microsoft. Microsoft 365 and Exchange Online are trademarks of Microsoft Corporation."));
     about.setOrganizationDomain("nvaert1986.github.io");
+    // Our own issue tracker: KDE's default bug address would send Report Bug to KDE and makes KDE's
+    // Help menu offer "Donate" (to KDE)
+    about.setBugAddress("https://github.com/nvaert1986/plasma-graphmail-linux/issues");
     about.setDesktopFileName(QStringLiteral("io.github.nvaert1986.graphmail"));
     KAboutData::setApplicationData(about);
     QApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("io.github.nvaert1986.graphmail"), QIcon::fromTheme(QStringLiteral("mail-client"))));
 
     QCommandLineParser parser;
     about.setupCommandLine(&parser);
-    parser.addPositionalArgument(QStringLiteral("files"), i18n("Outlook messages (.msg), mail files (.eml) to show, or Outlook data files (.pst) to import"), QStringLiteral("[files...]"));
+    parser.addPositionalArgument(QStringLiteral("files"),
+                                 i18n("Outlook messages (.msg), mail files (.eml) to show, Outlook data files (.pst) to import, or mailto: links to write to"),
+                                 QStringLiteral("[files or links...]"));
     parser.addOptions({
         {QStringLiteral("message"), i18n("Show this message (account/mailbox/id)"), QStringLiteral("spec")},
         {QStringLiteral("folder"), i18n("Open this folder (account/mailbox/folder id)"), QStringLiteral("path")},
         {QStringLiteral("screenshot"), i18n("Save a picture of the window to this file and quit (tests; never marks anything as read)"), QStringLiteral("file")},
         {QStringLiteral("size"), i18n("Window size for --screenshot (WIDTHxHEIGHT)"), QStringLiteral("size"), QStringLiteral("1300x800")},
         {QStringLiteral("select"), i18n("Select this message in the list for --screenshot (row number)"), QStringLiteral("row")},
+        {QStringLiteral("message-details"), i18n("With --screenshot: show Message Details of the selected message once its headers are in (tests)")},
+        {QStringLiteral("reply-with-meeting"), i18n("With --screenshot: show Reply with Meeting for the selected message (tests)")},
+        {QStringLiteral("mail-to"), i18n("With --screenshot: the selected message as if dropped on calendar or tasks (tests)"), QStringLiteral("module")},
+        {QStringLiteral("configure-notifications"), i18n("With --screenshot: show Configure Notifications (tests)")},
+        {QStringLiteral("calendar-options"), i18n("With --screenshot: show Calendar Options (tests)")},
+        {QStringLiteral("cleanup-dialog"), i18n("With --screenshot: show Clean Up Old Mail (tests)")},
+        {QStringLiteral("forward-contact"), i18n("With --contacts, --directory-search and --screenshot: Forward as vCard for the first person found (tests)")},
+        {QStringLiteral("undo-move"), i18n("With --screenshot: move this message to a folder, then Undo, account/mailbox/message|folder; logged (tests)"), QStringLiteral("spec")},
+        {QStringLiteral("dark-palette"), i18n("Use a dark palette and log whether the shown message got the dark style (tests)")},
+        {QStringLiteral("preview-attachment"), i18n("With --message and --screenshot: preview this attachment (row id) (tests)"), QStringLiteral("id")},
+        {QStringLiteral("sweep"), i18n("With --screenshot: sweep without the dialog, account/mailbox/message|scope|folder (scope 0 all, 2 all but the newest; folder 0 deletes) (tests)"), QStringLiteral("spec")},
+        {QStringLiteral("calendar-slot"), i18n("With --calendar and --screenshot: select this time, start|end (yyyy-MM-ddTHH:mm) (tests)"), QStringLiteral("times")},
+        {QStringLiteral("calendar-pick"), i18n("With --calendar: drag in the date picker from one day number to another (\"10-13\"), logged (tests)"), QStringLiteral("days")},
+        {QStringLiteral("calendar-mouse"), i18n("With --calendar and --screenshot: mouse steps on the week grid, logged (tests)"), QStringLiteral("steps")},
+        {QStringLiteral("export-calendar"), i18n("With --calendar and --screenshot: export the default calendar into this .ics file, logged (tests)"), QStringLiteral("file")},
+        {QStringLiteral("cleanup-test"), i18n("With --screenshot: give this folder its own cleanup rule (move to Archive, older than 1 day), run, Undo, remove the rule, account/mailbox/folder; logged (tests)"), QStringLiteral("spec")},
+        {QStringLiteral("preview-close"), i18n("With --preview-attachment: close the preview after a moment (tests)")},
+        {QStringLiteral("delete-test"), i18n("With --folder, --select and --screenshot: Delete the selected message, log what is selected next, Undo (tests)")},
+        {QStringLiteral("new-task-dialog"), i18n("With --tasks and --screenshot: show New Task (\"show\"), or save one with this [TEST Graph Mail] title (tests)"), QStringLiteral("spec")},
+        {QStringLiteral("drag-out"), i18n("With --screenshot and --select: the files a drag of the selected message gives, logged (tests)")},
         {QStringLiteral("body-pdf"), i18n("With --screenshot: also save the rendered message body as PDF (tests)"), QStringLiteral("file")},
         {QStringLiteral("save-attachments"), i18n("With --screenshot: save all attachments of the shown message into this folder first (tests)"), QStringLiteral("folder")},
         {QStringLiteral("open-window"), i18n("With --screenshot and --select: picture of the message in its own window (tests)")},
@@ -99,6 +226,7 @@ int main(int argc, char **argv)
         {QStringLiteral("event-teams"), i18n("With --new-event: a Teams meeting (tests)")},
         {QStringLiteral("event-weekly"), i18n("With --new-event: repeat weekly, this many times (tests)"), QStringLiteral("count")},
         {QStringLiteral("event-recurrence"), i18n("With --new-event: this repeat rule, Graph JSON (tests)"), QStringLiteral("json")},
+        {QStringLiteral("event-zones"), i18n("With --new-event: the start and end time zones, start|end IANA ids; the times are in those zones (tests)"), QStringLiteral("zones")},
         {QStringLiteral("event-allday"), i18n("With --new-event: an all-day event (tests)")},
         {QStringLiteral("event-calendar"), i18n("With --new-event: in this mailbox's calendar, account/mailbox (tests)"), QStringLiteral("mailbox")},
         {QStringLiteral("event-room"), i18n("With --new-event: book this room, name|address (tests)"), QStringLiteral("room")},
@@ -114,6 +242,7 @@ int main(int argc, char **argv)
         {QStringLiteral("test-series"), i18n("Tests: answer \"the series\" where it asks")},
         {QStringLiteral("test-comment"), i18n("Tests: the message of a cancellation or a response"), QStringLiteral("text")},
         {QStringLiteral("contacts"), i18n("Open the contacts")},
+        {QStringLiteral("signatures"), i18n("With --screenshot: open the signatures window (never saved) (tests)")},
         {QStringLiteral("tasks"), i18n("Open the tasks")},
         {QStringLiteral("task"), i18n("Show this task (account/mailbox/id)"), QStringLiteral("spec")},
         {QStringLiteral("new-contact"), i18n("With --contacts and --screenshot: a new contact with these fields, JSON, saved (tests)"), QStringLiteral("json")},
@@ -160,6 +289,12 @@ int main(int argc, char **argv)
         {QStringLiteral("ics-import"), i18n("With --screenshot: import this .ics file into the default calendar (tests)"), QStringLiteral("file")},
         {QStringLiteral("compose"), i18n("With --screenshot: open a composer: new, reply, replyAll or forward (the --select row) (tests)"), QStringLiteral("kind")},
         {QStringLiteral("compose-to"), i18n("With --compose: the recipients (tests)"), QStringLiteral("addresses")},
+        {QStringLiteral("compose-drop"), i18n("With --compose: drop these files (comma separated) on the text and log the result (tests)"), QStringLiteral("files")},
+        {QStringLiteral("compose-html"), i18n("With --compose: insert the HTML of this file as a paste and log its pictures (tests)"), QStringLiteral("file")},
+        {QStringLiteral("compose-keys"), i18n("With --compose: play these keys on the text and log every undo (tests)"), QStringLiteral("keys")},
+        {QStringLiteral("compose-type"), i18n("With --compose: type this into the text and log the links in it (tests)"), QStringLiteral("text")},
+        {QStringLiteral("compose-narrow"), i18n("With --compose: a narrow composer window (tests)")},
+        {QStringLiteral("compose-check-names"), i18n("With --compose: run Check Names on the recipients, logged (tests)")},
         {QStringLiteral("compose-from-other"), i18n("With --compose: From this other address, address|name (tests)"), QStringLiteral("from")},
         {QStringLiteral("compose-subject"), i18n("With --compose: the subject (tests)"), QStringLiteral("text")},
         {QStringLiteral("compose-text"), i18n("With --compose: text to type (tests)"), QStringLiteral("text")},
@@ -191,6 +326,14 @@ int main(int argc, char **argv)
         {QStringLiteral("load-images"), i18n("With --screenshot: load internet content as if \"Load Images\" was clicked (tests)")},
     });
     parser.process(app);
+    if (parser.isSet(QStringLiteral("dark-palette"))) {
+        // Tests: a dark desktop theme without changing the user's
+        QPalette dark(QColor(0x31, 0x36, 0x3b), QColor(0x23, 0x26, 0x29));
+        dark.setColor(QPalette::Base, QColor(0x1b, 0x1e, 0x20));
+        dark.setColor(QPalette::Text, QColor(0xfc, 0xfc, 0xfc));
+        dark.setColor(QPalette::WindowText, QColor(0xfc, 0xfc, 0xfc));
+        QApplication::setPalette(dark);
+    }
     about.processCommandLine(&parser);
 
     const bool screenshot = parser.isSet(QStringLiteral("screenshot"));
@@ -279,11 +422,6 @@ int main(int argc, char **argv)
             again.addOption({QStringLiteral("contacts"), QString()});
             again.addOption({QStringLiteral("tasks"), QString()});
             again.parse(arguments);
-            // Files from the file manager, relative to where that start was made
-            QStringList files;
-            for (const QString &file : again.positionalArguments()) {
-                files.append(QDir(workingDirectory).absoluteFilePath(file));
-            }
             if (again.isSet(QStringLiteral("message"))) {
                 openMessage(window, again.value(QStringLiteral("message")));
             }
@@ -306,7 +444,7 @@ int main(int argc, char **argv)
             shell->show();
             shell->raise();
             shell->activateWindow();
-            window->openFiles(files);
+            openArguments(window, again.positionalArguments(), workingDirectory);
         });
     }
 
@@ -353,6 +491,13 @@ int main(int argc, char **argv)
         auto jsonOf = [&parser](const char *option) {
             return QJsonDocument::fromJson(parser.value(QLatin1String(option)).toUtf8()).object();
         };
+        if (parser.isSet(QStringLiteral("signatures"))) {
+            // Shown, never accepted: the screenshot only
+            auto *dialog = new GraphMail::SignatureDialog(window->mailboxes(), window);
+            dialog->setAttribute(Qt::WA_DeleteOnClose);
+            dialog->show();
+            shown = dialog;
+        }
         if (contacts && parser.isSet(QStringLiteral("new-contact"))) {
             if (auto *dialog = static_cast<QDialog *>(contacts->newContactForTests(parser.value(QStringLiteral("contact-mailbox")), jsonOf("new-contact")))) {
                 shown = dialog;
@@ -382,6 +527,16 @@ int main(int argc, char **argv)
         }
         if (contacts && parser.isSet(QStringLiteral("directory-search"))) {
             contacts->searchDirectoryForTests(parser.value(QStringLiteral("directory-search")));
+            if (parser.isSet(QStringLiteral("forward-contact"))) {
+                // The directory answers later: forward once the first person is selected
+                QTimer::singleShot(4000, contacts, [contacts] {
+                    // No autosave into the mailbox, no close question at the end
+                    if (auto *composer = qobject_cast<GraphMail::ComposerWindow *>(contacts->forwardAsVCard())) {
+                        composer->setTestMode();
+                        lateShown() = composer;
+                    }
+                });
+            }
         }
         if (contacts && parser.isSet(QStringLiteral("add-from-directory"))) {
             contacts->addFromDirectoryForTests(parser.value(QStringLiteral("add-from-directory")));
@@ -477,6 +632,224 @@ int main(int argc, char **argv)
                 window->photos()->setForTests(key, file == QLatin1String("remove") ? QString() : file);
             });
         }
+        if (parser.isSet(QStringLiteral("configure-notifications"))) {
+            if (QWidget *dialog = KNotifyConfigWidget::configure(window)) {
+                shown = dialog->window();
+            }
+        }
+        if (parser.isSet(QStringLiteral("drag-out"))) {
+            // As a file manager asks: the text/uri-list bytes of the drag
+            GraphMail::MessageDragData data(window->mailboxKey(), {window->readingPane()->message()});
+            const QByteArray list = data.data(QStringLiteral("text/uri-list"));
+            for (const QByteArray &line : list.split('\n')) {
+                const QString path = QUrl(QString::fromUtf8(line.trimmed())).toLocalFile();
+                if (!path.isEmpty()) {
+                    QFile file(path);
+                    const QByteArray head = file.open(QIODevice::ReadOnly) ? file.read(4096) : QByteArray();
+                    qWarning("drag-out: %s, %lld bytes, original %d", qPrintable(QFileInfo(path).fileName()), qlonglong(file.size()), int(!head.contains("X-GraphMail-Rebuilt")));
+                }
+            }
+            if (list.isEmpty()) {
+                qWarning("drag-out: no files");
+            }
+        }
+        if (calendar && parser.isSet(QStringLiteral("calendar-slot"))) {
+            const QString slot = parser.value(QStringLiteral("calendar-slot"));
+            calendar->selectSlotForTests(QDateTime::fromString(slot.section(QLatin1Char('|'), 0, 0), Qt::ISODate),
+                                         QDateTime::fromString(slot.section(QLatin1Char('|'), 1, 1), Qt::ISODate));
+        }
+        if (calendar && parser.isSet(QStringLiteral("calendar-pick"))) {
+            const QString days = parser.value(QStringLiteral("calendar-pick"));
+            QTimer::singleShot(500, calendar, [calendar, days] {
+                qWarning().noquote() << "pick test:" << calendar->pickerDragForTests(days.section(QLatin1Char('-'), 0, 0).toInt(), days.section(QLatin1Char('-'), 1, 1).toInt());
+            });
+        }
+        if (calendar && parser.isSet(QStringLiteral("calendar-mouse"))) {
+            calendar->mouseForTests(parser.value(QStringLiteral("calendar-mouse")));
+            // The dialog it opened is the picture
+            const QWidgetList all = QApplication::topLevelWidgets();
+            for (QWidget *w : all) {
+                if (auto *dialog = qobject_cast<GraphMail::EventDialog *>(w); dialog && dialog->isVisible()) {
+                    lateShown() = dialog;
+                }
+            }
+        }
+        if (calendar && parser.isSet(QStringLiteral("export-calendar"))) {
+            const QString file = calendar->exportCalendar(parser.value(QStringLiteral("export-calendar")));
+            QFile written(file);
+            const QByteArray ics = written.open(QIODevice::ReadOnly) ? written.readAll() : QByteArray();
+            qWarning() << "export test:" << !file.isEmpty() << ics.count("BEGIN:VEVENT") << "events";
+        }
+        if (parser.isSet(QStringLiteral("cleanup-test"))) {
+            const QString spec = parser.value(QStringLiteral("cleanup-test"));
+            const QString key = spec.section(QLatin1Char('/'), 0, 1);
+            const qint64 folder = spec.section(QLatin1Char('/'), 2).section(QLatin1Char('|'), 0, 0).toLongLong();
+            // "|pst <folder>": export to an Outlook data file in that folder instead of moving
+            const QString pstFolder = spec.section(QLatin1Char('|'), 1).section(QLatin1Char(' '), 1);
+            const GraphMail::Cleanup::Settings saved = GraphMail::Cleanup::settings();
+            if (!pstFolder.isEmpty()) {
+                GraphMail::Cleanup::Settings changed = saved;
+                changed.pstFolder = pstFolder;
+                GraphMail::Cleanup::setSettings(changed);
+            }
+            GraphMail::Store *store = window->mailboxes()->store(key);
+            const std::optional<GraphMail::FolderRow> row = store ? store->folder(folder) : std::nullopt;
+            if (row) {
+                const auto count = [store, folder] {
+                    return store->messagesBefore(folder, QDateTime::currentMSecsSinceEpoch()).size();
+                };
+                const auto wait = [](int ms) {
+                    QElapsedTimer waited;
+                    waited.start();
+                    while (waited.elapsed() < ms) {
+                        QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+                    }
+                };
+                GraphMail::Cleanup::setFolderRule(key, row->graphId,
+                                                  {GraphMail::Cleanup::FolderRule::Mode::Own,
+                                                   pstFolder.isEmpty() ? GraphMail::Cleanup::Action::Archive : GraphMail::Cleanup::Action::ExportPst, 1});
+                qWarning() << "cleanup test: before" << count() << "planned" << GraphMail::Cleanup::plan(window->mailboxes(), QDateTime::currentMSecsSinceEpoch()).size();
+                window->runCleanupForTests();
+                wait(pstFolder.isEmpty() ? 8000 : 30000);
+                qWarning() << "cleanup test: after the run" << count();
+                window->undoForTests();
+                wait(8000);
+                qWarning() << "cleanup test: after Undo" << count();
+                GraphMail::Cleanup::setFolderRule(key, row->graphId, {});
+            }
+            GraphMail::Cleanup::setSettings(saved);
+        }
+        if (parser.isSet(QStringLiteral("delete-test"))) {
+            const auto wait = [](int ms) {
+                QElapsedTimer waited;
+                waited.start();
+                while (waited.elapsed() < ms) {
+                    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+                }
+            };
+            wait(2000);
+            const qint64 before = window->readingPane()->message();
+            if (QAction *remove = window->actionCollection()->action(QStringLiteral("delete"))) {
+                remove->trigger();
+            }
+            wait(6000);
+            qWarning() << "delete test: deleted" << before << "now selected" << window->readingPane()->message();
+            window->undoForTests();
+            wait(6000);
+        }
+        if (parser.isSet(QStringLiteral("sweep"))) {
+            // Never scope 1 here: that makes a rule, a standing change in the mailbox
+            const QString spec = parser.value(QStringLiteral("sweep"));
+            const QString key = spec.section(QLatin1Char('/'), 0, 1);
+            const qint64 message = spec.section(QLatin1Char('/'), 2).section(QLatin1Char('|'), 0, 0).toLongLong();
+            const int scope = spec.section(QLatin1Char('|'), 1, 1).toInt();
+            if (scope != 1) {
+                window->sweepMessages(key, message, scope, spec.section(QLatin1Char('|'), 2, 2).toLongLong());
+                QElapsedTimer waited;
+                waited.start();
+                while (waited.elapsed() < 8000) {
+                    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+                }
+                qWarning() << "sweep test: done";
+            }
+        }
+        if (parser.isSet(QStringLiteral("undo-move"))) {
+            const QString spec = parser.value(QStringLiteral("undo-move"));
+            const QString key = spec.section(QLatin1Char('/'), 0, 1);
+            const qint64 message = spec.section(QLatin1Char('/'), 2).section(QLatin1Char('|'), 0, 0).toLongLong();
+            const qint64 folder = spec.section(QLatin1Char('|'), 1).toLongLong();
+            const auto folderNow = [window, key, message] {
+                const GraphMail::Store *store = window->mailboxes()->store(key);
+                const std::optional<GraphMail::MessageRow> row = store ? store->message(message) : std::nullopt;
+                return row ? row->folder : 0;
+            };
+            const auto wait = [](int ms) {
+                QElapsedTimer waited;
+                waited.start();
+                while (waited.elapsed() < ms) {
+                    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+                }
+            };
+            qWarning() << "undo test: before" << folderNow();
+            window->rememberForUndo(key, {message}, false);
+            window->daemon()->move(key.section(QLatin1Char('/'), 0, 0), key.section(QLatin1Char('/'), 1), message, folder);
+            wait(8000);
+            qWarning() << "undo test: moved" << folderNow();
+            if (QAction *undo = window->actionCollection()->action(QStringLiteral("edit_undo"))) {
+                undo->trigger();
+            }
+            wait(8000);
+            qWarning() << "undo test: undone" << folderNow();
+        }
+        if (parser.isSet(QStringLiteral("dark-palette"))) {
+            QTimer::singleShot(1500, window, [window] {
+                window->readingPane()->bodyHtmlForTests([](const QString &html) {
+                    qWarning() << "dark test: styled" << html.contains(QLatin1String("hue-rotate(180deg)"));
+                });
+            });
+        }
+        if (parser.isSet(QStringLiteral("preview-attachment"))) {
+            const qint64 attachment = parser.value(QStringLiteral("preview-attachment")).toLongLong();
+            QTimer::singleShot(2000, window, [window, attachment] {
+                window->readingPane()->previewAttachment(attachment);
+            });
+            if (parser.isSet(QStringLiteral("preview-close"))) {
+                // Closed while LibreOffice still converts (crashed before 2026-11-16)
+                QTimer::singleShot(4000, window, [window] {
+                    if (QWidget *preview = window->readingPane()->lastPreview()) {
+                        preview->close();
+                        qWarning() << "preview test: closed early";
+                    }
+                });
+            }
+            // Okular or LibreOffice need a moment: the picture is taken late
+            QTimer::singleShot(8000, window, [window] {
+                lateShown() = window->readingPane()->lastPreview();
+            });
+        }
+        if (parser.isSet(QStringLiteral("cleanup-dialog"))) {
+            auto *dialog = new GraphMail::Cleanup::Dialog(window);
+            dialog->setAttribute(Qt::WA_DeleteOnClose);
+            dialog->show();
+            shown = dialog;
+        }
+        if (parser.isSet(QStringLiteral("calendar-options"))) {
+            auto *dialog = new GraphMail::CalendarOptions::Dialog(window);
+            dialog->setAttribute(Qt::WA_DeleteOnClose);
+            dialog->show();
+            shown = dialog;
+        }
+        if (parser.isSet(QStringLiteral("mail-to"))) {
+            if (parser.value(QStringLiteral("mail-to")) == QLatin1String("calendar")) {
+                if (QWidget *dialog = window->newAppointmentFromMail(window->mailboxKey(), window->readingPane()->message())) {
+                    shown = dialog;
+                }
+            } else {
+                window->newTaskFromMail(window->mailboxKey(), window->readingPane()->message());
+                QElapsedTimer waited;
+                waited.start();
+                while (waited.elapsed() < 8000) {
+                    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+                }
+            }
+        }
+        if (parser.isSet(QStringLiteral("reply-with-meeting"))) {
+            if (QWidget *dialog = window->replyWithMeeting(window->mailboxKey(), window->readingPane()->message())) {
+                shown = dialog;
+            }
+        }
+        if (parser.isSet(QStringLiteral("message-details"))) {
+            if (QWidget *dialog = window->openMessageDetails()) {
+                shown = dialog;
+                auto *text = dialog->findChild<QPlainTextEdit *>();
+                QElapsedTimer waited;
+                waited.start();
+                while (text && text->toPlainText().size() < 20 && waited.elapsed() < 20000) {
+                    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+                }
+                qWarning() << "details test:" << (text ? text->toPlainText().count(QLatin1Char('\n')) : -1) << "header lines";
+            }
+        }
         if (parser.isSet(QStringLiteral("rules"))) {
             GraphMail::RulesDialog *dialog = window->openRules(parser.value(QStringLiteral("settings-mailbox")));
             shown = dialog;
@@ -521,6 +894,37 @@ int main(int argc, char **argv)
                 dialog->checkForTests(parser.value(QStringLiteral("add-mailbox")), true);
             } else if (parser.isSet(QStringLiteral("remove-mailbox"))) {
                 dialog->removeForTests(parser.value(QStringLiteral("remove-mailbox")));
+            }
+        }
+        if (tasks && parser.isSet(QStringLiteral("new-task-dialog"))) {
+            // "show", or a [TEST Graph Mail] title to save with a due date (tomorrow) and Important
+            const QString spec = parser.value(QStringLiteral("new-task-dialog"));
+            if (QDialog *dialog = tasks->newTaskDialog()) {
+                lateShown() = dialog;
+                if (spec.contains(QLatin1String("[TEST Graph Mail]"))) {
+                    // Into the administrator test account's list, never the user's own
+                    if (auto *list = dialog->findChild<QComboBox *>()) {
+                        for (int i = 0; i < list->count(); ++i) {
+                            if (list->itemText(i).contains(QLatin1String("administrator@"))) {
+                                list->setCurrentIndex(i);
+                            }
+                        }
+                        if (!list->currentText().contains(QLatin1String("administrator@"))) {
+                            qWarning() << "task dialog test: no administrator list";
+                            dialog->reject();
+                        }
+                    }
+                    dialog->findChild<QLineEdit *>()->setText(spec);
+                    const QList<QCheckBox *> boxes = dialog->findChildren<QCheckBox *>();
+                    for (QCheckBox *box : boxes) {
+                        box->setChecked(box->text().contains(QLatin1String("Due")) || box->text().contains(QLatin1String("Important")));
+                    }
+                    if (auto *due = dialog->findChild<QDateEdit *>(); due && !qobject_cast<QDateTimeEdit *>(due->parent())) {
+                        due->setDate(QDate::currentDate().addDays(1));
+                    }
+                    QTimer::singleShot(1500, dialog, &QDialog::accept);
+                    qWarning() << "task dialog test: saving" << spec;
+                }
             }
         }
         if (tasks) {
@@ -666,6 +1070,10 @@ int main(int argc, char **argv)
                     const QStringList room = parser.value(QStringLiteral("event-room")).split(QLatin1Char('|'));
                     dialog->setTestRoom(room.value(0), room.value(1));
                 }
+                if (parser.isSet(QStringLiteral("event-zones"))) {
+                    const QString zones = parser.value(QStringLiteral("event-zones"));
+                    dialog->setTestZones(zones.section(QLatin1Char('|'), 0, 0).toUtf8(), zones.section(QLatin1Char('|'), 1, 1).toUtf8());
+                }
                 if (parser.isSet(QStringLiteral("event-allday"))) {
                     dialog->setTestAllDay(true);
                 }
@@ -689,12 +1097,22 @@ int main(int argc, char **argv)
                 }
             }
         }
+        // Tests: a mailto: link given with --screenshot shows the composer it opens
+        for (const QString &argument : parser.positionalArguments()) {
+            if (GraphMail::Mailto::isMailto(argument)) {
+                if (auto *composer = qobject_cast<GraphMail::ComposerWindow *>(window->openMailto(argument))) {
+                    composer->setTestMode();
+                    composer->resize(parser.isSet(QStringLiteral("compose-narrow")) ? QSize(620, 500) : QSize(900, 760));
+                    shown = composer;
+                }
+            }
+        }
         if (parser.isSet(QStringLiteral("compose"))) {
             const QString kind = parser.value(QStringLiteral("compose"));
             const qint64 message = kind == QLatin1String("new") ? 0 : window->readingPane()->message();
             auto *composer = static_cast<GraphMail::ComposerWindow *>(window->openComposer(kind, message));
             composer->setTestMode();
-            composer->resize(900, 760);
+            composer->resize(parser.isSet(QStringLiteral("compose-narrow")) ? QSize(620, 500) : QSize(900, 760));
             if (parser.isSet(QStringLiteral("compose-from-other"))) {
                 const QString other = parser.value(QStringLiteral("compose-from-other"));
                 composer->setOtherFromForTests(other.section(QLatin1Char('|'), 0, 0), other.section(QLatin1Char('|'), 1));
@@ -721,6 +1139,38 @@ int main(int argc, char **argv)
                 qWarning() << "template test: saved" << GraphMail::Templates::save(&t) << t.value(QLatin1String("id")).toString();
             }
             shown = composer;
+            if (parser.isSet(QStringLiteral("compose-type"))) {
+                QTimer::singleShot(1500, composer, [composer, text = parser.value(QStringLiteral("compose-type"))] {
+                    qWarning() << "type test:" << composer->typeBodyForTests(text);
+                });
+            }
+            if (parser.isSet(QStringLiteral("compose-html"))) {
+                QFile html(parser.value(QStringLiteral("compose-html")));
+                if (html.open(QIODevice::ReadOnly)) {
+                    composer->insertHtmlForTests(QString::fromUtf8(html.readAll()));
+                }
+                QTimer::singleShot(7000, composer, [composer] {
+                    qWarning().noquote() << "html test:" << composer->imagesForTests().join(QStringLiteral(" ;; "));
+                });
+            }
+            if (parser.isSet(QStringLiteral("compose-keys"))) {
+                QTimer::singleShot(1500, composer, [composer, keys = parser.value(QStringLiteral("compose-keys"))] {
+                    qWarning().noquote() << "keys test:" << composer->keysForTests(keys).join(QStringLiteral(" ;; "));
+                });
+            }
+            if (parser.isSet(QStringLiteral("compose-drop"))) {
+                QTimer::singleShot(1500, composer, [composer, files = parser.value(QStringLiteral("compose-drop"))] {
+                    qWarning() << "drop test:" << composer->dropFilesForTests(files.split(QLatin1Char(',')));
+                });
+            }
+            if (parser.isSet(QStringLiteral("compose-check-names"))) {
+                composer->typeRecipientsForTests(parser.value(QStringLiteral("compose-to")));
+                QTimer::singleShot(1500, composer, [composer] {
+                    composer->checkNames([composer](bool resolved) {
+                        qWarning() << "check names test:" << resolved << composer->recipientsForTests();
+                    });
+                });
+            }
             if (parser.isSet(QStringLiteral("compose-save"))) {
                 QTimer::singleShot(1500, composer, [composer] {
                     if (composer->windowTitle().contains(QLatin1String("[TEST Graph Mail]"))) {
@@ -847,10 +1297,12 @@ int main(int argc, char **argv)
             || parser.isSet(QStringLiteral("search-filter")) || parser.isSet(QStringLiteral("category")) || parser.isSet(QStringLiteral("remove-colleague"))
             || parser.isSet(QStringLiteral("sharing")) || parser.isSet(QStringLiteral("share-calendar")) || parser.isSet(QStringLiteral("share-role"))
             || parser.isSet(QStringLiteral("share-remove")) || (parser.isSet(QStringLiteral("compose-to")) && !parser.isSet(QStringLiteral("compose-send")))
-            || parser.isSet(QStringLiteral("undo-send")) || parser.isSet(QStringLiteral("photo"));
+            || parser.isSet(QStringLiteral("undo-send")) || parser.isSet(QStringLiteral("photo")) || parser.isSet(QStringLiteral("forward-contact"))
+            || parser.isSet(QStringLiteral("preview-attachment")) || parser.isSet(QStringLiteral("compose-html"));
         QTimer::singleShot(slow ? 9000 : 2500, window, [window, target, fallback, file, pdf] {
             // The whole window: a module in the shell is grabbed with its navigation bar
-            (target ? target.data() : fallback)->window()->grab().save(file);
+            QWidget *picture = lateShown() ? lateShown().data() : (target ? target.data() : fallback);
+            picture->window()->grab().save(file);
             if (pdf.isEmpty() || !window->printBodyToPdf(pdf)) {
                 QCoreApplication::quit();
             }
@@ -858,14 +1310,10 @@ int main(int argc, char **argv)
         return app.exec();
     }
     shell->show();
-    if (const QStringList files = parser.positionalArguments(); !files.isEmpty()) {
-        QStringList absolute;
-        for (const QString &file : files) {
-            absolute.append(QFileInfo(file).absoluteFilePath());
-        }
+    if (const QStringList arguments = parser.positionalArguments(); !arguments.isEmpty()) {
         // After the window is up, as when the file manager hands them to a running copy
-        QTimer::singleShot(0, window, [window, absolute] {
-            window->openFiles(absolute);
+        QTimer::singleShot(0, window, [window, arguments] {
+            openArguments(window, arguments, QDir::currentPath());
         });
     }
     return app.exec();

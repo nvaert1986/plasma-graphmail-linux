@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "messagelistmodel.h"
+#include "messagedrag.h"
 
 #include <QMimeData>
 
@@ -278,15 +279,13 @@ QMimeData *MessageListModel::mimeData(const QModelIndexList &indexes) const
 {
     // One mailbox per drag: search results from other mailboxes than the first row's stay out
     const QString key = indexes.isEmpty() ? m_mailboxKey : mailboxKeyOf(indexes.first().row());
-    QStringList ids{key};
+    QList<qint64> ids;
     for (const QModelIndex &index : indexes) {
         if (mailboxKeyOf(index.row()) == key) {
-            ids.append(QString::number(index.data(IdRole).toLongLong()));
+            ids.append(index.data(IdRole).toLongLong());
         }
     }
-    auto *data = new QMimeData;
-    data->setData(mimeType(), ids.join(QLatin1Char('\n')).toLatin1());
-    return data;
+    return new MessageDragData(key, ids);
 }
 
 }

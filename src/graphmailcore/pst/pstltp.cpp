@@ -3,6 +3,7 @@
 
 #include "pstltp.h"
 
+#include <QSet>
 #include <QStringDecoder>
 #include <QTimeZone>
 #include <QtEndian>
@@ -233,8 +234,14 @@ std::optional<QByteArray> Heap::item(quint32 hid) const
 
 namespace
 {
-bool collectBth(const Heap &heap, quint32 hid, int level, int cbKey, int cbEnt, QList<BthRecord> &out, QString *error)
+// visited: every heap item is read once. A crafted index pointing many times at the same lower
+// item would otherwise fan out exponentially (levels can be up to 255)
+bool collectBth(const Heap &heap, quint32 hid, int level, int cbKey, int cbEnt, QList<BthRecord> &out, QSet<quint32> &visited, QString *error)
 {
+    if (visited.contains(hid)) {
+        return setError(error, QStringLiteral("BTH item %1 is referenced twice").arg(hid, 0, 16));
+    }
+    visited.insert(hid);
     const std::optional<QByteArray> records = heap.item(hid);
     if (!records) {
         return setError(error, QStringLiteral("missing BTH records %1").arg(hid, 0, 16));
@@ -245,7 +252,7 @@ bool collectBth(const Heap &heap, quint32 hid, int level, int cbKey, int cbEnt, 
     }
     for (int at = 0; at < records->size(); at += size) {
         if (level > 0) {
-            if (!collectBth(heap, u32(records->constData() + at + cbKey), level - 1, cbKey, cbEnt, out, error)) {
+            if (!collectBth(heap, u32(records->constData() + at + cbKey), level - 1, cbKey, cbEnt, out, visited, error)) {
                 return false;
             }
         } else {
@@ -276,7 +283,8 @@ std::optional<QList<BthRecord>> readBth(const Heap &heap, quint32 hidHeader, QSt
         setError(error, QStringLiteral("damaged BTH header"));
         return std::nullopt;
     }
-    if (!collectBth(heap, root, levels, cbKey, cbEnt, out, error)) {
+    QSet<quint32> visited;
+    if (!collectBth(heap, root, levels, cbKey, cbEnt, out, visited, error)) {
         return std::nullopt;
     }
     return out;

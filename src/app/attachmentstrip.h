@@ -31,6 +31,7 @@ public:
 
 Q_SIGNALS:
     void openRequested(qint64 attachment);
+    void previewRequested(qint64 attachment);
     void saveRequested(qint64 attachment);
     void saveAllRequested();
 

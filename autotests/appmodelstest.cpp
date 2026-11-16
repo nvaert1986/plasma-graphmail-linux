@@ -3,12 +3,26 @@
 
 #include "accounts.h"
 #include "calendardata.h"
+#include "calendarexport.h"
+#include "cleanup.h"
+#include "conditionalformat.h"
+#include "calendaroptions.h"
 #include "calendarviews.h"
 #include "graphmapper.h"
+#include "mailto.h"
+#include "messagedetails.h"
+#include "messagedrag.h"
+#include "readreceipts.h"
+#include "recipientedit.h"
+#include "replyoptions.h"
+#include "sweepdialog.h"
+#include "unsubscribe.h"
+#include "vcard.h"
 #include "recurrence.h"
 #include "conversationmodel.h"
 #include "foldermodel.h"
 #include "mailboxset.h"
+#include "maileditor.h"
 #include "mailboxworker.h"
 #include "messagelistmodel.h"
 #include "searchfolderdialog.h"
@@ -20,12 +34,17 @@
 #include <KConfigGroup>
 #include <KSharedConfig>
 
+#include <KCalendarCore/ICalFormat>
+#include <KCalendarCore/MemoryCalendar>
+
 #include <QDir>
 #include <QJsonArray>
 #include <QTimeZone>
 #include <QMimeData>
 #include <QSignalSpy>
 #include <QStandardPaths>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QJsonDocument>
 #include <QTest>
 #include <QUrl>
@@ -420,6 +439,10 @@ private Q_SLOTS:
         // Names that are not ASCII are encoded words
         QCOMPARE(MimeExport::encodeWord(QStringLiteral("Café")), QByteArray("=?UTF-8?B?") + QByteArray("Café").toBase64() + "?=");
         QCOMPARE(MimeExport::encodeWord(QStringLiteral("Plain")), QByteArray("Plain"));
+        // A name with a comma (Exchange's "Last, First") is quoted, quotes inside escaped
+        QCOMPARE(MimeExport::displayName(QStringLiteral("Doe, John")), QByteArray("\"Doe, John\""));
+        QCOMPARE(MimeExport::displayName(QStringLiteral("Ann \"Annie\" Doe")), QByteArray("\"Ann \\\"Annie\\\" Doe\""));
+        QCOMPARE(MimeExport::displayName(QStringLiteral("Plain Name")), QByteArray("Plain Name"));
         // mboxrd: a "From " line and its quoted forms get one more ">", CRLF becomes LF
         const QByteArray entry = MimeExport::mboxEntry("Subject: x\r\n\r\nFrom here\r\n>From there\r\nok\r\n", QStringLiteral("a@example.com"),
                                                        QDateTime(QDate(2026, 11, 13), QTime(9, 5, 7), QTimeZone::UTC));
@@ -453,6 +476,298 @@ private Q_SLOTS:
         model.fetchMore({});
         QCOMPARE(model.rowCount(), 300);
         QVERIFY(!model.canFetchMore({}));
+    }
+
+    // mailto: links (RFC 6068): addresses in the path and in to/cc/bcc, decoded text, line
+    // breaks, a literal plus, attach= only for local files
+    void mailtoLinks()
+    {
+        using namespace GraphMail;
+        QVERIFY(Mailto::isMailto(QStringLiteral("MAILTO:a@example.com")));
+        QVERIFY(!Mailto::isMailto(QStringLiteral("/home/example/a.eml")));
+        Mailto::Link l = Mailto::parse(QUrl(QStringLiteral(
+            "mailto:erin@example.com,desk%40example.com?cc=a@example.com&BCC=b@example.com,c@example.com&subject=Ren%C3%A9%20%E2%82%AC%2012&body=Line%201%0D%0ALine+2")));
+        QCOMPARE(l.to, (QStringList{QStringLiteral("erin@example.com"), QStringLiteral("desk@example.com")}));
+        QCOMPARE(l.cc, QStringList{QStringLiteral("a@example.com")});
+        QCOMPARE(l.bcc, (QStringList{QStringLiteral("b@example.com"), QStringLiteral("c@example.com")}));
+        QCOMPARE(l.subject, QStringLiteral(u"René € 12"));
+        QCOMPARE(l.body, QStringLiteral("Line 1\nLine+2"));
+        l = Mailto::parse(QUrl(QStringLiteral("mailto:?to=x@example.com&attach=/tmp/a%20b.pdf&attachment=file:///tmp/c.txt&attach=https://example.com/d")));
+        QCOMPARE(l.to, QStringList{QStringLiteral("x@example.com")});
+        QCOMPARE(l.attachments, (QStringList{QStringLiteral("/tmp/a b.pdf"), QStringLiteral("/tmp/c.txt")}));
+        QVERIFY(Mailto::parse(QUrl(QStringLiteral("https://example.com"))).to.isEmpty());
+    }
+
+    // Message Details shows the header block: up to the first empty line, CRLF or LF, folded
+    // lines kept as they are
+    void headerBlock()
+    {
+        using GraphMail::MessageDetailsDialog;
+        QCOMPARE(MessageDetailsDialog::headerBlock("Received: from a.example.com\r\n\tby b.example.com\r\nSubject: Example\r\n\r\nBody\r\n\r\nMore"),
+                 QStringLiteral("Received: from a.example.com\n\tby b.example.com\nSubject: Example"));
+        QCOMPARE(MessageDetailsDialog::headerBlock("Subject: LF only\n\nBody"), QStringLiteral("Subject: LF only"));
+        QCOMPARE(MessageDetailsDialog::headerBlock("Subject: no body"), QStringLiteral("Subject: no body"));
+    }
+
+    // Reply option "prefix each line": "> " before every line, one more ">" on quoted lines
+    void prefixLines()
+    {
+        QCOMPARE(GraphMail::ReplyOptions::prefixLines(QStringLiteral("One\n\n> Quoted\nTwo")), QStringLiteral("> One\n> \n>> Quoted\n> Two"));
+    }
+
+    // Calendar options: the three ways Outlook counts the first week of the year
+    void weekNumbers()
+    {
+        using namespace GraphMail::CalendarOptions;
+        // Monday and four days is ISO 8601, which QDate knows
+        for (QDate day(2020, 1, 1); day.year() < 2031; day = day.addDays(1)) {
+            QCOMPARE(weekNumber(day, Qt::Monday, FirstWeek::FirstFourDays), day.weekNumber());
+        }
+        // Sunday and 1 January (the United States): 28 December 2025 starts week 1 of 2026
+        QCOMPARE(weekStart(QDate(2025, 12, 31), Qt::Sunday), QDate(2025, 12, 28));
+        QCOMPARE(weekNumber(QDate(2025, 12, 31), Qt::Sunday, FirstWeek::JanuaryFirst), 1);
+        QCOMPARE(weekNumber(QDate(2026, 1, 4), Qt::Sunday, FirstWeek::JanuaryFirst), 2);
+        QCOMPARE(weekNumber(QDate(2026, 11, 16), Qt::Sunday, FirstWeek::JanuaryFirst), 47);
+        // Monday and the first full week: 2026 starts on a Thursday, so 5 January is week 1
+        QCOMPARE(weekNumber(QDate(2026, 1, 4), Qt::Monday, FirstWeek::FirstFullWeek), 52);
+        QCOMPARE(weekNumber(QDate(2026, 1, 5), Qt::Monday, FirstWeek::FirstFullWeek), 1);
+    }
+
+    // List-Unsubscribe: one click over https first, then a mail, then the web page
+    void unsubscribeWays()
+    {
+        using namespace GraphMail::Unsubscribe;
+        const QString both = QStringLiteral("<mailto:leave@lists.example.com?subject=unsubscribe>, <https://news.example.com/u/a1b2\n c3>");
+        Way way = choose(both, true);
+        QCOMPARE(way.kind, Kind::OneClick);
+        QCOMPARE(way.url, QUrl(QStringLiteral("https://news.example.com/u/a1b2c3")));
+        way = choose(both, false);
+        QCOMPARE(way.kind, Kind::Mail);
+        QCOMPARE(way.url.path(), QStringLiteral("leave@lists.example.com"));
+        way = choose(QStringLiteral("<https://news.example.com/u/1>"), false);
+        QCOMPARE(way.kind, Kind::Browser);
+        // One click needs https; plain http only opens in the browser
+        way = choose(QStringLiteral("<http://news.example.com/u/1>"), true);
+        QCOMPARE(way.kind, Kind::Browser);
+        QCOMPARE(choose(QStringLiteral("<javascript:alert(1)>, <ftp://example.com/x>"), true).kind, Kind::None);
+        QCOMPARE(choose(QString(), true).kind, Kind::None);
+    }
+
+    // The one-click request (RFC 8058): a POST with the fixed body and no cookies
+    void unsubscribePost()
+    {
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        QByteArray request;
+        connect(&server, &QTcpServer::newConnection, this, [&server, &request] {
+            QTcpSocket *socket = server.nextPendingConnection();
+            connect(socket, &QTcpSocket::readyRead, socket, [socket, &request] {
+                request += socket->readAll();
+                if (request.endsWith("List-Unsubscribe=One-Click")) {
+                    socket->write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                    socket->disconnectFromHost();
+                }
+            });
+        });
+        bool finished = false;
+        bool ok = false;
+        GraphMail::Unsubscribe::post(QUrl(QStringLiteral("http://127.0.0.1:%1/u/1").arg(server.serverPort())), this, [&](bool success, const QString &) {
+            finished = true;
+            ok = success;
+        });
+        QTRY_VERIFY(finished);
+        QVERIFY(ok);
+        QVERIFY(request.startsWith("POST /u/1 "));
+        QVERIFY(request.contains("application/x-www-form-urlencoded"));
+        QVERIFY(!request.toLower().contains("cookie:"));
+    }
+
+    // Forward as vCard: escaping, the fields of a Graph contact, folding inside UTF-8
+    void vCard()
+    {
+        const QJsonObject contact = QJsonDocument::fromJson(R"({
+            "displayName": "Renée de Vries", "givenName": "Renée", "surname": "de Vries",
+            "companyName": "Acme; Inc", "department": "Sales, East", "jobTitle": "Buyer",
+            "emailAddresses": [{"address": "renee@example.com"}, {"address": "r.devries@example.org"}],
+            "businessPhones": ["+31 10 000 0000"], "mobilePhone": "+31 6 0000 0000",
+            "businessAddress": {"street": "Example Street 1", "city": "Utrecht", "postalCode": "1234 AB", "countryOrRegion": "Netherlands"},
+            "birthday": "1980-02-29T11:59:00Z", "personalNotes": "Line one\nLine two"
+        })").object();
+        const QByteArray card = GraphMail::VCard::fromContact(contact);
+        QVERIFY(card.startsWith("BEGIN:VCARD\r\nVERSION:3.0\r\n"));
+        QVERIFY(card.endsWith("END:VCARD\r\n"));
+        QVERIFY(card.contains("FN:Ren\xc3\xa9" "e de Vries\r\n"));
+        QVERIFY(card.contains("N:de Vries;Ren\xc3\xa9" "e;;;\r\n"));
+        QVERIFY(card.contains("ORG:Acme\\; Inc;Sales\\, East\r\n"));
+        QVERIFY(card.contains("EMAIL;TYPE=INTERNET,PREF:renee@example.com\r\n"));
+        QVERIFY(card.contains("EMAIL;TYPE=INTERNET:r.devries@example.org\r\n"));
+        QVERIFY(card.contains("TEL;TYPE=CELL,VOICE:+31 6 0000 0000\r\n"));
+        QVERIFY(card.contains("ADR;TYPE=WORK:;;Example Street 1;Utrecht;;1234 AB;Netherlands\r\n"));
+        QVERIFY(card.contains("BDAY:1980-02-29\r\n"));
+        QVERIFY(card.contains("NOTE:Line one\\nLine two\r\n"));
+        // A long line folds at 75 octets and never inside the two bytes of an "é"
+        const QByteArray folded = GraphMail::VCard::fromContact(QJsonObject{{QStringLiteral("displayName"), QString(QStringLiteral("é")).repeated(60)}});
+        for (const QByteArray &line : folded.split('\n')) {
+            QVERIFY(line.size() <= 76);
+            QVERIFY(QString::fromUtf8(line).indexOf(QChar::ReplacementCharacter) < 0);
+        }
+        QVERIFY(folded.contains("\r\n \xc3\xa9"));
+    }
+
+    // Check Names: every typed word must be in the entry, accents and case ignored
+    void checkNamesMatching()
+    {
+        const QStringList entries{QStringLiteral("Renée de Vries <renee@example.com>"), QStringLiteral("René Jansen <rene@example.org>"),
+                                  QStringLiteral("Acme Sales <sales@example.com>")};
+        QCOMPARE(GraphMail::AddressBook::matches(entries, QStringLiteral("renee")), QStringList{entries.at(0)});
+        QCOMPARE(GraphMail::AddressBook::matches(entries, QStringLiteral("RENE")).size(), 2);
+        QCOMPARE(GraphMail::AddressBook::matches(entries, QStringLiteral("rene jansen")), QStringList{entries.at(1)});
+        QCOMPARE(GraphMail::AddressBook::matches(entries, QStringLiteral("sales@")), QStringList{entries.at(2)});
+        QVERIFY(GraphMail::AddressBook::matches(entries, QStringLiteral("nobody")).isEmpty());
+        QVERIFY(GraphMail::AddressBook::matches(entries, QStringLiteral("  ")).isEmpty());
+        // The parts as typed: a comma inside a name before the address does not split
+        QCOMPARE(GraphMail::splitRecipients(QStringLiteral("Doe, Jane <jane@example.com>; rene")).size(), 2);
+    }
+
+    // Sweep's rule for future messages: from the address, deleted or moved, nothing after it
+    void sweepRule()
+    {
+        QJsonObject rule = GraphMail::SweepDialog::rule(QStringLiteral("news@example.com"), QString(), 4);
+        QCOMPARE(rule.value(QLatin1String("sequence")).toInt(), 4);
+        QVERIFY(rule.value(QLatin1String("isEnabled")).toBool());
+        QCOMPARE(rule.value(QLatin1String("conditions")).toObject().value(QLatin1String("fromAddresses")).toArray().first().toObject().value(QLatin1String("emailAddress")).toObject().value(QLatin1String("address")).toString(),
+                 QStringLiteral("news@example.com"));
+        QVERIFY(rule.value(QLatin1String("actions")).toObject().value(QLatin1String("delete")).toBool());
+        QVERIFY(rule.value(QLatin1String("actions")).toObject().value(QLatin1String("stopProcessingRules")).toBool());
+        rule = GraphMail::SweepDialog::rule(QStringLiteral("news@example.com"), QStringLiteral("AAMkFolder"), 1);
+        QCOMPARE(rule.value(QLatin1String("actions")).toObject().value(QLatin1String("moveToFolder")).toString(), QStringLiteral("AAMkFolder"));
+        QVERIFY(!rule.value(QLatin1String("actions")).toObject().contains(QLatin1String("delete")));
+    }
+
+    // Export Calendar: an .ics that KCalendarCore reads back with the same events
+    void calendarExport()
+    {
+        GraphMail::DisplayEvent meeting;
+        meeting.graphId = QStringLiteral("AAMkMeeting");
+        meeting.subject = QStringLiteral("Acme planning; Q3, draft");
+        meeting.location = QStringLiteral("Room 1");
+        meeting.start = QDateTime(QDate(2026, 3, 2), QTime(9, 30));
+        meeting.end = QDateTime(QDate(2026, 3, 2), QTime(10, 0));
+        meeting.firstDay = meeting.lastDay = QDate(2026, 3, 2);
+        meeting.json = QJsonObject{{QStringLiteral("iCalUId"), QStringLiteral("uid-1@example.com")}};
+        GraphMail::DisplayEvent holiday;
+        holiday.graphId = QStringLiteral("AAMkDay");
+        holiday.subject = QStringLiteral("Day off");
+        holiday.allDay = true;
+        holiday.showAs = 0;
+        holiday.firstDay = QDate(2026, 3, 5);
+        holiday.lastDay = QDate(2026, 3, 6);
+        // Two occurrences of one series share Exchange's iCalendar id
+        GraphMail::DisplayEvent first = meeting;
+        first.type = 1;
+        first.firstDay = first.lastDay = QDate(2026, 3, 9);
+        GraphMail::DisplayEvent second = first;
+        second.firstDay = second.lastDay = QDate(2026, 3, 16);
+        const QByteArray ics = GraphMail::CalendarExport::toIcs({meeting, holiday, first, second}, QStringLiteral("Calendar"));
+        auto calendar = KCalendarCore::MemoryCalendar::Ptr::create(QTimeZone::systemTimeZone());
+        QVERIFY(KCalendarCore::ICalFormat().fromString(calendar, QString::fromUtf8(ics)));
+        QCOMPARE(calendar->events().size(), 4);
+        const KCalendarCore::Event::Ptr read = calendar->event(QStringLiteral("uid-1@example.com"));
+        QVERIFY(read);
+        QCOMPARE(read->summary(), meeting.subject);
+        QCOMPARE(read->location(), QStringLiteral("Room 1"));
+        QCOMPARE(read->dtStart().toLocalTime(), meeting.start);
+        const KCalendarCore::Event::Ptr day = calendar->event(QStringLiteral("AAMkDay"));
+        QVERIFY(day && day->allDay());
+        QCOMPARE(day->dtEnd().date(), QDate(2026, 3, 6));
+        QCOMPARE(day->transparency(), KCalendarCore::Event::Transparent);
+        QVERIFY(calendar->event(QStringLiteral("uid-1@example.com-2026-03-16")));
+    }
+
+    // Conditional formatting: sender name or address, or subject; off rules and empty text never
+    void conditionalFormatting()
+    {
+        using namespace GraphMail::ConditionalFormat;
+        Rule boss{QStringLiteral("Boss"), QStringLiteral("sender"), QStringLiteral("jane@example.com"), QColor(Qt::red), true};
+        Rule urgent{QStringLiteral("Urgent"), QStringLiteral("subject"), QStringLiteral("urgent"), QColor(Qt::blue), true};
+        Rule off{QStringLiteral("Off"), QStringLiteral("sender"), QStringLiteral("acme"), QColor(Qt::green), false};
+        const QList<Rule> list{off, boss, urgent};
+        QCOMPARE(colorFor(list, QStringLiteral("Jane Doe"), QStringLiteral("JANE@example.com"), QStringLiteral("URGENT: invoice")), QColor(Qt::red));
+        QCOMPARE(colorFor(list, QStringLiteral("Acme Sales"), QStringLiteral("sales@acme.example"), QStringLiteral("Urgent offer")), QColor(Qt::blue));
+        QVERIFY(!colorFor(list, QStringLiteral("Acme Sales"), QStringLiteral("sales@acme.example"), QStringLiteral("Offer")));
+        QVERIFY(!(Rule{QString(), QStringLiteral("subject"), QStringLiteral("  "), QColor(Qt::red), true}.matches({}, {}, QStringLiteral("anything"))));
+    }
+
+    // Read receipts: Exchange sends when marked read, so every way of marking decides first
+    void readReceiptDecisions()
+    {
+        using namespace GraphMail::ReadReceipts;
+        QCOMPARE(decide(Mode::Always, true, false), Decision::Send);
+        QCOMPARE(decide(Mode::Always, std::nullopt, true), Decision::Send);
+        QCOMPARE(decide(Mode::Never, true, false), Decision::DontSend);
+        QCOMPARE(decide(Mode::Ask, true, false), Decision::Ask);
+        // Mark as Read by hand in Ask mode: no receipt without a yes
+        QCOMPARE(decide(Mode::Ask, true, true), Decision::DontSend);
+        QCOMPARE(decide(Mode::Ask, false, false), Decision::DontSend);
+        // Not known yet: the reading pane marks it read once the headers are there
+        QCOMPARE(decide(Mode::Ask, std::nullopt, false), Decision::Wait);
+    }
+
+    // Clean Up Old Mail: off by default; a folder's own setting counts anyway; some folders never
+    // Pasted HTML (Outlook on the web's signature) rewritten into what Qt's import keeps
+    void pastedHtmlForQt()
+    {
+        using GraphMail::MailEditor;
+        // A cell's CSS width as the attribute Qt reads
+        QVERIFY(MailEditor::htmlForQt(QStringLiteral("<td style=\"vertical-align:top; width:75px; height:auto\">")).contains(QLatin1String("width=\"75\"")));
+        // Its side padding counts in (Qt's width holds it); a table keeps no width (a browser widens it)
+        QVERIFY(MailEditor::htmlForQt(QStringLiteral("<td style=\"padding-right:7px; vertical-align:top; width:18.8334px\">")).contains(QLatin1String("width=\"26\"")));
+        QVERIFY(!MailEditor::htmlForQt(QStringLiteral("<table style=\"width:37.6667px; border-collapse:collapse\">")).contains(QLatin1String("width=")));
+        // A unitless line height: the font size times it, in pixels (12pt = 16px, x 1.333)
+        const QString p = MailEditor::htmlForQt(QStringLiteral("<p style=\"line-height:1.333; margin:0.1pt; font-size:12pt\">x</p>"));
+        QVERIFY2(p.contains(QLatin1String("line-height:21px")), qPrintable(p));
+        // "initial" (and one without a font size) is left to Qt's own spacing
+        QVERIFY(!MailEditor::htmlForQt(QStringLiteral("<p style=\"line-height:initial; color:red\">x</p>")).contains(QLatin1String("line-height")));
+        // A paragraph with only a line break: one empty line, as in a browser
+        QCOMPARE(MailEditor::htmlForQt(QStringLiteral("<p style=\"margin:0\"><span>  <br></span></p>")), QStringLiteral("<p style=\"margin:0\"><span>&nbsp;</span></p>"));
+        // Everything else stays as it was
+        QCOMPARE(MailEditor::htmlForQt(QStringLiteral("<b>Hello</b> <a href=\"mailto:a@example.com\">a</a>")), QStringLiteral("<b>Hello</b> <a href=\"mailto:a@example.com\">a</a>"));
+    }
+
+    void cleanupRules()
+    {
+        using namespace GraphMail::Cleanup;
+        Settings off;
+        QVERIFY(!off.enabled);
+        QCOMPARE(off.days, 365);
+        FolderRule inherit;
+        QVERIFY(!effective(off, inherit));
+        FolderRule own{FolderRule::Mode::Own, Action::Delete, 30};
+        QVERIFY(effective(off, own));
+        QCOMPARE(effective(off, own)->days, 30);
+        Settings on = off;
+        on.enabled = true;
+        on.action = Action::ExportPst;
+        QCOMPARE(effective(on, inherit)->action, Action::ExportPst);
+        QVERIFY(!effective(on, FolderRule{FolderRule::Mode::Off, Action::Archive, 365}));
+        QVERIFY(excluded(QStringLiteral("deleteditems")) && excluded(QStringLiteral("archive")) && excluded(QStringLiteral("drafts")));
+        QVERIFY(!excluded(QStringLiteral("inbox")) && !excluded(QString()));
+    }
+
+    // Dragging messages: a small envelope (the folder pane stays visible), a count for several
+    void dragPixmap()
+    {
+        const QPixmap one = GraphMail::MessageListView::dragPixmap(1, 1.0);
+        QCOMPARE(one.size(), QSize(32, 32));
+        const QPixmap three = GraphMail::MessageListView::dragPixmap(3, 2.0);
+        QCOMPARE(three.deviceIndependentSize().toSize(), QSize(41, 41));
+        // The badge (beside its number) has the accent colour
+        const QImage image = three.toImage();
+        QCOMPARE(QColor(image.pixel(image.width() - 32, 18)).rgb(), QApplication::palette().color(QPalette::Highlight).rgb());
+        if (const QByteArray dir = qgetenv("GRAPHMAIL_SAVE_DRAG"); !dir.isEmpty()) {
+            one.save(QString::fromLocal8Bit(dir) + QStringLiteral("/one.png"));
+            three.save(QString::fromLocal8Bit(dir) + QStringLiteral("/three.png"));
+        }
     }
 };
 

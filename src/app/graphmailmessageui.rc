@@ -1,10 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<gui name="plasma-graphmail-linux-message" version="2"
+<gui name="plasma-graphmail-linux-message" version="5"
      xmlns="http://www.kde.org/standards/kxmlgui/1.0"
      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
      xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0 http://www.kde.org/standards/kxmlgui/1.0/kxmlgui.xsd">
+  <MenuBar>
+    <Menu name="file">
+      <Action name="save_pdf"/>
+      <Action name="message_details"/>
+    </Menu>
+    <Menu name="message">
+      <text>&amp;Message</text>
+      <Action name="reply"/>
+      <Action name="reply_all"/>
+      <Action name="forward"/>
+      <Action name="forward_as_attachment"/>
+      <Action name="reply_with_meeting"/>
+      <Action name="edit_as_new"/>
+    </Menu>
+    <Menu name="view">
+      <text>&amp;View</text>
+      <Action name="dark_messages"/>
+    </Menu>
+  </MenuBar>
   <ToolBar name="mainToolBar" iconText="textbesideicon">
     <text>Main Toolbar</text>
     <Action name="reply"/>

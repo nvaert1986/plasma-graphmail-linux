@@ -89,9 +89,10 @@ private:
         return f.fileName();
     }
 
-    QJsonObject run(const QString &file)
+    QJsonObject run(const QString &file, bool skipDuplicates = false)
     {
         auto *job = new MessageImport(client.get(), QStringLiteral("/me"), QStringLiteral("f1"), file);
+        job->setSkipDuplicates(skipDuplicates);
         QSignalSpy finished(job, &MessageImport::finished);
         job->start();
         for (int i = 0; i < 200 && finished.isEmpty(); ++i) {
@@ -182,6 +183,61 @@ private Q_SLOTS:
         QVERIFY(!answer.value(QLatin1String("ok")).toBool());
         QVERIFY(!answer.value(QLatin1String("detail")).toString().isEmpty());
         QCOMPARE(calls().constLast(), QStringLiteral("DELETE /v1.0/me/messages/m1"));
+    }
+
+    // With skipDuplicates a message whose Message-ID is in the folder already is left out; one that
+    // is not there (or without a Message-ID) is created as usual
+    void skipsDuplicates()
+    {
+        const QString file = dir.filePath(QStringLiteral("duplicate.json"));
+        const auto write = [&](const QString &messageId) {
+            QJsonObject message{{QStringLiteral("subject"), QStringLiteral("Example duplicate")}};
+            if (!messageId.isEmpty()) {
+                message.insert(QStringLiteral("internetMessageId"), messageId);
+            }
+            QFile f(file);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(QJsonDocument(QJsonObject{{QStringLiteral("message"), message}}).toJson());
+        };
+        QByteArray filter;
+        server->handler = [&](const FakeRequest &r) -> FakeReply {
+            if (r.verb == "GET" && pathOf(r) == "/v1.0/me/mailFolders/f1/messages") {
+                filter = QByteArray::fromPercentEncoding(r.target.mid(r.target.indexOf("$filter=") + 8));
+                const bool known = filter.contains("<known@example.com>");
+                return json(200, {{QStringLiteral("value"), known ? QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("old")}}} : QJsonArray()}});
+            }
+            if (r.verb == "POST" && pathOf(r) == "/v1.0/me/mailFolders/f1/messages") {
+                return json(201, {{QStringLiteral("id"), QStringLiteral("new")}});
+            }
+            return json(404, {});
+        };
+
+        write(QStringLiteral("<known@example.com>"));
+        QJsonObject answer = run(file, true);
+        QVERIFY(answer.value(QLatin1String("ok")).toBool());
+        QVERIFY(answer.value(QLatin1String("duplicate")).toBool());
+        QCOMPARE(answer.value(QLatin1String("id")).toString(), QStringLiteral("old"));
+        QCOMPARE(filter, QByteArray("internetMessageId eq '<known@example.com>'"));
+        QCOMPARE(calls(), QStringList{QStringLiteral("GET /v1.0/me/mailFolders/f1/messages")});
+
+        // Not in the folder: created; a quote in the ID is doubled in the filter
+        server->requests.clear();
+        write(QStringLiteral("<o'new@example.com>"));
+        answer = run(file, true);
+        QVERIFY(!answer.value(QLatin1String("duplicate")).toBool());
+        QCOMPARE(answer.value(QLatin1String("id")).toString(), QStringLiteral("new"));
+        QCOMPARE(filter, QByteArray("internetMessageId eq '<o''new@example.com>'"));
+        QCOMPARE(calls().constLast(), QStringLiteral("POST /v1.0/me/mailFolders/f1/messages"));
+
+        // Without a Message-ID, or without the option: no lookup
+        server->requests.clear();
+        write(QString());
+        QVERIFY(run(file, true).value(QLatin1String("ok")).toBool());
+        write(QStringLiteral("<known@example.com>"));
+        QVERIFY(!run(file, false).value(QLatin1String("duplicate")).toBool());
+        for (const QString &call : calls()) {
+            QVERIFY(!call.startsWith(QLatin1String("GET")));
+        }
     }
 
     // The message itself refused: nothing to clean up

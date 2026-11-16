@@ -99,9 +99,18 @@ void OutboxEngine::run(const Outgoing &outgoing)
     m_recreated = false;
     m_attachmentsChanged = false;
     if (m_run.state == Outgoing::State::Discard) {
+        m_held.remove(m_run.uuid);
         discard();
         return;
     }
+    // The end of an Undo send hold: this revision is in Exchange already, so straight to sending
+    // (sendDraft checks the hold and Undo again); after a restart the full path runs
+    if (m_run.send && !m_run.draftId.isEmpty() && m_held.value(m_run.uuid, -1) == m_run.revision) {
+        m_held.remove(m_run.uuid);
+        sendDraft();
+        return;
+    }
+    m_held.remove(m_run.uuid);
     ensureDraft();
 }
 
@@ -426,11 +435,65 @@ void OutboxEngine::sendDraft()
         persist([after](Outgoing &o) {
             o.nextAttempt = after;
         });
+        m_held.insert(m_run.uuid, m_run.revision);
         const QString uuid = m_run.uuid;
         done();
         Q_EMIT changed(uuid, QStringLiteral("held"), {});
         return;
     }
+    // @mentions go onto the draft first (Graph's beta: a PATCH of the draft ignores them)
+    if (!m_run.mentions.isEmpty()) {
+        addMentions();
+        return;
+    }
+    postSend();
+}
+
+void OutboxEngine::addMentions()
+{
+    QString beta = m_ctx->client->baseUrl();
+    beta.replace(QLatin1String("/v1.0"), QLatin1String("/beta"));
+    // What the draft has already: a send tried again adds nobody twice
+    request("GET", beta + messagePath() + QStringLiteral("?$select=id&$expand=mentions($select=mentioned)"), {}, [this, beta](const GraphResponse &response) {
+        QSet<QString> present;
+        const QJsonArray existing = response.json().value(QLatin1String("mentions")).toArray();
+        for (const QJsonValue &v : existing) {
+            present.insert(v.toObject().value(QLatin1String("mentioned")).toObject().value(QLatin1String("address")).toString().toLower());
+        }
+        auto missing = std::make_shared<QList<OutgoingRecipient>>();
+        for (const OutgoingRecipient &r : std::as_const(m_run.mentions)) {
+            if (!r.address.isEmpty() && !present.contains(r.address.toLower())) {
+                present.insert(r.address.toLower());
+                missing->append(r);
+            }
+        }
+        // One after the other; a mention that cannot be added does not stop the message
+        // The step holds itself only weakly; the request under way keeps it alive
+        auto next = std::make_shared<std::function<void()>>();
+        const std::weak_ptr<std::function<void()>> weak = next;
+        *next = [this, beta, missing, weak] {
+            if (missing->isEmpty()) {
+                postSend();
+                return;
+            }
+            const OutgoingRecipient r = missing->takeFirst();
+            const QJsonObject mention{{QStringLiteral("mentioned"), QJsonObject{{QStringLiteral("name"), r.name}, {QStringLiteral("address"), r.address}}}};
+            request("POST", beta + messagePath() + QStringLiteral("/mentions"), mention, [step = weak.lock()](const GraphResponse &added) {
+                if (!added.ok()) {
+                    qCWarning(GRAPHMAIL).noquote() << "mention not added:" << added.describe();
+                }
+                (*step)();
+            });
+        };
+        if (!response.ok()) {
+            qCWarning(GRAPHMAIL).noquote() << "mentions of the draft not read:" << response.describe();
+        }
+        (*next)();
+    });
+}
+
+void OutboxEngine::postSend()
+{
     request("POST", messagePath() + QStringLiteral("/send"), {}, [this](const GraphResponse &response) {
         if (!response.ok()) {
             if (response.graphErrorCode() == QLatin1String("ErrorSendAsDenied") && !m_run.fromMailbox.isEmpty()) {

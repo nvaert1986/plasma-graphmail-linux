@@ -29,15 +29,47 @@ public:
     virtual void setEvents(QDate first, QDate last, const QList<DisplayEvent> &events) = 0;
     // The selected event, if any (Delete, the context menu)
     std::optional<DisplayEvent> selected() const;
+    // The selected time without an event, as Outlook marks it blue: a click selects a half hour
+    // (a day in the all-day strip and the month), a drag a longer time; New Event takes it
+    struct Slot {
+        QDateTime start;
+        QDateTime end;
+        bool allDay = false;
+    };
+    std::optional<Slot> selectedSlot() const
+    {
+        return m_slot;
+    }
+    void setSelectedSlot(const Slot &slot)
+    {
+        m_slot = slot;
+        m_selected.reset();
+        repaintSelection();
+    }
+
+protected:
+    virtual void repaintSelection()
+    {
+        update();
+    }
+
+public:
 
 Q_SIGNALS:
     void eventActivated(const GraphMail::DisplayEvent &event);
     void eventMenuRequested(const GraphMail::DisplayEvent &event, const QPoint &globalPos);
     void newEventRequested(const QDateTime &start, const QDateTime &end, bool allDay);
+    // Typing on a selected time: a new event with what was typed as its title, as in Outlook
+    void newEventTyped(const QDateTime &start, const QDateTime &end, bool allDay, const QString &text);
+    // Right click on empty time (the selection is set first): New Event, New Meeting, ...
+    void slotMenuRequested(const QPoint &globalPos);
     void dayActivated(QDate day);
+    // The selected event changed (a click), for actions such as Join
+    void selectionChanged();
 
 protected:
     std::optional<DisplayEvent> m_selected;
+    std::optional<Slot> m_slot;
 };
 
 // Day, work week and week: a column per day, the hours down, all-day events on top
@@ -59,6 +91,14 @@ public:
     void printTo(QPainter *painter, const QRectF &target, int fromHour, int toHour);
     // The working day of the first day shown, for the hours to print
     QPair<int, int> printHours() const;
+    // Tests: the hour grid, to send it mouse events
+    QWidget *gridForTests() const;
+
+protected:
+    void repaintSelection() override
+    {
+        repaintAll();
+    }
 
 private:
     class Header;
@@ -110,6 +150,8 @@ protected:
     void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:
+    // The rows shown: six for a month, fewer for a span of weeks
+    int weeks() const;
     QRectF cellRect(int index) const;
     std::optional<DisplayEvent> eventAt(const QPointF &pos) const;
     QDate dayAt(const QPointF &pos) const;

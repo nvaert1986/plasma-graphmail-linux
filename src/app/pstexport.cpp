@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "pstexport.h"
+#include "graphmail_debug.h"
 #include "daemonclient.h"
 #include "mailboxset.h"
 #include "mimeexport.h"
@@ -50,7 +51,9 @@ void PstExporter::plan(qint64 folder, quint32 parent)
     for (;;) {
         const QList<ListRow> page = store->listPage(folder, cursor, 1000);
         for (const ListRow &r : page) {
-            ids.append(r.id);
+            if (m_only.isEmpty() || m_only.contains(r.id)) {
+                ids.append(r.id);
+            }
         }
         if (page.size() < 1000) {
             break;
@@ -60,6 +63,10 @@ void PstExporter::plan(qint64 folder, quint32 parent)
     // Oldest first, as Outlook adds them
     for (auto it = ids.crbegin(); it != ids.crend(); ++it) {
         m_jobs.append({*it, nid});
+    }
+    // A chosen set of messages: the folders are listed one by one, a subfolder is its own entry
+    if (!m_only.isEmpty()) {
+        return;
     }
     const QList<FolderRow> all = store->folders();
     for (const FolderRow &child : all) {
@@ -162,8 +169,7 @@ void PstExporter::start()
     if (m_folders.isEmpty()) {
         addItems();
     }
-    m_tempDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/export-") + QUuid::createUuid().toString(QUuid::Id128);
-    QDir().mkpath(m_tempDir);
+    m_tempDir = MimeExport::workDirectory(QStringLiteral("export"));
     if (m_parent) {
         m_progress = new QProgressDialog(i18nc("@info:progress", "Exporting to an Outlook data file..."), i18nc("@action:button", "Cancel"), 0, int(m_jobs.size()), m_parent);
         m_progress->setWindowModality(Qt::WindowModal);
@@ -201,8 +207,11 @@ void PstExporter::next()
                             file.close();
                             file.remove();
                         } else {
-                            // No answer (offline, an outage): the rest from the cache at once
-                            m_offline = true;
+                            // No answer at all (offline, an outage): the rest from the cache at once.
+                            // One message refused (deleted meanwhile): only that one from the cache
+                            if (answer.isEmpty()) {
+                                m_offline = true;
+                            }
                             add(MimeExport::rebuild(m_mailboxes->store(m_mailboxKey), m_mailboxes->blobs(m_mailboxKey), job.message), job, false);
                         }
                         next();
@@ -226,6 +235,9 @@ void PstExporter::add(const QByteArray &mime, const Job &job, bool original)
     }
     if (m_writer.addMessage(job.folder, MimeMapi::fromMime(mime, extras, m_keywords)) != 0) {
         ++(original ? m_original : m_rebuilt);
+        if (original) {
+            m_saved.append(job.message);
+        }
     }
 }
 
@@ -254,7 +266,7 @@ void PstExporter::finish()
     if (!ok) {
         QFile::remove(m_part);
     }
-    qWarning() << "pst export test:" << ok << m_original << "original," << m_rebuilt << "rebuilt," << m_items << "items" << m_error;
+    qCInfo(GRAPHMAIL) << "pst export:" << ok << m_original << "original," << m_rebuilt << "rebuilt," << m_items << "items" << m_error;
     Q_EMIT finished(ok, m_original, m_rebuilt, m_items, m_file, m_error);
     deleteLater();
 }

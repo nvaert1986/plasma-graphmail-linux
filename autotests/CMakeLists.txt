@@ -36,6 +36,10 @@ ecm_add_tests(
 # The app's models, with a temporary cache (QStandardPaths test mode)
 ecm_add_test(appmodelstest.cpp
     ../src/app/calendardata.cpp
+    ../src/app/calendarexport.cpp
+    ../src/app/cleanup.cpp
+    ../src/app/conditionalformat.cpp
+    ../src/app/calendaroptions.cpp
     ../src/app/calendarviews.cpp
     ../src/app/recurrence.cpp
     ../src/app/conversationmodel.cpp
@@ -48,11 +52,21 @@ ecm_add_test(appmodelstest.cpp
     ../src/app/daemonclient.cpp
     ../src/app/rulesdialog.cpp
     ../src/app/mimeexport.cpp
-    ../src/app/mimemapi.cpp
+    ../src/app/mailto.cpp
+    ../src/app/messagedetails.cpp
+    ../src/app/messagedrag.cpp
+    ../src/app/readreceipts.cpp
+    ../src/app/recipientedit.cpp
+    ../src/app/replyoptions.cpp
+    ../src/app/sweepdialog.cpp
     ../src/app/movedialog.cpp
+    ../src/app/unsubscribe.cpp
+    ../src/app/vcard.cpp
+    ../src/app/mimemapi.cpp
     ../src/app/accesstext.cpp
+    ../src/app/maileditor.cpp
     TEST_NAME appmodelstest
-    LINK_LIBRARIES graphmailcore KF6::I18n KF6::ConfigCore KF6::WidgetsAddons KPim6::Mime Qt6::Widgets Qt6::DBus Qt6::Test
+    LINK_LIBRARIES graphmailcore KF6::I18n KF6::ConfigCore KF6::WidgetsAddons KF6::Holidays KF6::CalendarCore KPim6::Mime KPim6::PimTextEdit Qt6::Widgets Qt6::DBus Qt6::Test
 )
 target_include_directories(appmodelstest PRIVATE ${CMAKE_SOURCE_DIR}/src/app)
 

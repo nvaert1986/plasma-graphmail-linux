@@ -16,6 +16,9 @@
 #include <KToggleAction>
 
 #include <QCheckBox>
+#include <QMouseEvent>
+#include <QDialogButtonBox>
+#include <QComboBox>
 #include <QDateEdit>
 #include <QDateTimeEdit>
 #include <QFormLayout>
@@ -96,7 +99,6 @@ TasksWindow::TasksWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *p
     , m_mailboxes(mailboxes)
     , m_daemon(daemon)
     , m_lists(new QTreeWidget(this))
-    , m_add(new QLineEdit(this))
     , m_tasks(new QTreeWidget(this))
     , m_details(new QWidget(this))
     , m_title(new QLineEdit(this))
@@ -117,8 +119,6 @@ TasksWindow::TasksWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *p
     m_lists->setHeaderHidden(true);
     m_lists->setFrameShape(QFrame::NoFrame);
     m_lists->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_add->setPlaceholderText(i18nc("@info:placeholder", "Add a task"));
-    m_add->setClearButtonEnabled(true);
     m_tasks->setColumnCount(3);
     m_tasks->setHeaderLabels({i18nc("@title:column", "Task"), i18nc("@title:column", "Due"), QString()});
     m_tasks->setRootIsDecorated(false);
@@ -197,7 +197,6 @@ TasksWindow::TasksWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *p
     auto *middle = new QWidget(this);
     auto *middleLayout = new QVBoxLayout(middle);
     middleLayout->setContentsMargins(0, 0, 0, 0);
-    middleLayout->addWidget(m_add);
     middleLayout->addWidget(m_tasks, 1);
     auto *splitter = new QSplitter(this);
     splitter->addWidget(m_lists);
@@ -218,7 +217,8 @@ TasksWindow::TasksWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *p
         }
         menu.exec(m_lists->viewport()->mapToGlobal(pos));
     });
-    connect(m_add, &QLineEdit::returnPressed, this, &TasksWindow::addTask);
+    // A double click on empty space in the list: a new task, as in the calendar
+    m_tasks->viewport()->installEventFilter(this);
     connect(m_tasks, &QTreeWidget::currentItemChanged, this, &TasksWindow::showDetails);
     connect(m_tasks, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem *item, int column) {
         // The tick box: done or not, at once
@@ -322,7 +322,7 @@ void TasksWindow::setupActions()
     newTask->setIcon(QIcon::fromTheme(QStringLiteral("view-task-add")));
     actions->setDefaultShortcut(newTask, QKeySequence(Qt::CTRL | Qt::Key_N));
     connect(newTask, &QAction::triggered, this, [this] {
-        m_add->setFocus();
+        newTaskDialog();
     });
     QAction *newListAction = actions->addAction(QStringLiteral("new_list"));
     newListAction->setText(i18nc("@action", "New List..."));
@@ -442,7 +442,9 @@ void TasksWindow::listChanged()
 {
     const bool flagged = m_lists->currentItem() && m_lists->currentItem()->data(0, Qt::UserRole + 1).toString() == QLatin1String("flaggedEmails");
     // Flagged mail becomes a task by flagging it, not here
-    m_add->setEnabled(!currentList().first.isEmpty() && !flagged);
+    if (QAction *add = actionCollection()->action(QStringLiteral("new_task"))) {
+        add->setEnabled(!flagged);
+    }
     fillTasks();
 }
 
@@ -584,16 +586,120 @@ void TasksWindow::loadSteps()
                     });
 }
 
-void TasksWindow::addTask()
+void TasksWindow::createTask(const QString &mailboxKey, qint64 list, const QJsonObject &task)
 {
-    const auto [key, list] = currentList();
-    const QString title = m_add->text().trimmed();
-    if (key.isEmpty() || title.isEmpty()) {
-        return;
+    m_daemon->createItem(mailboxKey.section(QLatin1Char('/'), 0, 0), mailboxKey.section(QLatin1Char('/'), 1), QStringLiteral("task"), list,
+                         QString::fromUtf8(QJsonDocument(task).toJson(QJsonDocument::Compact)));
+}
+
+QDialog *TasksWindow::newTaskDialog()
+{
+    auto *dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(i18nc("@title:window", "New Task"));
+    dialog->resize(520, 420);
+    auto *form = new QFormLayout(dialog);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    // Every list a task can go into (not Flagged Emails), the one shown first
+    auto *list = new QComboBox(dialog);
+    const QString current = m_lists->currentItem() ? m_lists->currentItem()->data(0, Qt::UserRole).toString() : QString();
+    QTreeWidgetItemIterator it(m_lists);
+    while (*it) {
+        const QString key = (*it)->data(0, Qt::UserRole).toString();
+        if (key.contains(QLatin1Char('|')) && (*it)->data(0, Qt::UserRole + 1).toString() != QLatin1String("flaggedEmails")) {
+            const QString owner = (*it)->parent() ? (*it)->parent()->text(0) : QString();
+            const QString name = (*it)->data(0, Qt::UserRole + 2).toString().isEmpty() ? (*it)->text(0) : (*it)->data(0, Qt::UserRole + 2).toString();
+            list->addItem((*it)->icon(0), owner.isEmpty() ? name : QStringLiteral("%1 (%2)").arg(name, owner), key);
+            if (key == current) {
+                list->setCurrentIndex(list->count() - 1);
+            }
+        }
+        ++it;
     }
-    m_daemon->createItem(key.section(QLatin1Char('/'), 0, 0), key.section(QLatin1Char('/'), 1), QStringLiteral("task"), list,
-                         QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("title"), title}}).toJson(QJsonDocument::Compact)));
-    m_add->clear();
+    if (list->count() == 0) {
+        dialog->deleteLater();
+        return nullptr;
+    }
+    auto *title = new QLineEdit(dialog);
+    title->setPlaceholderText(i18nc("@info:placeholder", "Add a title"));
+    auto *hasDue = new QCheckBox(i18nc("@option:check", "Due:"), dialog);
+    auto *due = new QDateEdit(QDate::currentDate(), dialog);
+    due->setCalendarPopup(true);
+    due->setEnabled(false);
+    connect(hasDue, &QCheckBox::toggled, due, &QWidget::setEnabled);
+    auto *remind = new QCheckBox(i18nc("@option:check", "Remind me:"), dialog);
+    auto *reminder = new QDateTimeEdit(QDateTime(QDate::currentDate().addDays(1), QTime(9, 0)), dialog);
+    reminder->setCalendarPopup(true);
+    reminder->setEnabled(false);
+    connect(remind, &QCheckBox::toggled, reminder, &QWidget::setEnabled);
+    auto *important = new QCheckBox(i18nc("@option:check", "Important"), dialog);
+    auto *notes = new QTextEdit(dialog);
+    notes->setAcceptRichText(false);
+    notes->setPlaceholderText(i18nc("@info:placeholder", "Add a note"));
+    form->addRow(i18nc("@label:listbox", "List:"), list);
+    form->addRow(i18nc("@label:textbox", "Title:"), title);
+    form->addRow(hasDue, due);
+    form->addRow(remind, reminder);
+    form->addRow(QString(), important);
+    form->addRow(i18nc("@label:textbox", "Notes:"), notes);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, dialog);
+    buttons->button(QDialogButtonBox::Save)->setEnabled(false);
+    connect(title, &QLineEdit::textChanged, dialog, [buttons](const QString &text) {
+        buttons->button(QDialogButtonBox::Save)->setEnabled(!text.trimmed().isEmpty());
+    });
+    connect(buttons, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+    form->addRow(buttons);
+    connect(dialog, &QDialog::accepted, this, [this, list, title, hasDue, due, remind, reminder, important, notes] {
+        // The fields as the details pane writes them
+        QJsonObject task{{QStringLiteral("title"), title->text().trimmed()}};
+        if (hasDue->isChecked()) {
+            task.insert(QStringLiteral("dueDateTime"), Mapper::dueDateTime(due->date()));
+        }
+        if (remind->isChecked()) {
+            task.insert(QStringLiteral("isReminderOn"), true);
+            task.insert(QStringLiteral("reminderDateTime"), graphTime(reminder->dateTime()));
+        }
+        if (important->isChecked()) {
+            task.insert(QStringLiteral("importance"), QStringLiteral("high"));
+        }
+        if (!notes->toPlainText().trimmed().isEmpty()) {
+            task.insert(QStringLiteral("body"), QJsonObject{{QStringLiteral("contentType"), QStringLiteral("text")}, {QStringLiteral("content"), notes->toPlainText()}});
+        }
+        const QString key = list->currentData().toString();
+        createTask(key.section(QLatin1Char('|'), 0, 0), key.section(QLatin1Char('|'), 1).toLongLong(), task);
+    });
+    dialog->show();
+    title->setFocus();
+    return dialog;
+}
+
+bool TasksWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_tasks->viewport() && event->type() == QEvent::MouseButtonDblClick && !m_tasks->itemAt(static_cast<QMouseEvent *>(event)->position().toPoint())) {
+        newTaskDialog();
+        return true;
+    }
+    return KXmlGuiWindow::eventFilter(watched, event);
+}
+
+bool TasksWindow::newTask(const QString &mailboxKey, const QString &title, const QString &notes)
+{
+    const Store *store = m_mailboxes->store(mailboxKey);
+    const QList<ParentRow> lists = store ? store->parents(ItemKind::Task) : QList<ParentRow>();
+    const auto list = std::find_if(lists.cbegin(), lists.cend(), [](const ParentRow &l) {
+        return l.wellKnown == QLatin1String("defaultList");
+    });
+    if (list == lists.cend()) {
+        return false;
+    }
+    QJsonObject task{{QStringLiteral("title"), title.trimmed().isEmpty() ? i18nc("@item a task without a title", "(no title)") : title.trimmed()}};
+    if (!notes.isEmpty()) {
+        task.insert(QStringLiteral("body"), QJsonObject{{QStringLiteral("content"), notes}, {QStringLiteral("contentType"), QStringLiteral("text")}});
+    }
+    m_daemon->createItem(mailboxKey.section(QLatin1Char('/'), 0, 0), mailboxKey.section(QLatin1Char('/'), 1), QStringLiteral("task"), list->id,
+                         QString::fromUtf8(QJsonDocument(task).toJson(QJsonDocument::Compact)));
+    return true;
 }
 
 void TasksWindow::setDone(const Task &task, bool isDone)
@@ -739,9 +845,8 @@ bool TasksWindow::addTaskForTests(const QString &listName, const QString &title)
     QTreeWidgetItemIterator it(m_lists);
     while (*it) {
         if ((*it)->data(0, Qt::UserRole + 2).toString() == listName) {
-            m_lists->setCurrentItem(*it);
-            m_add->setText(title);
-            addTask();
+            const QString key = (*it)->data(0, Qt::UserRole).toString();
+            createTask(key.section(QLatin1Char('|'), 0, 0), key.section(QLatin1Char('|'), 1).toLongLong(), QJsonObject{{QStringLiteral("title"), title}});
             return true;
         }
         ++it;

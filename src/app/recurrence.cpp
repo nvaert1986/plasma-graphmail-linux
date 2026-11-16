@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "recurrence.h"
+#include "calendaroptions.h"
 
 #include <KLocalizedString>
 
@@ -125,7 +126,7 @@ QString describeRecurrence(const QJsonObject &recurrence)
 
 QJsonObject presetRecurrence(RepeatPreset preset, QDate start)
 {
-    QJsonObject pattern{{QStringLiteral("interval"), 1}, {QStringLiteral("firstDayOfWeek"), graphDayName(QLocale().firstDayOfWeek())}};
+    QJsonObject pattern{{QStringLiteral("interval"), 1}, {QStringLiteral("firstDayOfWeek"), graphDayName(CalendarOptions::firstDayOfWeek())}};
     switch (preset) {
     case RepeatPreset::Daily:
         pattern.insert(QStringLiteral("type"), QStringLiteral("daily"));
@@ -186,7 +187,7 @@ RecurrenceDialog::RecurrenceDialog(const QJsonObject &recurrence, QDate start, Q
     auto *weekLayout = new QHBoxLayout(weekly);
     weekLayout->setContentsMargins(0, 0, 0, 0);
     for (int i = 0; i < 7; ++i) {
-        const int day = (QLocale().firstDayOfWeek() - 1 + i) % 7 + 1;
+        const int day = (CalendarOptions::firstDayOfWeek() - 1 + i) % 7 + 1;
         auto *box = new QCheckBox(QLocale().standaloneDayName(day, QLocale::ShortFormat), weekly);
         box->setProperty("day", day);
         weekLayout->addWidget(box);
@@ -323,7 +324,7 @@ RecurrenceDialog::RecurrenceDialog(const QJsonObject &recurrence, QDate start, Q
 QJsonObject RecurrenceDialog::recurrence() const
 {
     QJsonObject pattern{{QStringLiteral("interval"), m_interval->isEnabled() ? m_interval->value() : 1},
-                        {QStringLiteral("firstDayOfWeek"), graphDayName(QLocale().firstDayOfWeek())}};
+                        {QStringLiteral("firstDayOfWeek"), graphDayName(CalendarOptions::firstDayOfWeek())}};
     switch (m_type->currentIndex()) {
     case 0:
         pattern.insert(QStringLiteral("type"), QStringLiteral("daily"));

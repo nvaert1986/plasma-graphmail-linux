@@ -59,9 +59,8 @@ QJsonObject graphRecipient(const OutgoingRecipient &recipient)
     return {{QStringLiteral("emailAddress"), address}};
 }
 
-QList<OutgoingRecipient> parseRecipients(const QString &text, QStringList *invalid)
+QStringList splitRecipients(const QString &text)
 {
-    QList<OutgoingRecipient> result;
     QStringList parts;
     QString current;
     bool inAngle = false;
@@ -83,6 +82,13 @@ QList<OutgoingRecipient> parseRecipients(const QString &text, QStringList *inval
         }
     }
     parts.append(current);
+    return parts;
+}
+
+QList<OutgoingRecipient> parseRecipients(const QString &text, QStringList *invalid)
+{
+    QList<OutgoingRecipient> result;
+    const QStringList parts = splitRecipients(text);
     static const QRegularExpression named(QStringLiteral(R"(^(.*)<\s*([^<>\s]+@[^<>\s]+)\s*>$)"));
     static const QRegularExpression bare(QStringLiteral(R"(^[^\s<>"@]+@[^\s<>"@]+\.[^\s<>"@]+$)"));
     for (const QString &raw : std::as_const(parts)) {
@@ -142,6 +148,8 @@ QJsonObject Outgoing::toJson() const
             {QStringLiteral("to"), recipientsToJson(to)},
             {QStringLiteral("cc"), recipientsToJson(cc)},
             {QStringLiteral("bcc"), recipientsToJson(bcc)},
+            {QStringLiteral("replyTo"), recipientsToJson(replyTo)},
+            {QStringLiteral("mentions"), recipientsToJson(mentions)},
             {QStringLiteral("subject"), subject},
             {QStringLiteral("body"), body},
             {QStringLiteral("html"), html},
@@ -179,6 +187,8 @@ Outgoing Outgoing::fromJson(const QJsonObject &json)
     o.to = recipientsFromJson(json.value(QLatin1String("to")));
     o.cc = recipientsFromJson(json.value(QLatin1String("cc")));
     o.bcc = recipientsFromJson(json.value(QLatin1String("bcc")));
+    o.replyTo = recipientsFromJson(json.value(QLatin1String("replyTo")));
+    o.mentions = recipientsFromJson(json.value(QLatin1String("mentions")));
     o.subject = text(json, "subject");
     o.body = text(json, "body");
     o.html = json.value(QLatin1String("html")).toBool(true);
@@ -229,6 +239,9 @@ QJsonObject Outgoing::graphMessage() const
                   {QStringLiteral("ccRecipients"), graphRecipients(cc)},
                   {QStringLiteral("bccRecipients"), graphRecipients(bcc)},
                   {QStringLiteral("importance"), QString::fromLatin1(importanceNames[qBound(0, importance, 2)])}};
+    if (!replyTo.isEmpty()) {
+        m.insert(QStringLiteral("replyTo"), graphRecipients(replyTo));
+    }
     m.insert(QStringLiteral("isReadReceiptRequested"), readReceipt);
     m.insert(QStringLiteral("isDeliveryReceiptRequested"), deliveryReceipt);
     // MAPI properties Graph has no field for: sensitivity always (Outlook writes it too), the

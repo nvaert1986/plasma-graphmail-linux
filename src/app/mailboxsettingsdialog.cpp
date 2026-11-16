@@ -88,6 +88,7 @@ MailboxSettingsDialog::MailboxSettingsDialog(MailboxSet *mailboxes, DaemonClient
     hours->addStretch();
     auto *work = new QGroupBox(i18nc("@title:group", "Working Hours"), this);
     auto *workForm = new QFormLayout(work);
+    workForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     workForm->addRow(i18nc("@label", "Days:"), days);
     workForm->addRow(i18nc("@label", "Hours:"), hours);
     workForm->addRow(i18nc("@label:listbox", "Time zone:"), m_workZone);
@@ -96,8 +97,16 @@ MailboxSettingsDialog::MailboxSettingsDialog(MailboxSet *mailboxes, DaemonClient
         combo->setEditable(true);
         combo->setInsertPolicy(QComboBox::NoInsert);
     }
+    // The lists fill in after the dialog is shown (from Exchange): let the fields take the width
+    // instead of the size of an empty list
+    for (QComboBox *combo : {m_workZone, m_zone, m_language, m_dateFormat, m_timeFormat}) {
+        combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        combo->setMinimumContentsLength(24);
+        combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    }
     auto *region = new QGroupBox(i18nc("@title:group", "Language and Time"), this);
     auto *regionForm = new QFormLayout(region);
+    regionForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     regionForm->addRow(i18nc("@label:listbox", "Language:"), m_language);
     regionForm->addRow(i18nc("@label:listbox", "Time zone:"), m_zone);
     regionForm->addRow(i18nc("@label:listbox", "Date format:"), m_dateFormat);

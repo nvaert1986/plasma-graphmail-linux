@@ -177,7 +177,11 @@ bool Ndb::walk(const Bref &root, quint8 ptype, const std::function<bool(const ch
     const int count = quint8(d[meta]);
     const int entrySize = quint8(d[meta + 2]);
     const int level = quint8(d[meta + 3]);
-    if (entrySize == 0 || count * entrySize > meta) {
+    // [MS-PST] 2.2.2.7.7: the entries are at least as big as what is read from them (NBTENTRY,
+    // BBTENTRY, BTENTRY); smaller ones in a crafted page would read past the page
+    const bool unicode = m_header.unicode;
+    const int needed = level > 0 ? (unicode ? 24 : 12) : (ptype == ptypeNBT ? (unicode ? 32 : 16) : (unicode ? 24 : 12));
+    if (entrySize < needed || count * entrySize > meta) {
         return fail(QStringLiteral("damaged BTree page at %1").arg(root.ib));
     }
     if (level == 0) {
@@ -329,13 +333,24 @@ std::optional<QByteArray> Ndb::treeDataBelow(quint64 bid, int maxLevel)
         fail(QStringLiteral("damaged XBLOCK %1").arg(bid));
         return std::nullopt;
     }
+    // A crafted tree may claim 4 GB or point at the same block a million times: a mail item over
+    // 512 MB is refused, and the size is checked while adding, not after
+    constexpr quint32 maxTotal = 512u * 1024 * 1024;
+    if (total > maxTotal) {
+        fail(QStringLiteral("XBLOCK %1 claims %2 bytes").arg(bid).arg(total));
+        return std::nullopt;
+    }
     QByteArray out;
-    out.reserve(total);
+    out.reserve(qsizetype(std::min<quint32>(total, 64u * 1024 * 1024)));
     for (int i = 0; i < count; ++i) {
         const quint64 child = readId(x->constData() + 8 + i * bidSize());
         // An XXBLOCK points to XBLOCKs, an XBLOCK to data blocks
         const std::optional<QByteArray> part = level == 2 ? treeDataBelow(child, 1) : blockData(child, true);
         if (!part) {
+            return std::nullopt;
+        }
+        if (quint64(out.size()) + quint64(part->size()) > total) {
+            fail(QStringLiteral("XBLOCK %1 holds more than its %2 bytes").arg(bid).arg(total));
             return std::nullopt;
         }
         out += *part;
@@ -349,11 +364,15 @@ std::optional<QByteArray> Ndb::treeDataBelow(quint64 bid, int maxLevel)
 
 std::optional<QList<QByteArray>> Ndb::treeBlocks(quint64 bid)
 {
-    return treeBlocksBelow(bid, 2);
+    qint64 total = 0;
+    return treeBlocksBelow(bid, 2, total);
 }
 
-std::optional<QList<QByteArray>> Ndb::treeBlocksBelow(quint64 bid, int maxLevel)
+std::optional<QList<QByteArray>> Ndb::treeBlocksBelow(quint64 bid, int maxLevel, qint64 &total)
 {
+    // The same limit as treeDataBelow: a crafted tree pointing at one block a million times
+    // would otherwise copy it into memory a million times
+    constexpr qint64 maxTotal = 512LL * 1024 * 1024;
     if ((bid & 2) == 0) {
         const std::optional<QByteArray> one = blockData(bid, true);
         if (!one) {
@@ -378,7 +397,7 @@ std::optional<QList<QByteArray>> Ndb::treeBlocksBelow(quint64 bid, int maxLevel)
     for (int i = 0; i < count; ++i) {
         const quint64 child = readId(x->constData() + 8 + i * bidSize());
         if (level == 2) {
-            const std::optional<QList<QByteArray>> part = treeBlocksBelow(child, 1);
+            const std::optional<QList<QByteArray>> part = treeBlocksBelow(child, 1, total);
             if (!part) {
                 return std::nullopt;
             }
@@ -386,6 +405,11 @@ std::optional<QList<QByteArray>> Ndb::treeBlocksBelow(quint64 bid, int maxLevel)
         } else {
             const std::optional<QByteArray> part = blockData(child, true);
             if (!part) {
+                return std::nullopt;
+            }
+            total += part->size();
+            if (total > maxTotal) {
+                fail(QStringLiteral("XBLOCK %1 holds more than %2 bytes").arg(bid).arg(maxTotal));
                 return std::nullopt;
             }
             out.append(*part);

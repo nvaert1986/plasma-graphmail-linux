@@ -2,10 +2,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "signaturedialog.h"
+#include "maileditor.h"
+#include "coloraction.h"
+#include "pastedimages.h"
 #include "mailboxset.h"
 
 #include <KActionCollection>
 #include <KLocalizedString>
+#include <KMessageBox>
 #include <KPIMTextEdit/RichTextComposer>
 #include <KPIMTextEdit/RichTextComposerActions>
 #include <KPIMTextEdit/RichTextComposerControler>
@@ -66,7 +70,7 @@ SignatureDialog::SignatureDialog(MailboxSet *mailboxes, QWidget *parent)
     , m_mailboxes(mailboxes)
     , m_signatures(Signatures::all())
     , m_list(new QListWidget(this))
-    , m_editor(new KPIMTextEdit::RichTextComposer(this))
+    , m_editor(new MailEditor(this))
     , m_actions(new KActionCollection(this))
     , m_mailbox(new QComboBox(this))
     , m_forNew(new QComboBox(this))
@@ -131,10 +135,34 @@ SignatureDialog::SignatureDialog(MailboxSet *mailboxes, QWidget *parent)
     // The editor with the usual formatting
     m_editor->composerActions()->createActions(m_actions);
     m_editor->activateRichText();
+    // A signature copied from Outlook on the web: its pictures point at the web
+    auto *pasted = new PastedImages(m_editor);
+    pasted->setContentIdResolver([this](const QString &contentId) {
+        return m_mailboxes->inlinePicture(contentId);
+    });
+    connect(pasted, &PastedImages::unavailable, this, [this](int count) {
+        KMessageBox::information(this,
+                                 i18ncp("@info",
+                                        "%1 picture could not be copied. The browser copies some pictures as links that only work inside it: save the picture there and add it with Insert Image.",
+                                        "%1 pictures could not be copied. The browser copies some pictures as links that only work inside it: save them there and add them with Insert Image.",
+                                        count),
+                                 i18nc("@title:window", "Pasted Pictures"));
+    });
     auto *formatting = new QToolBar(this);
-    for (const char *name : {"format_text_bold", "format_text_italic", "format_text_underline", "format_text_foreground_color", "format_font_family", "format_font_size",
-                             "manage_link", "add_image"}) {
-        if (QAction *action = m_actions->action(QLatin1String(name))) {
+    // Font Color as in the composer (the "A" with the colour under it and a palette)
+    auto *textColor = new ColorAction(ColorAction::Kind::Text, this);
+    connect(textColor, &ColorAction::colorChosen, this, [this](const QColor &color) {
+        if (color.isValid()) {
+            m_editor->composerControler()->setTextForegroundColor(color);
+        } else {
+            ColorAction::clearColor(m_editor, false);
+        }
+        m_editor->setFocus();
+    });
+    for (const char *name : {"format_text_bold", "format_text_italic", "format_text_underline", "text_color", "format_font_family", "format_font_size", "manage_link", "add_image"}) {
+        if (QLatin1String(name) == QLatin1String("text_color")) {
+            formatting->addAction(textColor);
+        } else if (QAction *action = m_actions->action(QLatin1String(name))) {
             formatting->addAction(action);
         }
     }
@@ -160,6 +188,11 @@ SignatureDialog::SignatureDialog(MailboxSet *mailboxes, QWidget *parent)
         }
         m_mailbox->addItem(box.address.isEmpty() ? box.label() : box.address, box.key());
         m_defaults.insert(box.key(), {Signatures::defaultFor(box.account, box.mailbox, false), Signatures::defaultFor(box.account, box.mailbox, true)});
+    }
+    // As wide as the longest signature name or address, never cut off ("Example Pe|")
+    for (QComboBox *box : {m_mailbox, m_forNew, m_forReply}) {
+        box->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+        box->setMinimumContentsLength(24);
     }
     form->addRow(i18nc("@label:listbox", "Mailbox:"), m_mailbox);
     form->addRow(i18nc("@label:listbox", "New messages:"), m_forNew);

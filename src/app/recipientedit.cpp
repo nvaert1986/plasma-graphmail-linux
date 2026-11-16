@@ -58,6 +58,33 @@ AddressBook::AddressBook(MailboxSet *mailboxes, QObject *parent)
     m_model->setStringList(entries);
 }
 
+QStringList AddressBook::matches(const QStringList &entries, const QString &typed)
+{
+    const auto plain = [](const QString &text) {
+        QString result;
+        for (const QChar c : text.normalized(QString::NormalizationForm_D)) {
+            if (c.category() != QChar::Mark_NonSpacing) {
+                result.append(c.toCaseFolded());
+            }
+        }
+        return result;
+    };
+    const QStringList words = plain(typed).split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    QStringList found;
+    if (words.isEmpty()) {
+        return found;
+    }
+    for (const QString &entry : entries) {
+        const QString text = plain(entry);
+        if (std::all_of(words.cbegin(), words.cend(), [&text](const QString &word) {
+                return text.contains(word);
+            })) {
+            found.append(entry);
+        }
+    }
+    return found;
+}
+
 QStringListModel *AddressBook::model() const
 {
     return m_model;
@@ -133,6 +160,24 @@ void RecipientEdit::keyPressEvent(QKeyEvent *event)
 QList<OutgoingRecipient> RecipientEdit::recipients(QStringList *invalid) const
 {
     return parseRecipients(text(), invalid);
+}
+
+void RecipientEdit::replacePart(const QString &part, const OutgoingRecipient &recipient)
+{
+    QStringList parts = splitRecipients(text());
+    for (QString &p : parts) {
+        if (p.trimmed() == part) {
+            p = formatRecipient(recipient);
+            break;
+        }
+    }
+    QStringList kept;
+    for (const QString &p : std::as_const(parts)) {
+        if (!p.trimmed().isEmpty()) {
+            kept.append(p.trimmed());
+        }
+    }
+    setText(kept.isEmpty() ? QString() : kept.join(QStringLiteral("; ")) + QStringLiteral("; "));
 }
 
 void RecipientEdit::setRecipients(const QList<OutgoingRecipient> &recipients)

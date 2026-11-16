@@ -37,7 +37,8 @@ public:
     void setFolderOpen(const QString &account, const QString &mailbox, qint64 folder, bool open);
     void fetchBody(const QString &account, const QString &mailbox, qint64 message);
     void fetchAttachment(const QString &account, const QString &mailbox, qint64 attachment);
-    void markRead(const QString &account, const QString &mailbox, qint64 message, bool read);
+    // receipt false: read without sending a requested read receipt
+    void markRead(const QString &account, const QString &mailbox, qint64 message, bool read, bool receipt = true);
     void setFlag(const QString &account, const QString &mailbox, qint64 message, int flag);
     void setFocused(const QString &account, const QString &mailbox, qint64 message, bool focused);
     void setFlagDates(const QString &account, const QString &mailbox, qint64 message, qint64 start, qint64 due);
@@ -67,6 +68,8 @@ public:
     // Another mailbox (docs/PHASE7.md): done gets the daemon's JSON answer (MailboxAccess), or
     // an empty string when the daemon did not answer
     void checkMailbox(const QString &account, const QString &address, bool add, QObject *context, const std::function<void(const QString &)> &done);
+    // A person's manager and direct reports (the daemon's OrgChart), JSON; empty when no answer
+    void orgChart(const QString &account, const QString &user, QObject *context, const std::function<void(const QString &)> &done);
     void removeMailbox(const QString &account, const QString &mailbox, QObject *context, const std::function<void(const QString &)> &done);
     void loadMessage(const QString &account, const QString &mailbox, qint64 message, QObject *context, const std::function<void(const QString &)> &done);
 

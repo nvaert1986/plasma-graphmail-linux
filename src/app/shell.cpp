@@ -3,6 +3,7 @@
 
 #include "shell.h"
 #include "mainwindow.h"
+#include "messagelistmodel.h"
 #include "profilephotos.h"
 #include "mailboxset.h"
 #include "avatar.h"
@@ -16,9 +17,11 @@
 #include <QApplication>
 #include <QButtonGroup>
 #include <QCloseEvent>
+#include <QDropEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QMenu>
+#include <QMimeData>
 #include <QStackedWidget>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -90,6 +93,10 @@ Shell::Shell(MailboxSet *mailboxes, DaemonClient *daemon)
         });
         m_buttons->addButton(button, i + 1);
         barLayout->addWidget(button);
+        if (i == 1 || i == 3) {
+            button->setAcceptDrops(true);
+            button->installEventFilter(this);
+        }
     }
     barLayout->addStretch();
     connect(m_buttons, &QButtonGroup::idClicked, this, [this](int module) {
@@ -220,6 +227,37 @@ void Shell::updateTitle()
     if (QWidget *page = m_stack->currentWidget()) {
         setWindowTitle(page->windowTitle());
     }
+}
+
+bool Shell::eventFilter(QObject *watched, QEvent *event)
+{
+    const int module = m_buttons->id(qobject_cast<QAbstractButton *>(watched));
+    if (module != 2 && module != 4) {
+        return QWidget::eventFilter(watched, event);
+    }
+    if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove) {
+        auto *drag = static_cast<QDragMoveEvent *>(event);
+        if (drag->mimeData()->hasFormat(MessageListModel::mimeType())) {
+            drag->setDropAction(Qt::CopyAction);
+            drag->accept();
+            return true;
+        }
+    } else if (event->type() == QEvent::Drop) {
+        auto *drop = static_cast<QDropEvent *>(event);
+        // "<mailbox key>\n<id>\n<id>...": an appointment or a task from the first message
+        const QStringList lines = QString::fromLatin1(drop->mimeData()->data(MessageListModel::mimeType())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        if (lines.size() >= 2) {
+            drop->setDropAction(Qt::CopyAction);
+            drop->accept();
+            if (module == 2) {
+                m_mail->newAppointmentFromMail(lines.at(0), lines.at(1).toLongLong());
+            } else {
+                m_mail->newTaskFromMail(lines.at(0), lines.at(1).toLongLong());
+            }
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void Shell::closeEvent(QCloseEvent *event)

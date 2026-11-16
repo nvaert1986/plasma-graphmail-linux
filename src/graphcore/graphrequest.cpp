@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "graphrequest.h"
+
+#include <QJsonObject>
 #include "graphclient.h"
 #include "graphcore_debug.h"
 #include "graphutil.h"
@@ -304,10 +306,13 @@ void GraphRequest::onReplyFinished()
                                   : std::min<qint64>(qint64(policy.backoffBaseMs) << std::min(m_attempts, 20), policy.maxBackoffMs);
         if (throttled) {
             Throttle::note(m_throttleKey, delayMs);
-            qCInfo(GRAPHCORE).noquote() << QStringLiteral("Throttled by Microsoft 365 (HTTP %1, %2), pausing it for %3 ms")
+            // Which request and which of Exchange's limits (its error code), to tell the limits apart
+            const QJsonObject error = response.json().value(QLatin1String("error")).toObject();
+            qCInfo(GRAPHCORE).noquote() << QStringLiteral("Throttled by Microsoft 365 (HTTP %1, %2), pausing it for %3 ms: %4 %5 %6")
                                                .arg(response.status)
                                                .arg(m_throttleKey)
-                                               .arg(delayMs);
+                                               .arg(delayMs)
+                                               .arg(QString::fromLatin1(m_spec.verb), m_url.path(), error.value(QLatin1String("code")).toString() + QLatin1Char(' ') + error.value(QLatin1String("message")).toString().left(160));
         } else {
             qCInfo(GRAPHCORE) << m_spec.verb << m_url.path() << "->" << (response.status ? QString::number(response.status) : response.errorString)
                               << "retrying in" << delayMs << "ms";

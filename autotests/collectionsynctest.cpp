@@ -449,6 +449,20 @@ private Q_SLOTS:
         QCOMPARE(QDateTime::fromMSecsSinceEpoch(events.first().start, QTimeZone::UTC).time(), QTime(9, 0));
         // An event ending exactly at the start of the range is not in it
         QVERIFY(store->eventsBetween({}, day + 10 * 3600 * 1000, day + 11 * 3600 * 1000).isEmpty());
+
+        // The series removed (the delta names only the series): its occurrence goes with it
+        QVERIFY(store->removeItem(ItemKind::Event, QStringLiteral("M")));
+        QVERIFY(!store->eventByGraphId(QStringLiteral("O")));
+        // One left behind earlier (a series removed before that): swept after a complete round
+        QJsonObject orphan = occurrence;
+        orphan.insert(QStringLiteral("id"), QStringLiteral("O2"));
+        orphan.insert(QStringLiteral("seriesMasterId"), QStringLiteral("GONE"));
+        QVERIFY(store->upsertItem(ItemKind::Event, calendar, Mapper::event(orphan)) == Store::Upsert::Inserted);
+        QVERIFY(store->upsertItem(ItemKind::Event, calendar, Mapper::event(master)) == Store::Upsert::Inserted);
+        QVERIFY(store->upsertItem(ItemKind::Event, calendar, Mapper::event(occurrence)) == Store::Upsert::Inserted);
+        QCOMPARE(store->sweepOrphanOccurrences(calendar), 1);
+        QVERIFY(!store->eventByGraphId(QStringLiteral("O2")));
+        QVERIFY(store->eventByGraphId(QStringLiteral("O")));
     }
 
     void todoLists()

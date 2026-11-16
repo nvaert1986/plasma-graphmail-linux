@@ -5,6 +5,7 @@
 #include "cfb/cfb.h"
 #include "pst/pstalgorithms.h"
 
+#include <QHash>
 #include <QMap>
 #include <QtEndian>
 
@@ -100,9 +101,22 @@ std::optional<QList<std::pair<quint32, Pst::PropValue>>> readProperties(const Cf
             const quint16 base = type & ~Pst::PtypMultiple;
             const int entry = base == Pst::PtypBinary ? 8 : 4;
             const qsizetype count = lengths ? lengths->data.size() / entry : 0;
+            // The value streams by number, found in one pass: a lookup per value scans all
+            // siblings, which a crafted file with 65,536 values and many siblings makes slow
+            const QString prefix = streamName(tag) + QStringLiteral("-");
+            QHash<quint32, const Cfb::Entry *> byIndex;
+            for (const Cfb::Entry &c : storage.children) {
+                if (c.name.size() == prefix.size() + 8 && c.name.startsWith(prefix, Qt::CaseInsensitive)) {
+                    bool ok = false;
+                    const quint32 index = c.name.mid(prefix.size()).toUInt(&ok, 16);
+                    if (ok) {
+                        byIndex.insert(index, &c);
+                    }
+                }
+            }
             QList<QByteArray> items;
             for (qsizetype i = 0; i < count && i < 0x10000; ++i) {
-                const Cfb::Entry *item = storage.child(streamName(tag) + QStringLiteral("-") + hex8(quint32(i)));
+                const Cfb::Entry *item = byIndex.value(quint32(i));
                 QByteArray d = item ? item->data : QByteArray();
                 if (base == Pst::PtypString) {
                     d = stripNull(d, 2);

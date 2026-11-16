@@ -153,7 +153,7 @@ int logout(const QCommandLineParser &parser)
     return 0;
 }
 
-int get(const QCommandLineParser &parser, const QString &path)
+int get(const QCommandLineParser &parser, const QString &path, const QByteArray &body = {}, const QByteArray &verb = "GET")
 {
     QString error;
     const Account account = pickAccount(parser.value(QStringLiteral("account")), &error);
@@ -171,7 +171,16 @@ int get(const QCommandLineParser &parser, const QString &path)
     for (const QString &value : extra) {
         preferences.append(value.toUtf8());
     }
-    const GraphResponse response = client.get(path, {Prefer::header(preferences)});
+    // patch|post <path> <json>, delete <path>: a change, for probes and test clean-up (otherwise read only)
+    GraphRequestSpec spec;
+    spec.verb = verb;
+    spec.pathOrUrl = path;
+    spec.headers = {Prefer::header(preferences)};
+    if (!body.isEmpty()) {
+        spec.headers.append({QByteArrayLiteral("Content-Type"), QByteArrayLiteral("application/json")});
+        spec.body = body;
+    }
+    const GraphResponse response = client.send(spec);
     err() << "HTTP " << response.status << (response.ok() ? QString() : QStringLiteral(" ") + response.describe()) << Qt::endl;
     const QJsonDocument json = QJsonDocument::fromJson(response.body);
     if (json.isNull()) {
@@ -293,7 +302,7 @@ int main(int argc, char **argv)
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addPositionalArgument(QStringLiteral("command"),
-                                 QStringLiteral("login | accounts | logout | get <path> | status | sync | folders <mailbox> | list <mailbox> <folder> | "
+                                 QStringLiteral("login | accounts | logout | get <path> | patch|post <path> <json> | delete <path> | status | sync | folders <mailbox> | list <mailbox> <folder> | "
                                                 "mark-read <mailbox> <message> [--unread] | resync <mailbox> <folder> | add-shared <address> | check-mailbox <address>"));
     parser.addOptions({
         {QStringLiteral("client"), QStringLiteral("App registration (client) ID; remembered as the default"), QStringLiteral("id")},
@@ -323,6 +332,12 @@ int main(int argc, char **argv)
     if (command == QLatin1String("get") && args.size() == 2) {
         return get(parser, args.at(1));
     }
+    if ((command == QLatin1String("patch") || command == QLatin1String("post")) && args.size() == 3) {
+        return get(parser, args.at(1), args.at(2).toUtf8(), command.toUpper().toLatin1());
+    }
+    if (command == QLatin1String("delete") && args.size() == 2) {
+        return get(parser, args.at(1), {}, QByteArrayLiteral("DELETE"));
+    }
     if (command == QLatin1String("status")) {
         return status();
     }
@@ -339,7 +354,8 @@ int main(int argc, char **argv)
         return callDaemon(QStringLiteral("MarkRead"), {QString(), args.at(1), args.at(2).toLongLong(), !parser.isSet(QStringLiteral("unread"))}) ? 0 : 1;
     }
     if (command == QLatin1String("resync") && args.size() == 3) {
-        return callDaemon(QStringLiteral("ResyncFolder"), {QString(), args.at(1), args.at(2).toLongLong()}) ? 0 : 1;
+        // With more than one account signed in the daemon needs --account
+        return callDaemon(QStringLiteral("ResyncFolder"), {parser.value(QStringLiteral("account")), args.at(1), args.at(2).toLongLong()}) ? 0 : 1;
     }
     if ((command == QLatin1String("add-shared") || command == QLatin1String("check-mailbox")) && args.size() == 2) {
         // Both answer the access check as JSON (docs/PHASE7.md); "problem" is empty when it worked

@@ -75,15 +75,29 @@ void BodyFetcher::fetchNow(qint64 message)
                    return a.isInline && !a.blob.isEmpty();
                });
         const bool listMissing = m->hasAttachments && attachments.isEmpty();
-        if ((!inlineMissing && !listMissing) || m_inFlight.contains(message)) {
+        // Bodies cached before schema 6 lack the List-Unsubscribe header: asked for once, on opening
+        const bool headerMissing = m_ctx->store->unsubscribe(message).isNull() || !m_ctx->store->readReceiptRequested(message).has_value();
+        if ((!inlineMissing && !listMissing && !headerMissing) || m_inFlight.contains(message)) {
             Q_EMIT bodyReady(message);
             return;
         }
         m_inFlight.insert(message);
-        fetchAttachments(message, m->graphId, [this, message] {
-            m_inFlight.remove(message);
-            Q_EMIT bodyReady(message);
-        });
+        auto attachmentsThenReady = [this, message, graphId = m->graphId, needed = inlineMissing || listMissing] {
+            auto ready = [this, message] {
+                m_inFlight.remove(message);
+                Q_EMIT bodyReady(message);
+            };
+            if (needed) {
+                fetchAttachments(message, graphId, ready);
+            } else {
+                ready();
+            }
+        };
+        if (headerMissing) {
+            fetchHeaders(message, m->graphId, attachmentsThenReady);
+        } else {
+            attachmentsThenReady();
+        }
         return;
     }
     m_failed.remove(message);
@@ -183,7 +197,7 @@ void BodyFetcher::fetch(qint64 message, const QString &graphId, bool urgent)
         m_urgentInFlight.insert(message);
     }
     GraphRequest *request = m_ctx->client->start({"GET",
-                                                  m_ctx->root + QStringLiteral("/messages/") + graphId + QStringLiteral("?$select=body,hasAttachments"),
+                                                  m_ctx->root + QStringLiteral("/messages/") + graphId + QStringLiteral("?$select=body,hasAttachments,internetMessageHeaders,isReadReceiptRequested"),
                                                   {},
                                                   {Prefer::header({Prefer::immutableId(), Prefer::htmlBody()})},
                                                   true,
@@ -219,6 +233,7 @@ void BodyFetcher::fetch(qint64 message, const QString &graphId, bool urgent)
             done(message, urgent);
             return;
         }
+        storeUnsubscribe(message, json);
         // Graph's hasAttachments is false when a message only has inline images (a logo in a
         // signature): a cid: reference in the body is the other reason to list the attachments
         if (json.value(QLatin1String("hasAttachments")).toBool() || content.contains("cid:")) {
@@ -229,6 +244,44 @@ void BodyFetcher::fetch(qint64 message, const QString &graphId, bool urgent)
             return;
         }
         done(message, urgent);
+    });
+}
+
+void BodyFetcher::storeUnsubscribe(qint64 message, const QJsonObject &json)
+{
+    // A mailing list's way out, for the reading pane's Unsubscribe (RFC 2369, RFC 8058)
+    QString unsubscribe;
+    bool oneClick = false;
+    for (const QJsonValue &header : json.value(QLatin1String("internetMessageHeaders")).toArray()) {
+        const QString name = header.toObject().value(QLatin1String("name")).toString();
+        const QString value = header.toObject().value(QLatin1String("value")).toString();
+        if (name.compare(QLatin1String("List-Unsubscribe"), Qt::CaseInsensitive) == 0) {
+            unsubscribe = value.simplified();
+        } else if (name.compare(QLatin1String("List-Unsubscribe-Post"), Qt::CaseInsensitive) == 0) {
+            oneClick = value.simplified().compare(QLatin1String("List-Unsubscribe=One-Click"), Qt::CaseInsensitive) == 0;
+        }
+    }
+    m_ctx->store->setUnsubscribe(message, unsubscribe, oneClick);
+    if (json.contains(QLatin1String("isReadReceiptRequested"))) {
+        m_ctx->store->setReadReceiptRequested(message, json.value(QLatin1String("isReadReceiptRequested")).toBool());
+    }
+}
+
+void BodyFetcher::fetchHeaders(qint64 message, const QString &graphId, const std::function<void()> &done)
+{
+    GraphRequest *request = m_ctx->client->start(
+        {"GET", m_ctx->root + QStringLiteral("/messages/") + graphId + QStringLiteral("?$select=internetMessageHeaders,isReadReceiptRequested"), {}, {Prefer::header({Prefer::immutableId()})}, true, nullptr});
+    connect(request, &GraphRequest::finished, this, [this, request, message, done] {
+        const GraphResponse response = request->response();
+        request->deleteLater();
+        // Offline: asked again next time. Any other failure counts as no header, not asked again
+        if (!response.isNetworkError()) {
+            storeUnsubscribe(message, response.ok() ? response.json() : QJsonObject());
+            if (!response.ok()) {
+                m_ctx->store->setReadReceiptRequested(message, false);
+            }
+        }
+        done();
     });
 }
 

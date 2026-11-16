@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "readingpane.h"
+#include "attachmentpreview.h"
 #include "attachmentstrip.h"
 #include "avatar.h"
 #include "blobstore.h"
@@ -10,15 +11,18 @@
 #include "icsdialog.h"
 #include "mailboxset.h"
 #include "mailview.h"
+#include "readreceipts.h"
 #include "store.h"
 #include "tnefdialog.h"
 
 #include <KConfigGroup>
 #include <KLocalizedString>
+#include <KMessageBox>
 #include <KMessageWidget>
 #include <KSharedConfig>
 
 #include <QAction>
+#include <QDesktopServices>
 #include <QDir>
 #include <QTimeZone>
 #include <QMenu>
@@ -102,9 +106,14 @@ ReadingPane::ReadingPane(QWidget *parent)
     , m_remoteBar(new KMessageWidget(this))
     , m_notice(new KMessageWidget(this))
     , m_meeting(new KMessageWidget(this))
+    , m_unsubscribeBar(new KMessageWidget(this))
+    , m_receiptBar(new KMessageWidget(this))
     , m_attachments(new AttachmentStrip(this))
     , m_body(new MailView(this))
 {
+    // The body's right-click menu: New Message To... and Print...
+    connect(m_body, &MailView::mailtoRequested, this, &ReadingPane::mailtoRequested);
+    connect(m_body, &MailView::printRequested, this, &ReadingPane::printRequested);
     m_notice->setMessageType(KMessageWidget::Error);
     m_notice->setWordWrap(true);
     m_notice->hide();
@@ -112,6 +121,7 @@ ReadingPane::ReadingPane(QWidget *parent)
     m_meeting->setCloseButtonVisible(false);
     m_meeting->hide();
     connect(m_attachments, &AttachmentStrip::openRequested, this, &ReadingPane::openAttachment);
+    connect(m_attachments, &AttachmentStrip::previewRequested, this, &ReadingPane::previewAttachment);
     connect(m_attachments, &AttachmentStrip::saveRequested, this, [this](qint64 attachment) {
         AttachmentRow row;
         contentOf(attachment, &row);
@@ -167,6 +177,29 @@ ReadingPane::ReadingPane(QWidget *parent)
     m_remoteBar->addAction(loadOnce);
     m_remoteBar->addAction(trust);
     m_remoteBar->hide();
+    // Outlook's "Unsubscribe" above a newsletter
+    m_unsubscribeBar->setCloseButtonVisible(false);
+    m_unsubscribeBar->setWordWrap(true);
+    auto *unsubscribeAction = new QAction(QIcon::fromTheme(QStringLiteral("list-remove-user")), i18nc("@action", "Unsubscribe"), m_unsubscribeBar);
+    connect(unsubscribeAction, &QAction::triggered, this, &ReadingPane::unsubscribe);
+    m_unsubscribeBar->addAction(unsubscribeAction);
+    m_unsubscribeBar->hide();
+    // Outlook's "The sender requested a read receipt. Send a receipt?"
+    m_receiptBar->setMessageType(KMessageWidget::Information);
+    m_receiptBar->setCloseButtonVisible(false);
+    m_receiptBar->setWordWrap(true);
+    m_receiptBar->setText(i18nc("@info", "The sender asked for a read receipt."));
+    auto *sendReceipt = new QAction(QIcon::fromTheme(QStringLiteral("mail-receipt")), i18nc("@action", "Send Receipt"), m_receiptBar);
+    connect(sendReceipt, &QAction::triggered, this, [this] {
+        answerReceipt(true);
+    });
+    auto *noReceipt = new QAction(QIcon::fromTheme(QStringLiteral("dialog-cancel")), i18nc("@action", "Don't Send"), m_receiptBar);
+    connect(noReceipt, &QAction::triggered, this, [this] {
+        answerReceipt(false);
+    });
+    m_receiptBar->addAction(sendReceipt);
+    m_receiptBar->addAction(noReceipt);
+    m_receiptBar->hide();
 
     auto *message = new QWidget(this);
     auto *layout = new QVBoxLayout(message);
@@ -194,6 +227,8 @@ ReadingPane::ReadingPane(QWidget *parent)
     layout->addWidget(line);
     layout->addWidget(m_notice);
     layout->addWidget(m_meeting);
+    layout->addWidget(m_receiptBar);
+    layout->addWidget(m_unsubscribeBar);
     layout->addWidget(m_remoteBar);
     layout->addWidget(m_body, 1);
 
@@ -403,6 +438,18 @@ void ReadingPane::setCategoryLabels(const QList<QPair<QString, QColor>> &labels)
     m_categoryLabels->setVisible(!parts.isEmpty());
 }
 
+void ReadingPane::bodyHtmlForTests(const std::function<void(const QString &)> &done)
+{
+    m_body->page()->toHtml(done);
+}
+
+void ReadingPane::zoom(int step)
+{
+    const double factor = step == 0 ? 1.0 : MailView::zoom() * (step > 0 ? 1.1 : 1.0 / 1.1);
+    MailView::setZoom(factor);
+    m_body->setZoomFactor(MailView::zoom());
+}
+
 void ReadingPane::clear()
 {
     m_message = 0;
@@ -412,6 +459,8 @@ void ReadingPane::clear()
     m_remoteBar->hide();
     m_notice->hide();
     m_meeting->hide();
+    m_unsubscribeBar->hide();
+    m_receiptBar->hide();
     m_attachments->setAttachments({}, false);
     m_stack->setCurrentIndex(0);
 }
@@ -519,6 +568,17 @@ void ReadingPane::openAttachment(qint64 attachment)
     runPending(attachment);
 }
 
+void ReadingPane::previewAttachment(qint64 attachment)
+{
+    m_pending[attachment].preview = true;
+    runPending(attachment);
+}
+
+QWidget *ReadingPane::lastPreview() const
+{
+    return m_lastPreview;
+}
+
 void ReadingPane::saveAttachment(qint64 attachment, const QString &path)
 {
     m_pending[attachment].savePath = path;
@@ -590,6 +650,14 @@ void ReadingPane::runPending(qint64 attachment)
             showNotice(i18nc("@info", "Could not save %1: %2", pending.savePath, file.errorString()));
         }
     }
+    if (pending.preview) {
+        auto *preview = new AttachmentPreview(fileNameFor(row, *data), *data, this);
+        connect(preview, &AttachmentPreview::openRequested, this, [this, attachment] {
+            openAttachment(attachment);
+        });
+        preview->show();
+        m_lastPreview = preview;
+    }
     if (pending.open) {
         if (!m_tempDir) {
             m_tempDir = std::make_unique<QTemporaryDir>(QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation)).filePath(QStringLiteral("graphmail-XXXXXX")));
@@ -657,9 +725,12 @@ void ReadingPane::showMessage(Store *store, BlobStore *blobs, qint64 message)
     m_sender = m->senderAddress;
     if (!sameMessage) {
         m_allowRemote = false;
+        m_markReadWhenKnown = false;
         m_pending.clear();
         m_notice->hide();
         m_meeting->hide();
+        m_unsubscribeBar->hide();
+        m_unsubscribe = {};
         m_meetingEventId.clear();
         if (m->itemType == 1 || m->itemType == 3) {
             showMeeting(*m);
@@ -701,6 +772,118 @@ void ReadingPane::showBody()
     const bool allow = m_allowRemote || isTrusted(m_sender);
     m_remoteBar->setVisible(m->bodyType == 1 && !allow && MailView::hasRemoteContent(*body));
     m_body->showBody(m_store, m_blobs, m_message, allow);
+    showUnsubscribe();
+    showReceiptQuestion();
+}
+
+bool ReadingPane::remoteAllowed() const
+{
+    return m_allowRemote || isTrusted(m_sender);
+}
+
+void ReadingPane::markReadWhenKnown()
+{
+    m_markReadWhenKnown = true;
+    showReceiptQuestion();
+}
+
+void ReadingPane::showReceiptQuestion()
+{
+    const std::optional<MessageRow> m = m_store ? m_store->message(m_message) : std::nullopt;
+    const ReadReceipts::Decision decision = m ? ReadReceipts::decide(ReadReceipts::mode(), m_store->readReceiptRequested(m_message), false) : ReadReceipts::Decision::Wait;
+    const bool ask = m && !m->isRead && m_daemon && decision == ReadReceipts::Decision::Ask;
+    m_receiptBar->setVisible(ask);
+    // Waiting to mark read: now that the request is known, no receipt was asked for
+    if (m_markReadWhenKnown && m && !m->isRead && m_daemon && (decision == ReadReceipts::Decision::DontSend || decision == ReadReceipts::Decision::Send)) {
+        m_markReadWhenKnown = false;
+        const QString key = mailboxKey();
+        m_daemon->markRead(key.section(QLatin1Char('/'), 0, 0), key.section(QLatin1Char('/'), 1), m_message, true, decision == ReadReceipts::Decision::Send);
+    }
+}
+
+void ReadingPane::answerReceipt(bool send)
+{
+    const QString key = mailboxKey();
+    m_receiptBar->animatedHide();
+    if (m_daemon && !key.isEmpty()) {
+        m_daemon->markRead(key.section(QLatin1Char('/'), 0, 0), key.section(QLatin1Char('/'), 1), m_message, true, send);
+    }
+}
+
+void ReadingPane::showUnsubscribe()
+{
+    // The header comes with the body; a bar that already answered stays as it is
+    if (!m_store || m_unsubscribe.kind != Unsubscribe::Kind::None) {
+        return;
+    }
+    bool oneClick = false;
+    m_unsubscribe = Unsubscribe::choose(m_store->unsubscribe(m_message, &oneClick), oneClick);
+    if (m_unsubscribe.kind == Unsubscribe::Kind::None) {
+        m_unsubscribeBar->hide();
+        return;
+    }
+    m_unsubscribeBar->setMessageType(KMessageWidget::Information);
+    m_unsubscribeBar->setText(i18nc("@info", "This message comes from a mailing list."));
+    for (QAction *action : m_unsubscribeBar->actions()) {
+        action->setVisible(true);
+    }
+    m_unsubscribeBar->show();
+}
+
+void ReadingPane::unsubscribe()
+{
+    const Unsubscribe::Way way = m_unsubscribe;
+    const QString host = way.url.host();
+    QString question;
+    switch (way.kind) {
+    case Unsubscribe::Kind::OneClick:
+        question = i18nc("@info %1 a web site", "Unsubscribe from this mailing list? Graph Mail sends the list's own unsubscribe request to %1.", host);
+        break;
+    case Unsubscribe::Kind::Mail:
+        question = i18nc("@info %1 an e-mail address", "Unsubscribe from this mailing list? A message to %1 opens; send it to unsubscribe.", way.url.path());
+        break;
+    case Unsubscribe::Kind::Browser:
+        question = i18nc("@info %1 a web site", "Unsubscribe from this mailing list? The list's page on %1 opens in your browser.", host);
+        break;
+    case Unsubscribe::Kind::None:
+        return;
+    }
+    if (KMessageBox::questionTwoActions(this,
+                                        question,
+                                        i18nc("@title:window", "Unsubscribe"),
+                                        KGuiItem(i18nc("@action:button", "Unsubscribe"), QStringLiteral("list-remove-user")),
+                                        KStandardGuiItem::cancel())
+        != KMessageBox::PrimaryAction) {
+        return;
+    }
+    if (way.kind == Unsubscribe::Kind::Mail) {
+        Q_EMIT mailtoRequested(way.url.toString());
+        return;
+    }
+    if (way.kind == Unsubscribe::Kind::Browser) {
+        QDesktopServices::openUrl(way.url);
+        return;
+    }
+    for (QAction *action : m_unsubscribeBar->actions()) {
+        action->setVisible(false);
+    }
+    m_unsubscribeBar->setText(i18nc("@info", "Unsubscribing..."));
+    const qint64 message = m_message;
+    Unsubscribe::post(way.url, this, [this, message, host](bool ok, const QString &detail) {
+        if (m_message != message) {
+            return;
+        }
+        if (ok) {
+            m_unsubscribeBar->setMessageType(KMessageWidget::Positive);
+            m_unsubscribeBar->setText(i18nc("@info %1 a web site", "%1 took the unsubscribe request.", host));
+            return;
+        }
+        m_unsubscribeBar->setMessageType(KMessageWidget::Warning);
+        m_unsubscribeBar->setText(i18nc("@info %1 a web site, %2 the reason", "%1 did not take the unsubscribe request (%2).", host, detail));
+        for (QAction *action : m_unsubscribeBar->actions()) {
+            action->setVisible(true);
+        }
+    });
 }
 
 }

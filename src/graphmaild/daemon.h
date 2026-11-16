@@ -57,6 +57,8 @@ public Q_SLOTS:
     // The content of an attachment (row id in the cache), for opening or saving it
     Q_SCRIPTABLE void FetchAttachment(const QString &account, const QString &mailbox, qlonglong attachment);
     Q_SCRIPTABLE void MarkRead(const QString &account, const QString &mailbox, qlonglong message, bool read);
+    // Read, and no read receipt even when the sender asked for one (docs/PHASE9B.md 9b.12)
+    Q_SCRIPTABLE void MarkReadWithoutReceipt(const QString &account, const QString &mailbox, qlonglong message);
     Q_SCRIPTABLE void SetFlag(const QString &account, const QString &mailbox, qlonglong message, int flag);
     // Flagged with follow-up dates (milliseconds since the epoch)
     // Focused Inbox: Move to Focused (true) / Move to Other (false)
@@ -72,6 +74,9 @@ public Q_SLOTS:
     Q_SCRIPTABLE QString AddSharedMailbox(const QString &account, const QString &address);
     // The same check without adding anything
     Q_SCRIPTABLE QString CheckMailbox(const QString &account, const QString &address);
+    // A person's manager and direct reports (docs/PHASE9B.md 9b.30), as JSON {"ok", "problem",
+    // "manager", "reports"}; problem "notGranted" when the tenant gave no consent for User.Read.All
+    Q_SCRIPTABLE QString OrgChart(const QString &account, const QString &user);
     // A message being written (Outgoing JSON, docs/PHASE4.md): stored in the mailbox's cache and
     // brought to Exchange as a draft; sent when its "send" is true
     Q_SCRIPTABLE void SaveOutgoing(const QString &account, const QString &mailbox, const QString &json);
@@ -151,6 +156,8 @@ private:
     static QString key(const QString &account, const QString &mailbox);
 
     QHash<QString, std::shared_ptr<GraphCore::Auth>> m_auth;
+    // Per account, only for OrgChart: Scopes::directory()
+    QHash<QString, std::shared_ptr<GraphCore::Auth>> m_directoryAuth;
     QHash<QString, Mailbox> m_mailboxes;
 };
 

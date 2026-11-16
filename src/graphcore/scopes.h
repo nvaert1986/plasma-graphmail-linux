@@ -51,6 +51,13 @@ inline QStringList tasks()
     return {QStringLiteral("Tasks.ReadWrite"), QStringLiteral("Tasks.ReadWrite.Shared")};
 }
 
+// Asked for on its own, never at sign-in: a tenant without admin consent for it must keep working
+// (AADSTS65001 would fail the whole token). The contact card's manager and direct reports.
+inline QStringList directory()
+{
+    return signIn() + QStringList{QStringLiteral("User.Read.All")};
+}
+
 inline QStringList suite()
 {
     return signIn() + files() + mail() + calendars() + contacts() + tasks();

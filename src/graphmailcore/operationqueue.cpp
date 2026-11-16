@@ -106,10 +106,11 @@ int OperationQueue::inFlight() const
     return int(m_inFlight.size());
 }
 
-bool OperationQueue::markRead(qint64 message, bool read)
+bool OperationQueue::markRead(qint64 message, bool read, bool receipt)
 {
     const std::optional<MessageRow> m = m_ctx->store->message(message);
-    return m && enqueue(message, QStringLiteral("read"), read, m->isRead);
+    const QJsonObject extra = read && !receipt ? QJsonObject{{QStringLiteral("noReceipt"), true}} : QJsonObject();
+    return m && enqueue(message, QStringLiteral("read"), read, m->isRead, extra);
 }
 
 bool OperationQueue::setFlag(qint64 message, int flag, qint64 start, qint64 due)
@@ -172,6 +173,8 @@ bool OperationQueue::enqueue(qint64 message, const QString &kind, const QJsonVal
             QJsonObject payload = payloadOf(*queued);
             payload.remove(QStringLiteral("start"));
             payload.remove(QStringLiteral("due"));
+            // A read receipt choice belongs to the newest request only (it comes again in extra)
+            payload.remove(QStringLiteral("noReceipt"));
             for (auto it = extra.begin(); it != extra.end(); ++it) {
                 payload.insert(it.key(), it.value());
             }
@@ -287,6 +290,12 @@ void OperationQueue::process(int slots)
         if (op.kind == QLatin1String("read")) {
             spec.verb = "PATCH";
             body.insert(QStringLiteral("isRead"), payload.value(QLatin1String("value")).toBool());
+            // Probed 2026-11-16: Exchange sends a requested read receipt as soon as isRead turns
+            // true; with PR_READ_RECEIPT_REQUESTED cleared in the same PATCH it sends none
+            if (payload.value(QLatin1String("noReceipt")).toBool() && payload.value(QLatin1String("value")).toBool()) {
+                body.insert(QStringLiteral("singleValueExtendedProperties"),
+                            QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("Boolean 0x0029")}, {QStringLiteral("value"), QStringLiteral("false")}}});
+            }
         } else if (op.kind == QLatin1String("flag")) {
             spec.verb = "PATCH";
             QJsonObject flag{{QStringLiteral("flagStatus"), flagName(payload.value(QLatin1String("value")).toInt())}};

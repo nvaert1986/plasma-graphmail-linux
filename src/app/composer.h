@@ -18,6 +18,7 @@ class KMessageWidget;
 class KToggleAction;
 class QActionGroup;
 class QComboBox;
+class QCompleter;
 class QLabel;
 class QLineEdit;
 class QListWidget;
@@ -44,7 +45,8 @@ struct MessageRow;
 struct ComposeRequest {
     // The mailbox the message is written in (an answer: where the original is)
     QString mailboxKey;
-    // new, reply, replyAll, forward, or draft (a message in Drafts opened again)
+    // new, reply, replyAll, forward, forwardAsAttachment, editAsNew (Outlook's Resend), or draft
+    // (a message in Drafts opened again)
     QString kind = QStringLiteral("new");
     // The message answered or forwarded, or the draft (row id in the mailbox's cache)
     qint64 message = 0;
@@ -71,6 +73,8 @@ public:
 
     // Tests (--compose, --screenshot): never asks anything, never saves by itself
     void setTestMode();
+    // A new message filled in from outside (a mailto: link): recipients, subject, text, files
+    void prefill(const QStringList &to, const QStringList &cc, const QStringList &bcc, const QString &subject, const QString &text, const QStringList &files);
     // Tests (--compose): fill in and send without dialogs
     void setTestInput(const QString &to, const QString &subject, const QString &text, const QStringList &files);
     bool sendNow();
@@ -88,12 +92,49 @@ public:
     // Tests: the Options menu without dialogs: "read", "delivery", "sensitivity=N", "defer=ISO"
     void setOptionsForTests(const QStringList &options);
 
+    // Check Names (Ctrl+K, docs/PHASE9B.md 9b.13): every typed part that is no address is looked up
+    // in the address book, then in the directory; several hits are offered to choose from.
+    // done(true) when nothing is left unresolved
+    void checkNames(const std::function<void(bool)> &done = {});
+    // Tests: the To line as it is now, or typed as is (names without addresses too)
+    QString recipientsForTests() const;
+    void typeRecipientsForTests(const QString &text);
+    // Tests: these keys typed into the text; the links in it afterwards ("text -> href", ...)
+    QStringList typeBodyForTests(const QString &text);
+    // Drops these files on the text; gives the inline pictures and the attachments
+    QStringList dropFilesForTests(const QStringList &paths);
+    // Plays keys on the text (see the function for the signs); gives the text after each undo
+    QStringList keysForTests(const QString &script);
+    // Inserts HTML (a paste) and, a few seconds later, lists the pictures: name and whether the
+    // editor holds it
+    void insertHtmlForTests(const QString &html);
+    QStringList imagesForTests() const;
+
 protected:
     void closeEvent(QCloseEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
 
 private:
+    // A web address typed before a space, Enter or Tab becomes a link, as in Outlook (HTML only)
+    void linkTypedAddress();
+    // Dropped files: pictures into the text, other files as attachments
+    void dropFiles(const QStringList &paths);
+    // Ctrl+Z / Ctrl+Y: Qt's undo, but a selection stays when only the look changed back
+    void undoText(bool undo);
+    // Outlook's @mentions: an "@" at the start of a word lists the people of the conversation and
+    // the address book; the one picked becomes "@Name" (a mailto link) and goes on the To line.
+    // At save the links are the message's mentions (the outbox adds them to the draft)
+    void updateMention();
+    void startMention();
+    void endMention();
+    void insertMention(const QString &entry);
+    QList<OutgoingRecipient> mentionsInText() const;
+    // Font Color "Automatic" / Highlight "No Color": removes the colour from the selection
+    void clearTextColor(bool background);
+    // Selects the picture under this point of the text; false when there is none
+    bool selectImageAt(const QPoint &viewportPoint);
     void setupActions();
     // Options > Delay Delivery: Exchange keeps the message until then
     void askDelay();
@@ -104,6 +145,10 @@ private:
     void saveAsTemplate();
     void setupFrom();
     void startFrom(const MessageRow *original);
+    void addOriginalAttachments(const MessageRow &original);
+    void attachOriginal(const MessageRow &original);
+    void startAsNew(const MessageRow &original);
+    void fillAsNew();
     void restore(const Outgoing &record);
     void restoreFromServer(const QString &json, const MessageRow &draft);
     void buildQuote();
@@ -145,6 +190,16 @@ private:
     bool m_dirty = false;
     bool m_closing = false;
     bool m_testMode = false;
+    // Undo: the steps and cursor after the last typed key; an Enter right after joins that step
+    int m_typingSteps = -1;
+    int m_typingEnd = -1;
+    bool m_replayingKey = false;
+    bool m_lineEnded = false;
+    // The @mention being typed: the list, and where its "@" is (-1: none)
+    QCompleter *m_mention = nullptr;
+    int m_mentionStart = -1;
+    // The picture selected by the mouse press, kept selected by its release
+    QTextCursor m_clickedImage;
     // The From entry before "Other Address..." was picked (back to it on Cancel)
     int m_fromBefore = 0;
 
@@ -155,6 +210,9 @@ private:
     RecipientEdit *m_cc;
     RecipientEdit *m_bcc;
     QLabel *m_bccLabel;
+    // Outlook's Reply To (Options > Show Reply To)
+    RecipientEdit *m_replyTo;
+    QLabel *m_replyToLabel;
     QLineEdit *m_subject;
     QListWidget *m_attachmentList;
     KPIMTextEdit::RichTextComposer *m_editor;
@@ -170,6 +228,7 @@ private:
     KToggleAction *m_high;
     KToggleAction *m_low;
     KToggleAction *m_showBcc;
+    KToggleAction *m_showReplyTo;
     KActionMenu *m_signatureMenu;
     // Options (docs/PHASE9.md)
     KToggleAction *m_readReceipt;
@@ -187,6 +246,10 @@ private:
     QString m_quoteHtml;
     QString m_quoteText;
     qint64 m_quoteSource = 0;
+    // Edit as New: the original whose text fills the editor once its body is here
+    qint64 m_asNewSource = 0;
+    // The quote with each line prefixed (Settings > Reply and Forward)
+    bool m_quotePrefixed = false;
 
     // Attachments in the list: ours (files, or on the draft already) and, for a forward, the
     // original's that Exchange copies (by name; removing one drops it from the draft)

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "store.h"
+#include "store_p.h"
 #include "graphmail_debug.h"
 
 #include <QJsonArray>
@@ -22,7 +23,6 @@ namespace
 constexpr QLatin1StringView messageColumns(
     "id, graph_id, folder, conversation, received, sent, sender_name, sender_address, subject, preview, to_list, cc_list, "
     "is_read, flag, importance, has_attachments, categories, internet_message_id, change_key, body_blob, body_type, body_size, pending_op, item_type, focused");
-constexpr QLatin1StringView listColumns("id, sender_name, sender_address, subject, preview, received, is_read, flag, importance, has_attachments, to_list, categories");
 
 QString encodeCategories(const QStringList &categories)
 {
@@ -74,24 +74,6 @@ MessageRow readMessage(const QSqlQuery &q)
     m.itemType = q.value(23).toInt();
     m.focused = q.value(24).toBool();
     return m;
-}
-
-ListRow readListRow(const QSqlQuery &q)
-{
-    ListRow row{q.value(0).toLongLong(),
-                q.value(1).toString(),
-                q.value(2).toString(),
-                q.value(3).toString(),
-                q.value(4).toString(),
-                q.value(5).toLongLong(),
-                q.value(6).toBool(),
-                q.value(7).toInt(),
-                q.value(8).toInt(),
-                q.value(9).toBool(),
-                q.value(10).toString(),
-                0,
-                categoriesFromJson(q.value(11).toString())};
-    return row;
 }
 
 FolderRow readFolder(const QSqlQuery &q)
@@ -240,12 +222,53 @@ QStringList schemaV5()
         QStringLiteral("CREATE INDEX messages_by_focus ON messages(folder, focused, received DESC, id DESC)"),
     };
 }
+
+// Schema 6 (docs/PHASE9B.md 9b.22): a mailing list's List-Unsubscribe header, kept with the body
+QStringList schemaV6()
+{
+    return {
+        QStringLiteral("ALTER TABLE messages ADD COLUMN list_unsubscribe TEXT"),
+        QStringLiteral("ALTER TABLE messages ADD COLUMN unsubscribe_one_click INTEGER NOT NULL DEFAULT 0"),
+    };
+}
+
+// Schema 7 (docs/PHASE9B.md 9b.12): whether the sender asked for a read receipt, kept with the body
+QStringList schemaV7()
+{
+    return {QStringLiteral("ALTER TABLE messages ADD COLUMN read_receipt INTEGER")};
+}
 }
 
 QList<QStringList> Store::migrations()
 {
-    return {schemaV1(), schemaV2(), schemaV3(), schemaV4(), schemaV5()};
+    return {schemaV1(), schemaV2(), schemaV3(), schemaV4(), schemaV5(), schemaV6(), schemaV7()};
 }
+
+// Shared with storeextra.cpp (store_p.h)
+namespace StoreRows
+{
+const QLatin1StringView listColumns("id, sender_name, sender_address, subject, preview, received, is_read, flag, importance, has_attachments, to_list, categories");
+
+ListRow readListRow(const QSqlQuery &q)
+{
+    ListRow row{q.value(0).toLongLong(),
+                q.value(1).toString(),
+                q.value(2).toString(),
+                q.value(3).toString(),
+                q.value(4).toString(),
+                q.value(5).toLongLong(),
+                q.value(6).toBool(),
+                q.value(7).toInt(),
+                q.value(8).toInt(),
+                q.value(9).toBool(),
+                q.value(10).toString(),
+                0,
+                categoriesFromJson(q.value(11).toString())};
+    return row;
+}
+}
+using StoreRows::listColumns;
+using StoreRows::readListRow;
 
 Store::Store() = default;
 
@@ -685,6 +708,50 @@ bool Store::setBodyText(qint64 message, const QString &bodyText)
     return q.exec() || fail(QStringLiteral("setBodyText"), q.lastError().text());
 }
 
+bool Store::setUnsubscribe(qint64 message, const QString &header, bool oneClick)
+{
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("UPDATE messages SET list_unsubscribe = ?, unsubscribe_one_click = ? WHERE id = ?"));
+    q.addBindValue(header.isNull() ? QString(QLatin1String("")) : header);
+    q.addBindValue(oneClick ? 1 : 0);
+    q.addBindValue(message);
+    return q.exec() || fail(QStringLiteral("setUnsubscribe"), q.lastError().text());
+}
+
+bool Store::setReadReceiptRequested(qint64 message, bool requested)
+{
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("UPDATE messages SET read_receipt = ? WHERE id = ?"));
+    q.addBindValue(requested ? 1 : 0);
+    q.addBindValue(message);
+    return q.exec() || fail(QStringLiteral("setReadReceiptRequested"), q.lastError().text());
+}
+
+std::optional<bool> Store::readReceiptRequested(qint64 message) const
+{
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT read_receipt FROM messages WHERE id = ?"));
+    q.addBindValue(message);
+    if (!q.exec() || !q.next() || q.value(0).isNull()) {
+        return std::nullopt;
+    }
+    return q.value(0).toInt() != 0;
+}
+
+QString Store::unsubscribe(qint64 message, bool *oneClick) const
+{
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT list_unsubscribe, unsubscribe_one_click FROM messages WHERE id = ?"));
+    q.addBindValue(message);
+    if (!q.exec() || !q.next()) {
+        return {};
+    }
+    if (oneClick) {
+        *oneClick = q.value(1).toInt() != 0;
+    }
+    return q.value(0).isNull() ? QString() : q.value(0).toString();
+}
+
 QHash<QString, qint64> Store::messageIdsByGraphIds(const QStringList &graphIds) const
 {
     QHash<QString, qint64> ids;
@@ -901,6 +968,36 @@ QHash<qint64, int> Store::unreadCounts() const
     return counts;
 }
 
+QList<qint64> Store::messagesBefore(qint64 folder, qint64 beforeMs) const
+{
+    QList<qint64> ids;
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT id FROM messages WHERE folder = ? AND received > 0 AND received < ? AND flag != 1 ORDER BY received, id"));
+    q.addBindValue(folder);
+    q.addBindValue(beforeMs);
+    if (q.exec()) {
+        while (q.next()) {
+            ids.append(q.value(0).toLongLong());
+        }
+    }
+    return ids;
+}
+
+QList<qint64> Store::messagesFrom(qint64 folder, const QString &address) const
+{
+    QList<qint64> ids;
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT id FROM messages WHERE folder = ? AND lower(sender_address) = ? ORDER BY received DESC, id DESC"));
+    q.addBindValue(folder);
+    q.addBindValue(address.trimmed().toLower());
+    if (q.exec()) {
+        while (q.next()) {
+            ids.append(q.value(0).toLongLong());
+        }
+    }
+    return ids;
+}
+
 QList<qint64> Store::conversation(const QString &conversationId) const
 {
     QList<qint64> ids;
@@ -913,6 +1010,33 @@ QList<qint64> Store::conversation(const QString &conversationId) const
         }
     }
     return ids;
+}
+
+QList<Store::ConversationMessage> Store::conversationMessages(const QStringList &conversations, const QSet<qint64> &skipFolders) const
+{
+    QList<ConversationMessage> result;
+    if (conversations.isEmpty()) {
+        return result;
+    }
+    QStringList marks;
+    marks.reserve(conversations.size());
+    for (qsizetype i = 0; i < conversations.size(); ++i) {
+        marks.append(QStringLiteral("?"));
+    }
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT id, folder, pending_op FROM messages WHERE conversation IN (%1)").arg(marks.join(QLatin1Char(','))));
+    for (const QString &c : conversations) {
+        q.addBindValue(c);
+    }
+    if (q.exec()) {
+        while (q.next()) {
+            const qint64 folder = q.value(1).toLongLong();
+            if (!skipFolders.contains(folder)) {
+                result.append({q.value(0).toLongLong(), folder, q.value(2).toLongLong() != 0});
+            }
+        }
+    }
+    return result;
 }
 
 int Store::generation(qint64 folder) const

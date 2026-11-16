@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "calendarviews.h"
+#include "calendaroptions.h"
 
 #include <KLocalizedString>
 
@@ -34,6 +35,15 @@ QString timeFormat()
 {
     // The C locale has no sensible short time: 24 hours as in the rest of the app
     return QLocale().name() == QLatin1String("C") ? QStringLiteral("HH:mm") : QLocale().timeFormat(QLocale::ShortFormat);
+}
+
+// The selected time without an event (Outlook's blue): the selection colour, light enough for the
+// hour lines to show through
+QColor selectionColor(const QPalette &palette)
+{
+    QColor colour = palette.color(QPalette::Highlight);
+    colour.setAlpha(110);
+    return colour;
 }
 
 // The block's fill: a tint of the calendar's colour on the background, paler while not
@@ -208,6 +218,13 @@ protected:
             p.setPen(pal.color(QPalette::Mid));
         }
         p.drawLine(0, height() - 1, width, height() - 1);
+        // A day selected in the all-day strip
+        if (m_view->m_slot && m_view->m_slot->allDay) {
+            const qint64 col = m_view->m_first.daysTo(m_view->m_slot->start.date());
+            if (col >= 0 && col < m_view->days()) {
+                p.fillRect(QRectF(m_view->columnX(int(col), width) + 1, dayHeader, m_view->columnWidth(width) - 1, height() - dayHeader - 1), selectionColor(pal));
+            }
+        }
         for (const Span &s : std::as_const(m_spans)) {
             const int fromCol = int(m_view->m_first.daysTo(s.from));
             const int toCol = int(m_view->m_first.daysTo(s.to));
@@ -221,6 +238,19 @@ protected:
     void mousePressEvent(QMouseEvent *event) override
     {
         m_view->m_selected = hit(event->position());
+        Q_EMIT m_view->selectionChanged();
+        m_view->m_slot.reset();
+        // An empty spot below the day names: the whole day
+        if (!m_view->m_selected && event->position().y() >= dayHeader) {
+            const int width = this->width();
+            for (int d = 0; d < m_view->days(); ++d) {
+                const qreal x = m_view->columnX(d, width);
+                if (event->position().x() >= x && event->position().x() < x + m_view->columnWidth(width)) {
+                    const QDate day = m_view->m_first.addDays(d);
+                    m_view->m_slot = Slot{QDateTime(day, QTime(0, 0)), QDateTime(day.addDays(1), QTime(0, 0)), true};
+                }
+            }
+        }
         m_view->repaintAll();
     }
 
@@ -248,8 +278,23 @@ protected:
     {
         if (const std::optional<DisplayEvent> e = hit(event->pos())) {
             m_view->m_selected = e;
-            update();
+            Q_EMIT m_view->selectionChanged();
+            m_view->m_slot.reset();
+            m_view->repaintAll();
             Q_EMIT m_view->eventMenuRequested(*e, event->globalPos());
+            return;
+        }
+        // An empty day in the all-day strip: selected, then its menu
+        const int width = this->width();
+        for (int d = 0; d < m_view->days(); ++d) {
+            const qreal x = m_view->columnX(d, width);
+            if (event->pos().x() >= x && event->pos().x() < x + m_view->columnWidth(width)) {
+                const QDate day = m_view->m_first.addDays(d);
+                m_view->m_selected.reset();
+                m_view->m_slot = Slot{QDateTime(day, QTime(0, 0)), QDateTime(day.addDays(1), QTime(0, 0)), true};
+                m_view->repaintAll();
+                Q_EMIT m_view->slotMenuRequested(event->globalPos());
+            }
         }
     }
 
@@ -286,6 +331,8 @@ public:
         , m_view(view)
     {
         setFixedHeight(24 * hourHeight + 1);
+        // Enter and typing on a selected time
+        setFocusPolicy(Qt::ClickFocus);
         // The red line for now moves on
         auto *timer = new QTimer(this);
         timer->setInterval(60 * 1000);
@@ -392,6 +439,16 @@ protected:
             const qreal x = d == m_view->days() ? width - 1 : m_view->columnX(d, width);
             p.drawLine(QPointF(x, 0), QPointF(x, height()));
         }
+        // The selected time, below the events
+        if (m_view->m_slot && !m_view->m_slot->allDay) {
+            const qint64 col = m_view->m_first.daysTo(m_view->m_slot->start.date());
+            if (col >= 0 && col < m_view->days()) {
+                const QDateTime dayStart(m_view->m_slot->start.date(), QTime(0, 0));
+                const qreal top = dayStart.secsTo(m_view->m_slot->start) / 3600.0 * hourHeight;
+                const qreal bottom = std::min<qint64>(24 * 3600, dayStart.secsTo(m_view->m_slot->end)) / 3600.0 * hourHeight;
+                p.fillRect(QRectF(m_view->columnX(int(col), width) + 1, top + 1, m_view->columnWidth(width) - 1, bottom - top - 1), selectionColor(pal));
+            }
+        }
         for (const auto &placed : std::as_const(m_placed)) {
             const bool selected = m_view->m_selected && m_view->m_selected->id == placed.second.id && m_view->m_selected->mailboxKey == placed.second.mailboxKey;
             drawEventBlock(p, placed.first, placed.second, selected, pal, placed.first.height() >= hourHeight * 0.9);
@@ -411,15 +468,71 @@ protected:
 
     void mousePressEvent(QMouseEvent *event) override
     {
+        setFocus(Qt::MouseFocusReason);
         m_view->m_selected = hit(event->position());
+        Q_EMIT m_view->selectionChanged();
+        m_anchor.reset();
+        m_collapse.reset();
+        const std::optional<QPair<int, int>> at = m_view->m_selected ? std::nullopt : halfHourAt(event->position());
+        // Inside the selection: it stays for a double click or a right click; a single click
+        // narrows it to the half hour clicked once the double click time is over
+        if (at && inSelection(*at)) {
+            if (event->button() == Qt::LeftButton) {
+                m_collapse = at;
+                QTimer::singleShot(QApplication::doubleClickInterval(), this, [this] {
+                    if (m_collapse) {
+                        selectHalfHours(m_collapse->first, m_collapse->second, m_collapse->second);
+                        m_collapse.reset();
+                        update();
+                    }
+                });
+            }
+            return;
+        }
+        m_view->m_slot.reset();
+        // An empty spot: its half hour, a drag makes it longer
+        if (at) {
+            m_anchor = at;
+            selectHalfHours(at->first, at->second, at->second);
+        }
         update();
         m_view->m_header->update();
+    }
+
+    void mouseMoveEvent(QMouseEvent *event) override
+    {
+        if (!(event->buttons() & Qt::LeftButton)) {
+            return;
+        }
+        // A drag that starts inside the selection makes a new one from there
+        if (!m_anchor && m_collapse) {
+            m_anchor = m_collapse;
+            m_collapse.reset();
+        }
+        if (!m_anchor) {
+            return;
+        }
+        // Up or down within the day the drag started in
+        const int half = std::clamp(int(event->position().y() / (hourHeight / 2.0)), 0, 47);
+        selectHalfHours(m_anchor->first, std::min(half, m_anchor->second), std::max(half, m_anchor->second));
+        update();
+    }
+
+    void mouseReleaseEvent(QMouseEvent *) override
+    {
+        m_anchor.reset();
     }
 
     void mouseDoubleClickEvent(QMouseEvent *event) override
     {
         if (const std::optional<DisplayEvent> e = hit(event->position())) {
             Q_EMIT m_view->eventActivated(*e);
+            return;
+        }
+        // Inside the selection: that whole time, as Outlook does
+        m_collapse.reset();
+        if (const std::optional<QPair<int, int>> at = halfHourAt(event->position()); at && inSelection(*at)) {
+            Q_EMIT m_view->newEventRequested(m_view->m_slot->start, m_view->m_slot->end, false);
             return;
         }
         // A new event in the half hour clicked
@@ -438,12 +551,57 @@ protected:
     {
         if (const std::optional<DisplayEvent> e = hit(event->pos())) {
             m_view->m_selected = e;
+            Q_EMIT m_view->selectionChanged();
+            m_view->m_slot.reset();
             update();
             Q_EMIT m_view->eventMenuRequested(*e, event->globalPos());
+            return;
         }
+        // Empty time: selected (unless inside the selection already), then its menu
+        const std::optional<QPair<int, int>> at = halfHourAt(event->pos());
+        if (!at) {
+            return;
+        }
+        if (!inSelection(*at)) {
+            m_view->m_selected.reset();
+            selectHalfHours(at->first, at->second, at->second);
+        }
+        m_collapse.reset();
+        update();
+        m_view->m_header->update();
+        Q_EMIT m_view->slotMenuRequested(event->globalPos());
+    }
+
+    void keyPressEvent(QKeyEvent *event) override
+    {
+        const std::optional<CalendarView::Slot> slot = m_view->m_slot;
+        if (!slot || slot->allDay) {
+            QWidget::keyPressEvent(event);
+            return;
+        }
+        if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+            Q_EMIT m_view->newEventRequested(slot->start, slot->end, false);
+            return;
+        }
+        // Typing starts a new event with the text as its title (Outlook types in place)
+        if (const QString text = event->text(); !text.isEmpty() && text.at(0).isPrint() && !(event->modifiers() & (Qt::ControlModifier | Qt::AltModifier))) {
+            Q_EMIT m_view->newEventTyped(slot->start, slot->end, false, text);
+            return;
+        }
+        QWidget::keyPressEvent(event);
     }
 
 private:
+    // Whether a half hour lies in the selected time of this grid
+    bool inSelection(const QPair<int, int> &at) const
+    {
+        if (!m_view->m_slot || m_view->m_slot->allDay) {
+            return false;
+        }
+        const QDateTime moment(m_view->m_first.addDays(at.first), QTime(0, 0).addSecs(at.second * 1800));
+        return moment >= m_view->m_slot->start && moment < m_view->m_slot->end;
+    }
+
     std::optional<DisplayEvent> hit(const QPointF &pos) const
     {
         // The last drawn is on top
@@ -455,9 +613,40 @@ private:
         return std::nullopt;
     }
 
+    // The day column and the half hour (0..47) under a point
+    std::optional<QPair<int, int>> halfHourAt(const QPointF &pos) const
+    {
+        const int width = this->width();
+        for (int d = 0; d < m_view->days(); ++d) {
+            const qreal x = m_view->columnX(d, width);
+            if (pos.x() >= x && pos.x() < x + m_view->columnWidth(width)) {
+                return QPair<int, int>{d, std::clamp(int(pos.y() / (hourHeight / 2.0)), 0, 47)};
+            }
+        }
+        return std::nullopt;
+    }
+
+    void selectHalfHours(int day, int from, int to)
+    {
+        const QDate date = m_view->m_first.addDays(day);
+        const QDateTime start(date, QTime(0, 0).addSecs(from * 1800));
+        // The last half hour of the day ends at midnight
+        const QDateTime end = to == 47 ? QDateTime(date.addDays(1), QTime(0, 0)) : QDateTime(date, QTime(0, 0).addSecs((to + 1) * 1800));
+        m_view->m_slot = Slot{start, end, false};
+    }
+
     TimeGridView *m_view;
     QList<QPair<QRectF, DisplayEvent>> m_placed;
+    // Where a drag selection started: day column and half hour
+    std::optional<QPair<int, int>> m_anchor;
+    // A click inside the selection, narrowed to it unless a double click follows
+    std::optional<QPair<int, int>> m_collapse;
 };
+
+QWidget *TimeGridView::gridForTests() const
+{
+    return m_grid;
+}
 
 TimeGridView::TimeGridView(QWidget *parent)
     : CalendarView(parent)
@@ -636,12 +825,18 @@ namespace
 constexpr int weekColumn = 30;
 }
 
+int MonthView::weeks() const
+{
+    // Six for a month; a span chosen in the date picker shows its own whole weeks
+    return m_first.isValid() && m_last.isValid() ? std::clamp(int(m_first.daysTo(m_last) + 1 + 6) / 7, 1, 6) : 6;
+}
+
 QRectF MonthView::cellRect(int index) const
 {
     const qreal top = dayHeader / 1.5;
     const qreal left = m_weekNumbers ? weekColumn : 0;
     const qreal w = (width() - left) / 7.0;
-    const qreal h = (height() - top) / 6.0;
+    const qreal h = (height() - top) / std::max(1, weeks());
     return {left + (index % 7) * w, top + (index / 7) * h, w, h};
 }
 
@@ -660,21 +855,24 @@ void MonthView::paintEvent(QPaintEvent *)
         p.setPen(pal.color(QPalette::WindowText));
         p.drawText(QRectF(cell.left() + 6, 0, cell.width() - 8, dayHeader / 1.5), Qt::AlignLeft | Qt::AlignVCenter, QLocale().standaloneDayName(day.dayOfWeek(), QLocale::LongFormat));
     }
-    // ISO week numbers, as Outlook's (the week of the row's Thursday)
+    // Week numbers, counted as chosen in the calendar options
     if (m_weekNumbers) {
         p.setPen(pal.color(QPalette::PlaceholderText));
-        for (int row = 0; row < 6; ++row) {
+        for (int row = 0; row < weeks(); ++row) {
             const QRectF cell = cellRect(row * 7);
             p.drawText(QRectF(0, cell.top() + 2, weekColumn - 4, cell.height()), Qt::AlignRight | Qt::AlignTop,
-                       QString::number(m_first.addDays(row * 7 + (4 - m_first.dayOfWeek() + 7) % 7).weekNumber()));
+                       QString::number(CalendarOptions::weekNumber(m_first.addDays(row * 7))));
         }
     }
     const QFontMetricsF fm(font);
     const qreal line = fm.height() + 3;
-    for (int i = 0; i < 42; ++i) {
+    for (int i = 0; i < weeks() * 7; ++i) {
         const QDate day = m_first.addDays(i);
         const QRectF cell = cellRect(i);
         p.fillRect(cell, day.month() == m_month ? pal.color(QPalette::Base) : pal.color(QPalette::AlternateBase));
+        if (m_slot && m_slot->start.date() == day) {
+            p.fillRect(cell, selectionColor(pal));
+        }
         p.setPen(pal.color(QPalette::Mid));
         p.drawRect(cell);
         QFont number = font;
@@ -745,7 +943,7 @@ std::optional<DisplayEvent> MonthView::eventAt(const QPointF &pos) const
 
 QDate MonthView::dayAt(const QPointF &pos) const
 {
-    for (int i = 0; i < 42; ++i) {
+    for (int i = 0; i < weeks() * 7; ++i) {
         if (cellRect(i).contains(pos)) {
             return m_first.addDays(i);
         }
@@ -762,6 +960,12 @@ void MonthView::mousePressEvent(QMouseEvent *event)
         }
     }
     m_selected = eventAt(event->position());
+    Q_EMIT selectionChanged();
+    m_slot.reset();
+    // An empty spot: the day, for New Event (at nine, as a double click makes it)
+    if (const QDate day = dayAt(event->position()); !m_selected && day.isValid()) {
+        m_slot = Slot{QDateTime(day, QTime(9, 0)), QDateTime(day, QTime(9, 30)), false};
+    }
     update();
 }
 
@@ -781,8 +985,18 @@ void MonthView::contextMenuEvent(QContextMenuEvent *event)
 {
     if (const std::optional<DisplayEvent> e = eventAt(event->pos())) {
         m_selected = e;
+        Q_EMIT selectionChanged();
+        m_slot.reset();
         update();
         Q_EMIT eventMenuRequested(*e, event->globalPos());
+        return;
+    }
+    // An empty day: selected, then its menu
+    if (const QDate day = dayAt(event->pos()); day.isValid()) {
+        m_selected.reset();
+        m_slot = Slot{QDateTime(day, QTime(9, 0)), QDateTime(day, QTime(9, 30)), false};
+        update();
+        Q_EMIT slotMenuRequested(event->globalPos());
     }
 }
 
@@ -810,6 +1024,7 @@ AgendaView::AgendaView(QWidget *parent)
     });
     connect(m_tree, &QTreeWidget::currentItemChanged, this, [this, eventOf](QTreeWidgetItem *item) {
         m_selected = eventOf(item);
+        Q_EMIT selectionChanged();
     });
     m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_tree, &QWidget::customContextMenuRequested, this, [this, eventOf](const QPoint &pos) {

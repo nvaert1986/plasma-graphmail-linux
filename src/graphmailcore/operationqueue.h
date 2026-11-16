@@ -23,7 +23,9 @@ class OperationQueue : public QObject
 public:
     explicit OperationQueue(SyncContext *context, QObject *parent = nullptr);
 
-    bool markRead(qint64 message, bool read);
+    // receipt false: Exchange sends no read receipt (PR_READ_RECEIPT_REQUESTED cleared in the
+    // same PATCH, docs/PHASE9B.md 9b.12)
+    bool markRead(qint64 message, bool read, bool receipt = true);
     // 0 not flagged, 1 flagged, 2 complete
     // With dates (milliseconds, 0 = none): Outlook's Today, Tomorrow, This Week, Next Week, Custom
     bool setFlag(qint64 message, int flag, qint64 start = 0, qint64 due = 0);

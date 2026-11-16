@@ -7,6 +7,7 @@
 #include <QtEndian>
 
 #include <algorithm>
+#include <vector>
 
 namespace GraphMail::Cfb
 {
@@ -219,20 +220,41 @@ private:
         return out;
     }
 
-    // The siblings of a storage (a binary tree from its Child ID), in tree order
+    // The siblings of a storage (a binary tree from its Child ID), in tree order. Walked with an
+    // own stack: a crafted file can chain thousands of siblings, recursion would overflow the
+    // call stack. Only a storage's children recurse, and that depth is limited.
     bool children(quint32 id, Entry &parent, QSet<quint32> &visited, int depth)
     {
-        if (id == noStream) {
-            return true;
-        }
-        if (depth > maxDepth || qint64(id + 1) * dirEntrySize > m_dir.size() || visited.contains(id)) {
+        if (depth > maxDepth) {
             return fail(m_error, QStringLiteral("damaged directory"));
         }
-        visited.insert(id);
-        const char *e = m_dir.constData() + qint64(id) * dirEntrySize;
-        if (!children(u32(e + 68), parent, visited, depth)) {
-            return false;
+        std::vector<quint32> stack;
+        quint32 node = id;
+        while (node != noStream || !stack.empty()) {
+            // Down the left siblings
+            while (node != noStream) {
+                if (qint64(node + 1) * dirEntrySize > m_dir.size() || visited.contains(node)) {
+                    return fail(m_error, QStringLiteral("damaged directory"));
+                }
+                visited.insert(node);
+                stack.push_back(node);
+                node = u32(m_dir.constData() + qint64(node) * dirEntrySize + 68);
+            }
+            node = stack.back();
+            stack.pop_back();
+            const char *e = m_dir.constData() + qint64(node) * dirEntrySize;
+            if (!addEntry(e, parent, visited, depth)) {
+                return false;
+            }
+            // Then the right sibling's subtree
+            node = u32(e + 72);
         }
+        return true;
+    }
+
+    // One directory entry: a storage with its children, or a stream with its data
+    bool addEntry(const char *e, Entry &parent, QSet<quint32> &visited, int depth)
+    {
         const int nameBytes = std::min<int>(u16(e + 64), 64);
         Entry entry;
         entry.name = QString::fromUtf16(reinterpret_cast<const char16_t *>(e), std::max(0, nameBytes / 2 - 1));
@@ -244,9 +266,15 @@ private:
             }
         } else if (type == typeStream) {
             const quint32 start = u32(e + 116);
-            const qint64 size = qint64(m_major == 3 ? u32(e + 120) : u64(e + 120));
+            const quint64 declared = m_major == 3 ? u32(e + 120) : u64(e + 120);
+            // A stream cannot be larger than the file holding it (a version 4 size is 64 bits:
+            // compared whole, not cut to 32 bits, which would send a huge one to the mini FAT)
+            if (declared > quint64(m_file.size())) {
+                return fail(m_error, QStringLiteral("stream larger than the file"));
+            }
+            const qint64 size = qint64(declared);
             if (size > 0) {
-                const std::optional<QByteArray> data = quint32(size) < m_cutoff ? chain(start, m_miniFat, true, size) : chain(start, m_fat, false, size);
+                const std::optional<QByteArray> data = size < qint64(m_cutoff) ? chain(start, m_miniFat, true, size) : chain(start, m_fat, false, size);
                 if (!data) {
                     return false;
                 }
@@ -256,7 +284,7 @@ private:
             return fail(m_error, QStringLiteral("directory entry of type %1 in the tree").arg(type));
         }
         parent.children.append(entry);
-        return children(u32(e + 72), parent, visited, depth);
+        return true;
     }
 
     const QByteArray &m_file;

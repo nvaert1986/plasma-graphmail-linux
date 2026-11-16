@@ -24,6 +24,8 @@ private Q_SLOTS:
         QTest::newRow("shared mailbox, case folded") << host + QStringLiteral("/v1.0/users/Shared@Example.com/mailFolders") << QStringLiteral("acc|shared@example.com");
         QTest::newRow("calendar view") << host + QStringLiteral("/beta/me/calendarView/delta") << QStringLiteral("acc|me");
         QTest::newRow("to do") << host + QStringLiteral("/v1.0/me/todo/lists") << QStringLiteral("acc|me");
+        QTest::newRow("people counts against the mailbox") << host + QStringLiteral("/v1.0/me/people?$top=500") << QStringLiteral("acc|me");
+        QTest::newRow("a colleague's photo") << host + QStringLiteral("/v1.0/users/Colleague@Example.com/photos/96x96/$value") << QStringLiteral("acc|colleague@example.com");
         QTest::newRow("own OneDrive is not a mailbox") << host + QStringLiteral("/v1.0/me/drive/root") << QStringLiteral("acc");
         QTest::newRow("profile is not a mailbox") << host + QStringLiteral("/v1.0/me") << QStringLiteral("acc");
         QTest::newRow("drives") << host + QStringLiteral("/v1.0/drives/b!x/items/y") << QStringLiteral("acc");

@@ -55,6 +55,8 @@ public:
     // nullptr while the mailbox has no cache yet
     Store *store(const QString &key) const;
     BlobStore *blobs(const QString &key) const;
+    // An inline picture by its Content-ID from any mailbox's cache (empty when none has it)
+    QByteArray inlinePicture(const QString &contentId) const;
     // The account Graph Mail starts in (see reload())
     QString primaryAccount() const;
     // The mailbox's photo (docs/PHASE9.md), null while unknown or when it has none

@@ -717,6 +717,27 @@ void RulesDialog::remove(const QJsonObject &rule, bool ask)
     call(QStringLiteral("messageRuleDelete"), {{QStringLiteral("id"), rule.value(QLatin1String("id"))}});
 }
 
+void RulesDialog::createFrom(const QJsonObject &draft)
+{
+    // After the list is in: a new rule goes after the others
+    auto connection = std::make_shared<QMetaObject::Connection>();
+    *connection = connect(this, &RulesDialog::loadedForTests, this, [this, draft, connection] {
+        disconnect(*connection);
+        RuleEditor editor(m_mailboxes, m_folders, m_categories, m_mailbox->currentData().toString(), draft, this);
+        editor.setWindowTitle(i18nc("@title:window", "Create Rule"));
+        if (editor.exec() != QDialog::Accepted) {
+            return;
+        }
+        QJsonObject out = editor.rule();
+        int last = 0;
+        for (const QJsonValue &v : std::as_const(m_rules)) {
+            last = std::max(last, v.toObject().value(QLatin1String("sequence")).toInt());
+        }
+        out.insert(QStringLiteral("sequence"), last + 1);
+        call(QStringLiteral("messageRuleCreate"), {{QStringLiteral("rule"), out}});
+    });
+}
+
 RuleEditor *RulesDialog::editorForTests(const QString &name, const QString &subject)
 {
     auto *editor = new RuleEditor(m_mailboxes, m_folders, m_categories, m_mailbox->currentData().toString(), {}, this);

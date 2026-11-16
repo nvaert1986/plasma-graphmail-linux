@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<gui name="plasma-graphmail-linux-calendar" version="6"
+<gui name="plasma-graphmail-linux-calendar" version="10"
      xmlns="http://www.kde.org/standards/kxmlgui/1.0"
      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
      xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0 http://www.kde.org/standards/kxmlgui/1.0/kxmlgui.xsd">
   <MenuBar>
+    <Menu name="file">
+      <Action name="import_ics"/>
+      <Action name="export_ics"/>
+    </Menu>
     <Menu name="event">
       <text>&amp;Event</text>
       <Action name="new_event"/>
+      <Action name="new_meeting"/>
+      <Action name="join_meeting"/>
       <Action name="delete_event"/>
       <Separator/>
       <Action name="open_colleague_calendar"/>
@@ -34,12 +40,15 @@
       <Action name="go_tasks"/>
     </Menu>
     <Menu name="settings">
+      <Action name="calendar_options" append="configure_merge"/>
       <Action name="delete_request_after_responding" append="configure_merge"/>
     </Menu>
   </MenuBar>
   <ToolBar name="mainToolBar" iconText="textbesideicon">
     <text>Main Toolbar</text>
     <Action name="new_event"/>
+    <Action name="new_meeting"/>
+    <Action name="join_meeting"/>
     <Action name="open_colleague_calendar"/>
     <Separator/>
     <Action name="go_today"/>

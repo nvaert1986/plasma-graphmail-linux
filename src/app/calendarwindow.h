@@ -5,6 +5,7 @@
 
 #include "calendardata.h"
 #include "mailboxsettings.h"
+#include "outgoing.h"
 
 #include <KXmlGuiWindow>
 
@@ -15,7 +16,7 @@
 #include <QTimer>
 
 class KConfigGroup;
-class KDatePicker;
+class QCalendarWidget;
 class QLabel;
 class QStackedWidget;
 class QTreeWidget;
@@ -25,6 +26,7 @@ namespace GraphMail
 
 class AgendaView;
 class CalendarSharingDialog;
+class EventDialog;
 class CategoryList;
 class CalendarView;
 class DaemonClient;
@@ -40,6 +42,14 @@ class CalendarWindow : public KXmlGuiWindow
     Q_OBJECT
 
 public:
+    // File > Export Calendar; a file name skips the dialogs (tests). The file written, or empty
+    QString exportCalendar(const QString &testFile = {});
+    // Tests: select a time in the view shown, as a click and drag does
+    void selectSlotForTests(const QDateTime &start, const QDateTime &end);
+    // Tests: drag over a time in the week grid, then click or double click in it; logged
+    void mouseForTests(const QString &script);
+    // Drags in the date picker from one day of the month shown to another; gives the range shown
+    QString pickerDragForTests(int fromDay, int toDay);
     enum class Mode { Day, WorkWeek, Week, Month, Agenda };
 
     CalendarWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *parent = nullptr);
@@ -58,6 +68,10 @@ public:
     void openEvent(const QString &mailboxKey, qint64 event);
     // Tests: a new event in the default calendar, filled in and saved
     QWidget *newEventForTests(const QDateTime &start, const QDateTime &end);
+    // Reply with Meeting: a new meeting at the next half hour, in a calendar of mailboxKey (the
+    // message's mailbox) when it has a writable one, else the first writable calendar
+    QWidget *newMeeting(const QString &mailboxKey, const QString &subject, const QList<OutgoingRecipient> &required, const QList<OutgoingRecipient> &optional,
+                        const QString &description);
     // Tests: answer every question the way given (series or occurrence, a message for a
     // cancellation or response, confirmations yes); only events marked [TEST Graph Mail]
     void setTestAnswers(bool series, const QString &comment);
@@ -84,17 +98,30 @@ Q_SIGNALS:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     void setupActions();
     void fillCalendarList();
     void refresh();
     void step(int direction);
-    // The days the current mode shows around m_date
+    // The days the current mode shows around m_date (or the span picked in the date picker)
     QPair<QDate, QDate> range() const;
+    // Outlook's date picker: days dragged over are shown together, up to 14 as day columns,
+    // longer (up to six weeks) as weeks; a single day, Today or a view ends it
+    void showSpan(QDate from, QDate to);
+    void endSpan();
+    void markSpan();
+    // The day under a point of the date picker's grid (invalid on the header or outside)
+    QDate pickerDateAt(const QPoint &pos) const;
     CalendarView *currentView() const;
 
-    void newEvent(const QDateTime &start, const QDateTime &end, bool allDay);
+    void newEvent(const QDateTime &start, const QDateTime &end, bool allDay, const QString &subject = {}, bool meeting = false);
+    // The selected time of the view, else the next full hour of the day shown
+    QPair<QDateTime, QDateTime> newEventTime(bool *allDay) const;
+    void slotMenu(const QPoint &globalPos);
+    // The dialog opened by typing on a selected time: more typing goes into its title
+    QPointer<EventDialog> m_typedDialog;
     void activate(const DisplayEvent &event);
     void showMenu(const DisplayEvent &event, const QPoint &globalPos);
     // Asks "this occurrence or the series" for a recurring event; empty when cancelled
@@ -125,7 +152,12 @@ private:
     WorkingHours m_workingHours;
     bool m_scrolledToWork = false;
     QDate m_date;
-    KDatePicker *m_picker;
+    QCalendarWidget *m_picker;
+    std::optional<QPair<QDate, QDate>> m_span;
+    // A drag in the date picker: the day it started on
+    bool m_pickerPressed = false;
+    QDate m_pickAnchor;
+    QList<QDate> m_marked;
     QTreeWidget *m_calendarList;
     QLabel *m_title;
     QStackedWidget *m_stack;

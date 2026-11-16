@@ -60,6 +60,11 @@ struct Outgoing {
     QList<OutgoingRecipient> to;
     QList<OutgoingRecipient> cc;
     QList<OutgoingRecipient> bcc;
+    // Where answers go instead of the sender (Outlook's Reply To); empty: the sender
+    QList<OutgoingRecipient> replyTo;
+    // People @mentioned in the text (Outlook's mentions): Graph's beta mentions, added to the draft
+    // before the send (a PATCH of the draft ignores them, probed 2026-11-16)
+    QList<OutgoingRecipient> mentions;
     QString subject;
     QString body;
     bool html = true;
@@ -108,6 +113,8 @@ QJsonObject graphRecipient(const OutgoingRecipient &recipient);
 // once the part before it holds an address ("Doe, Jane <...>" stays one). Parts that are no
 // address go to `invalid`.
 QList<OutgoingRecipient> parseRecipients(const QString &text, QStringList *invalid = nullptr);
+// The parts of such a line as typed, untrimmed (parseRecipients' first step)
+QStringList splitRecipients(const QString &text);
 QString formatRecipient(const OutgoingRecipient &recipient);
 
 }

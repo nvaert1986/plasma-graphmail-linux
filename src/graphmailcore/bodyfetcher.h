@@ -46,6 +46,9 @@ private:
     void fetchAttachments(qint64 message, const QString &graphId, const std::function<void()> &done);
     void fetchAttachmentContent(qint64 message, const QString &graphId, const AttachmentRow &attachment, const std::function<void()> &done);
     void done(qint64 message, bool urgent);
+    // The List-Unsubscribe headers of Graph's internetMessageHeaders into the cache (schema 6)
+    void storeUnsubscribe(qint64 message, const QJsonObject &json);
+    void fetchHeaders(qint64 message, const QString &graphId, const std::function<void()> &done);
     qint64 now() const;
 
     SyncContext *m_ctx;

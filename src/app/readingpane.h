@@ -4,10 +4,13 @@
 #pragma once
 
 #include "eventdialog.h"
+#include "unsubscribe.h"
 
 #include <QHash>
+#include <QPointer>
 #include <QWidget>
 
+#include <functional>
 #include <memory>
 
 class QTemporaryDir;
@@ -40,10 +43,21 @@ public:
     ~ReadingPane() override;
 
     void showMessage(Store *store, BlobStore *blobs, qint64 message);
+    // Read receipts in Ask mode: whether the sender asked is not known yet (headers on their way);
+    // the message is marked read (or the question shown) once it is
+    void markReadWhenKnown();
+    // Remote pictures shown for this message (Load Images, or a trusted sender): printing and
+    // Save as PDF show them too
+    bool remoteAllowed() const;
     // The same message again (its body or inline images arrived)
     void reload();
     // Tests: the rendered body as PDF; the application quits when it is written
     bool printBodyToPdf(const QString &file);
+    // Tests: the page as Chromium has it now
+    void bodyHtmlForTests(const std::function<void(const QString &)> &done);
+    // Preview of an attachment (docs/PHASE9B.md 9b.25); the dialog once the content is there
+    void previewAttachment(qint64 attachment);
+    QWidget *lastPreview() const;
     // "Load Images" for the message on screen
     void loadImages();
     // The daemon stored (or failed to fetch) an attachment's content
@@ -52,6 +66,8 @@ public:
     void saveAllTo(const QString &folder);
     int pendingCount() const;
     void clear();
+    // View > Zoom In (1), Zoom Out (-1), Actual Size (0): the message's size, remembered
+    void zoom(int step);
     // The message's categories as labels in their colours (docs/PHASE9.md), under the subject
     void setCategoryLabels(const QList<QPair<QString, QColor>> &labels);
     // For meeting requests (Accept / Tentative / Decline) and .ics files (Add to Calendar)
@@ -65,6 +81,10 @@ Q_SIGNALS:
     void bodyNeeded(qint64 message);
     // An attachment's content is not in the cache yet
     void attachmentNeeded(qint64 attachment);
+    // Unsubscribe by mail: the window opens a composer for this mailto: link
+    void mailtoRequested(const QString &link);
+    // Print... from the message's right-click menu
+    void printRequested();
 
 private:
     class AvatarLabel;
@@ -91,6 +111,7 @@ private:
 
     struct Pending {
         bool open = false;
+        bool preview = false;
         QString savePath;
         // Save All: the name is chosen once the content is known (an attached mail gets .eml)
         QString saveFolder;
@@ -100,6 +121,15 @@ private:
     KMessageWidget *m_notice;
     // A meeting request or cancellation: the event's time, the answer buttons
     KMessageWidget *m_meeting;
+    // A mailing list's Unsubscribe (docs/PHASE9B.md 9b.22)
+    KMessageWidget *m_unsubscribeBar;
+    // The sender asked for a read receipt and the user is asked (docs/PHASE9B.md 9b.12)
+    KMessageWidget *m_receiptBar;
+    void showReceiptQuestion();
+    void answerReceipt(bool send);
+    Unsubscribe::Way m_unsubscribe;
+    void showUnsubscribe();
+    void unsubscribe();
     void showMeeting(const MessageRow &message);
     // sendMode: 0 send now, 1 with a comment, 2 no response, -1 ask with a menu
     void proposeNewTime(const QString &eventGraphId, const EventDialog::NewTime &time);
@@ -115,12 +145,14 @@ private:
     // Private copies of opened attachments; removed when the app quits
     std::unique_ptr<QTemporaryDir> m_tempDir;
     MailView *m_body;
+    QPointer<QWidget> m_lastPreview;
     Store *m_store = nullptr;
     BlobStore *m_blobs = nullptr;
     qint64 m_message = 0;
     QString m_sender;
     // "Load images" for the message on screen
     bool m_allowRemote = false;
+    bool m_markReadWhenKnown = false;
     // What the body view shows: body blob, inline images present, remote allowed; reload() skips
     // when nothing changed (the daemon answers every request, also when all was cached already)
     QString m_shown;

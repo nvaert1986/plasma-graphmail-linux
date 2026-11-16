@@ -29,6 +29,12 @@ public:
     qint64 message() const;
     QString mailboxKey() const;
 
+Q_SIGNALS:
+    // Reply with Meeting: the main window opens the meeting (it owns the calendar)
+    void replyWithMeetingRequested(const QString &mailboxKey, qint64 message);
+    // Unsubscribe by mail: the main window opens the composer
+    void mailtoRequested(const QString &link);
+
 private:
     void setupActions();
     void refresh();

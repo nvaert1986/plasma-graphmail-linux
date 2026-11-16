@@ -76,14 +76,16 @@ QString throttleKeyFor(const QString &scope, const QUrl &url, const QString &gra
         return scope;
     }
 
-    // Resources served by Exchange Online; anything else under /me (drive, people, ...) is not
+    // Resources served by Exchange Online; anything else under /me (drive, ...) is not. The People
+    // API and photos count against the mailbox too ("over its MailboxConcurrency limit" on /me/people)
     static const QSet<QString> outlook{
         QStringLiteral("messages"),      QStringLiteral("mailFolders"),    QStringLiteral("sendMail"),
         QStringLiteral("events"),        QStringLiteral("calendar"),       QStringLiteral("calendars"),
         QStringLiteral("calendarView"),  QStringLiteral("calendarGroups"), QStringLiteral("findMeetingTimes"),
         QStringLiteral("reminderView"),  QStringLiteral("contacts"),       QStringLiteral("contactFolders"),
         QStringLiteral("mailboxSettings"), QStringLiteral("outlook"),      QStringLiteral("todo"),
-        QStringLiteral("inferenceClassification"), QStringLiteral("getMailTips"),
+        QStringLiteral("inferenceClassification"), QStringLiteral("getMailTips"), QStringLiteral("people"),
+        QStringLiteral("photo"),         QStringLiteral("photos"),
     };
     // OData key syntax: mailFolders('inbox')
     const QString segment = parts.value(resource).section(QLatin1Char('('), 0, 0);

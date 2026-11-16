@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<gui name="plasma-graphmail-linux-contacts" version="2"
+<gui name="plasma-graphmail-linux-contacts" version="3"
      xmlns="http://www.kde.org/standards/kxmlgui/1.0"
      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
      xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0 http://www.kde.org/standards/kxmlgui/1.0/kxmlgui.xsd">
@@ -10,6 +10,10 @@
       <text>C&amp;ontact</text>
       <Action name="new_contact"/>
       <Action name="find_contact"/>
+    </Menu>
+    <Menu name="view">
+      <text>&amp;View</text>
+      <Action name="name_order"/>
     </Menu>
     <Menu name="go">
       <Action name="go_mail"/>

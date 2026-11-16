@@ -8,6 +8,7 @@
 #include <optional>
 
 #include "calendardata.h"
+#include "outgoing.h"
 
 #include <QDialog>
 #include <QTimer>
@@ -20,9 +21,12 @@ class QLineEdit;
 class QPushButton;
 class QTextEdit;
 class QTimeEdit;
+class QToolButton;
 
 namespace GraphMail
 {
+
+class TimeGridView;
 
 class AddressBook;
 class DaemonClient;
@@ -37,6 +41,13 @@ struct EventEditRequest {
     QDateTime start;
     QDateTime end;
     bool allDay = false;
+    // A new meeting filled in from a message (Reply with Meeting): subject, people, the text
+    QString subject;
+    QList<OutgoingRecipient> required;
+    QList<OutgoingRecipient> optional;
+    QString description;
+    // New Meeting: the attendees first, as Outlook opens a meeting request
+    bool meeting = false;
     // An existing one: what is opened (an occurrence, or the series master for the whole series)
     std::optional<DisplayEvent> event;
     bool series = false;
@@ -74,6 +85,10 @@ public:
     void applyTestEdit(const QString &title, int shiftMinutes);
     void setTestRoom(const QString &name, const QString &address);
     void setTestAllDay(bool allDay);
+    // Typing in the calendar faster than this dialog takes the keyboard: the title gets the rest
+    void typeIntoSubject(const QString &text);
+    // Tests: Time Zones on, with these zones; the times typed stay as they are
+    void setTestZones(const QByteArray &start, const QByteArray &end);
     // Tests: the calendar of this mailbox (its default one) for a new event
     void selectCalendarForTests(const QString &mailboxKey);
     void saveNow();
@@ -98,6 +113,12 @@ private:
     MailboxSet *m_mailboxes;
     DaemonClient *m_daemon;
     CalendarData *m_data;
+    // Outlook's day beside the form: that day's events, the event's time marked; a double click
+    // there moves the event to that half hour
+    TimeGridView *m_day = nullptr;
+    // Teams: the event's own link, or its series' (an ordinary occurrence has none)
+    QString m_joinUrl;
+    void updateDay();
     EventEditRequest m_request;
     QJsonObject m_original;
     QJsonObject m_recurrence;
@@ -113,12 +134,22 @@ private:
     QLabel *m_calendarLabel;
     QLineEdit *m_subject;
     RecipientEdit *m_required;
+    // Save, or Send while there are attendees (it is a meeting then: Exchange sends invitations)
+    void updateSaveLabel();
     RecipientEdit *m_optional;
     QPushButton *m_rooms;
     QDateEdit *m_startDate;
     QTimeEdit *m_startTime;
     QDateEdit *m_endDate;
     QTimeEdit *m_endTime;
+    // Outlook's Time Zones (docs/PHASE9B.md 9b.29): the start and end each in a zone of its own,
+    // the local one unless the user picks another (a flight, a meeting abroad)
+    QComboBox *m_startZone = nullptr;
+    QComboBox *m_endZone = nullptr;
+    QToolButton *m_zones = nullptr;
+    QTimeZone startZone() const;
+    QTimeZone endZone() const;
+    void showZones(bool on);
     QCheckBox *m_allDay;
     QComboBox *m_repeat;
     QLineEdit *m_location;

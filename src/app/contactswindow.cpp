@@ -9,14 +9,21 @@
 #include "contactdialog.h"
 #include "daemonclient.h"
 #include "mailboxset.h"
+#include "mimeexport.h"
 #include "store.h"
+#include "vcard.h"
 
 #include <KActionCollection>
+#include <KConfigGroup>
 #include <KLocalizedString>
 #include <KMessageBox>
+#include <KSelectAction>
+#include <KSharedConfig>
 #include <KStandardAction>
 
 #include <QHBoxLayout>
+#include <QDir>
+#include <QFile>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -29,9 +36,13 @@
 #include <QMenu>
 #include <QPushButton>
 #include <QSplitter>
+#include <QStandardPaths>
+#include <QTemporaryDir>
+#include <QUuid>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 
@@ -77,6 +88,28 @@ QString companyOf(const QJsonObject &o)
 {
     return text(o, "companyName").isEmpty() ? text(o, "department") : text(o, "companyName");
 }
+
+KConfigGroup contactsGroup()
+{
+    return KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("Contacts"));
+}
+}
+
+QString ContactsWindow::listName(const QJsonObject &o, NameOrder order)
+{
+    // Contacts have a middle name, people of the directory do not
+    const QString first = QStringList{text(o, "givenName"), text(o, "middleName")}.join(QLatin1Char(' ')).simplified();
+    const QString last = text(o, "surname").simplified();
+    if (order == NameOrder::DisplayName || (first.isEmpty() && last.isEmpty())) {
+        return text(o, "displayName");
+    }
+    if (first.isEmpty() || last.isEmpty()) {
+        return first + last;
+    }
+    if (order == NameOrder::LastFirst) {
+        return last + QStringLiteral(", ") + first;
+    }
+    return first + QLatin1Char(' ') + last;
 }
 
 ContactsWindow::ContactsWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *parent)
@@ -91,7 +124,8 @@ ContactsWindow::ContactsWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWid
     , m_message(new QPushButton(QIcon::fromTheme(QStringLiteral("mail-message-new")), i18nc("@action:button", "New Message"), this))
     , m_edit(new QPushButton(QIcon::fromTheme(QStringLiteral("document-edit")), i18nc("@action:button", "Edit"), this))
     , m_delete(new QPushButton(QIcon::fromTheme(QStringLiteral("edit-delete")), i18nc("@action:button", "Delete"), this))
-    , m_add(new QPushButton(QIcon::fromTheme(QStringLiteral("contact-new")), i18nc("@action:button", "Add to Contacts"), this))
+    , m_add(new QPushButton(QIcon::fromTheme(QStringLiteral("list-add-user"), QIcon::fromTheme(QStringLiteral("contact-new"))), i18nc("@action:button", "Add to Contacts"), this))
+    , m_forward(new QPushButton(QIcon::fromTheme(QStringLiteral("mail-forward")), i18nc("@action:button Outlook's Forward Contact, As a vCard", "Forward as vCard"), this))
 {
     setWindowTitle(i18nc("@title:window", "Contacts"));
     m_sources->setHeaderHidden(true);
@@ -115,6 +149,9 @@ ContactsWindow::ContactsWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWid
     connect(m_card, &QLabel::linkActivated, this, [this](const QString &link) {
         if (const std::optional<Person> p = current(); p && link.startsWith(QLatin1String("mailto:"))) {
             newMessage(*p);
+        } else if (link.startsWith(QLatin1String("person:"))) {
+            // A manager or report: their card, from the directory
+            searchDirectoryForTests(link.mid(7));
         }
     });
 
@@ -135,6 +172,7 @@ ContactsWindow::ContactsWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWid
     rightLayout->addLayout(header, 1);
     auto *buttons = new QHBoxLayout;
     buttons->addWidget(m_message);
+    buttons->addWidget(m_forward);
     buttons->addWidget(m_edit);
     buttons->addWidget(m_add);
     m_categorize = new QPushButton(QIcon::fromTheme(QStringLiteral("tag")), i18nc("@action:button", "Categorize"), this);
@@ -180,6 +218,7 @@ ContactsWindow::ContactsWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWid
         }
         const bool own = p && p->id != 0;
         m_message->setEnabled(p && !mailOf(p->json).isEmpty());
+        m_forward->setEnabled(p.has_value());
         m_edit->setVisible(own);
         m_delete->setVisible(own);
         m_categorize->setVisible(own);
@@ -210,6 +249,7 @@ ContactsWindow::ContactsWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWid
             addToContacts(*p);
         }
     });
+    connect(m_forward, &QPushButton::clicked, this, &ContactsWindow::forwardAsVCard);
     // The filter filters a folder; in the directory it searches (after a pause)
     m_searchTimer.setSingleShot(true);
     m_searchTimer.setInterval(400);
@@ -241,13 +281,15 @@ ContactsWindow::ContactsWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWid
     fillSources();
 }
 
+ContactsWindow::~ContactsWindow() = default;
+
 void ContactsWindow::setupActions()
 {
     KActionCollection *actions = actionCollection();
     QAction *add = actions->addAction(QStringLiteral("new_contact"));
     add->setText(i18nc("@action", "New Contact"));
     add->setIconText(i18nc("@action short toolbar text", "New"));
-    add->setIcon(QIcon::fromTheme(QStringLiteral("contact-new")));
+    add->setIcon(QIcon::fromTheme(QStringLiteral("list-add-user"), QIcon::fromTheme(QStringLiteral("contact-new"))));
     actions->setDefaultShortcut(add, QKeySequence(Qt::CTRL | Qt::Key_N));
     connect(add, &QAction::triggered, this, &ContactsWindow::newContact);
     QAction *search = actions->addAction(QStringLiteral("find_contact"));
@@ -257,6 +299,17 @@ void ContactsWindow::setupActions()
     connect(search, &QAction::triggered, this, [this] {
         m_filter->setFocus();
         m_filter->selectAll();
+    });
+    // Outlook's People option "Display names as": the list's names and their order
+    auto *order = new KSelectAction(i18nc("@action", "Name Order"), this);
+    actions->addAction(QStringLiteral("name_order"), order);
+    order->setItems({i18nc("@item:inmenu name order", "Display Name"), i18nc("@item:inmenu name order", "First Last"), i18nc("@item:inmenu name order", "Last, First")});
+    order->setCurrentItem(std::clamp(contactsGroup().readEntry("NameOrder", 0), 0, 2));
+    connect(order, &KSelectAction::indexTriggered, this, [this](int index) {
+        KConfigGroup group = contactsGroup();
+        group.writeEntry("NameOrder", index);
+        group.sync();
+        fillList();
     });
     const struct {
         const char *name;
@@ -366,14 +419,17 @@ void ContactsWindow::fillList()
     const QString selectedMail = current() ? mailOf(current()->json) : QString();
     m_list->clear();
     const QString filter = m_directory ? QString() : m_filter->text().trimmed();
+    const auto order = NameOrder(contactsGroup().readEntry("NameOrder", 0));
     for (int i = 0; i < m_people.size(); ++i) {
         const QJsonObject &o = m_people.at(i).json;
         const QString name = text(o, "displayName");
+        const QString shown = listName(o, order);
         if (!filter.isEmpty()
-            && !(name.contains(filter, Qt::CaseInsensitive) || mailOf(o).contains(filter, Qt::CaseInsensitive) || companyOf(o).contains(filter, Qt::CaseInsensitive))) {
+            && !(name.contains(filter, Qt::CaseInsensitive) || shown.contains(filter, Qt::CaseInsensitive) || mailOf(o).contains(filter, Qt::CaseInsensitive)
+                 || companyOf(o).contains(filter, Qt::CaseInsensitive))) {
             continue;
         }
-        auto *row = new QTreeWidgetItem(m_list, {name, mailOf(o), companyOf(o), phoneOf(o)});
+        auto *row = new QTreeWidgetItem(m_list, {shown, mailOf(o), companyOf(o), phoneOf(o)});
         row->setData(0, Qt::UserRole, i);
         row->setIcon(0, QIcon(avatarPixmap(name, mailOf(o), 22)));
         if ((selected > 0 && m_people.at(i).id == selected) || (selected == 0 && mailOf(o) == selectedMail)) {
@@ -499,6 +555,56 @@ void ContactsWindow::showPerson(const Person &p)
     m_card->setText(html);
     m_photo->setPixmap(avatarPixmap(text(o, "displayName"), mailOf(o), 96));
     loadPhoto(p);
+    loadOrgChart(p, html);
+}
+
+void ContactsWindow::loadOrgChart(const Person &p, const QString &html)
+{
+    // Outlook's Organization: the manager and direct reports from the directory (needs User.Read.All,
+    // which the daemon asks for separately; without it the card stays as it is)
+    const QString user = p.id == 0 && !text(p.json, "id").isEmpty() ? text(p.json, "id") : mailOf(p.json);
+    QString account;
+    const QList<MailboxInfo> boxes = m_mailboxes->mailboxes();
+    for (const MailboxInfo &box : boxes) {
+        if (box.own) {
+            account = box.account;
+            break;
+        }
+    }
+    if (user.isEmpty() || account.isEmpty()) {
+        return;
+    }
+    const QString shownMail = mailOf(p.json);
+    m_daemon->orgChart(account, user, this, [this, html, shownMail](const QString &json) {
+        const std::optional<Person> now = current();
+        const QJsonObject answer = QJsonDocument::fromJson(json.toUtf8()).object();
+        if (!now || mailOf(now->json) != shownMail || !answer.value(QLatin1String("ok")).toBool()) {
+            return;
+        }
+        const auto link = [](const QJsonObject &person) {
+            const QString address = text(person, "mail").isEmpty() ? text(person, "userPrincipalName") : text(person, "mail");
+            QString shown = QStringLiteral("<a href=\"person:%1\">%2</a>").arg(address.toHtmlEscaped(), text(person, "displayName").toHtmlEscaped());
+            if (!text(person, "jobTitle").isEmpty()) {
+                shown += QStringLiteral(" <span style='color:gray'>(%1)</span>").arg(text(person, "jobTitle").toHtmlEscaped());
+            }
+            return shown;
+        };
+        QString extra;
+        if (const QJsonObject manager = answer.value(QLatin1String("manager")).toObject(); !manager.isEmpty()) {
+            extra += QStringLiteral("<p><span style='color:gray'>%1</span> %2</p>").arg(i18nc("@info contact card", "Manager:").toHtmlEscaped(), link(manager));
+        }
+        QStringList reports;
+        const QJsonArray list = answer.value(QLatin1String("reports")).toArray();
+        for (const QJsonValue &v : list) {
+            reports.append(link(v.toObject()));
+        }
+        if (!reports.isEmpty()) {
+            extra += QStringLiteral("<p><span style='color:gray'>%1</span><br>%2</p>").arg(i18nc("@info contact card", "Direct reports:").toHtmlEscaped(), reports.join(QStringLiteral("<br>")));
+        }
+        if (!extra.isEmpty()) {
+            m_card->setText(html + extra);
+        }
+    });
 }
 
 void ContactsWindow::loadPhoto(const Person &p)
@@ -606,6 +712,36 @@ void ContactsWindow::newMessage(const Person &p)
     (new ComposerWindow(m_mailboxes, m_daemon, request))->show();
 }
 
+QWidget *ContactsWindow::forwardAsVCard()
+{
+    const std::optional<Person> p = current();
+    if (!p) {
+        return nullptr;
+    }
+    // In the app's cache, not /tmp: the daemon reads the attachment when the draft is saved
+    if (!m_vcards) {
+        const QString cache = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+        QDir().mkpath(cache);
+        m_vcards = std::make_unique<QTemporaryDir>(cache + QStringLiteral("/vcard-XXXXXX"));
+    }
+    // A folder per forward: the file keeps the person's name, as the receiver sees it
+    const QString name = text(p->json, "displayName").isEmpty() ? mailOf(p->json) : text(p->json, "displayName");
+    const QString dir = m_vcards->path() + QLatin1Char('/') + QUuid::createUuid().toString(QUuid::Id128);
+    QFile file(dir + QLatin1Char('/') + MimeExport::safeFileName(name) + QStringLiteral(".vcf"));
+    const QByteArray card = VCard::fromContact(p->json);
+    if (!m_vcards->isValid() || !QDir().mkpath(dir) || !file.open(QIODevice::WriteOnly) || file.write(card) != card.size()) {
+        KMessageBox::error(this, i18nc("@info", "Could not write the contact card to a file."));
+        return nullptr;
+    }
+    file.close();
+    ComposeRequest request;
+    request.mailboxKey = p->mailboxKey.isEmpty() ? targetFolder().first : p->mailboxKey;
+    auto *composer = new ComposerWindow(m_mailboxes, m_daemon, request);
+    composer->prefill({}, {}, {}, name, QString(), {file.fileName()});
+    composer->show();
+    return composer;
+}
+
 void ContactsWindow::addToContacts(const Person &p)
 {
     const auto [mailboxKey, folder] = targetFolder();
@@ -629,6 +765,8 @@ void ContactsWindow::addToContacts(const Person &p)
     }
     const QJsonObject &o = p.json;
     QJsonObject contact{{QStringLiteral("displayName"), text(o, "displayName")},
+                        {QStringLiteral("givenName"), text(o, "givenName")},
+                        {QStringLiteral("surname"), text(o, "surname")},
                         {QStringLiteral("jobTitle"), text(o, "jobTitle")},
                         {QStringLiteral("department"), text(o, "department")},
                         {QStringLiteral("companyName"), text(o, "companyName")},

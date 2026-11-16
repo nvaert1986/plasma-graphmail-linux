@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "calendardata.h"
+#include "calendaroptions.h"
 #include "categorylist.h"
 #include "graphmapper.h"
 #include "mailboxset.h"
 #include "store.h"
 
 #include <KConfigGroup>
+#include <KHolidays/HolidayRegion>
 #include <KLocalizedString>
 #include <KSharedConfig>
 
@@ -113,6 +115,11 @@ void CalendarData::reload()
 bool CalendarData::isFreeBusy(const QString &mailboxKey)
 {
     return mailboxKey.endsWith(QLatin1String("/freebusy"));
+}
+
+bool CalendarData::isHoliday(const QString &mailboxKey)
+{
+    return mailboxKey == QLatin1String("local/holidays");
 }
 
 void CalendarData::addFreeBusy(const QString &account, const QString &address, const QString &name)
@@ -344,6 +351,21 @@ void CalendarData::setCategoryList(CategoryList *categories)
     m_categoryList = categories;
 }
 
+QString CalendarData::joinUrlOf(const DisplayEvent &event) const
+{
+    const auto joinUrl = [](const QJsonObject &json) {
+        return json.value(QLatin1String("onlineMeeting")).toObject().value(QLatin1String("joinUrl")).toString();
+    };
+    QString url = joinUrl(event.json);
+    if (url.isEmpty() && !event.seriesMaster.isEmpty()) {
+        const Store *store = m_mailboxes->store(event.mailboxKey);
+        if (const std::optional<EventRow> master = store ? store->eventByGraphId(event.seriesMaster) : std::nullopt) {
+            url = joinUrl(QJsonDocument::fromJson(master->json.toUtf8()).object());
+        }
+    }
+    return url;
+}
+
 QStringList CalendarData::categoriesOf(const DisplayEvent &event) const
 {
     QJsonArray array = event.json.value(QLatin1String("categories")).toArray();
@@ -399,12 +421,53 @@ QList<DisplayEvent> CalendarData::events(QDate from, QDate to) const
             }
         }
     }
+    if (const QString region = CalendarOptions::holidayRegion(); !region.isEmpty()) {
+        // Public holidays and days off of the region, as all-day items nobody can change
+        const KHolidays::HolidayRegion holidays(region);
+        const KHolidays::Holiday::List list = holidays.isValid() ? holidays.rawHolidays(from, to) : KHolidays::Holiday::List();
+        for (const KHolidays::Holiday &h : list) {
+            if (h.dayType() != KHolidays::Holiday::NonWorkday && !h.categoryList().contains(QLatin1String("public"))) {
+                continue;
+            }
+            DisplayEvent e;
+            e.mailboxKey = QStringLiteral("local/holidays");
+            e.id = -h.observedStartDate().toJulianDay();
+            e.color = QColor(0x8f, 0x9a, 0xa6);
+            e.allDay = true;
+            e.firstDay = h.observedStartDate();
+            e.lastDay = h.observedEndDate();
+            e.start = QDateTime(e.firstDay, QTime(0, 0));
+            e.end = QDateTime(e.lastDay.addDays(1), QTime(0, 0));
+            e.subject = h.name();
+            e.showAs = 0;
+            result.append(e);
+        }
+    }
     std::sort(result.begin(), result.end(), [](const DisplayEvent &a, const DisplayEvent &b) {
         if (a.allDay != b.allDay) {
             return a.allDay;
         }
         return a.start != b.start ? a.start < b.start : a.end > b.end;
     });
+    return result;
+}
+
+QList<DisplayEvent> CalendarData::eventsOf(const QString &mailboxKey, qint64 calendar, QDate from, QDate to) const
+{
+    QList<DisplayEvent> result;
+    const Store *store = m_mailboxes->store(mailboxKey);
+    if (!store) {
+        return result;
+    }
+    const qint64 start = QDateTime(from.addDays(-1), QTime(0, 0)).toMSecsSinceEpoch();
+    const qint64 end = QDateTime(to.addDays(2), QTime(0, 0)).toMSecsSinceEpoch();
+    const QList<EventRow> rows = store->eventsBetween({calendar}, start, end);
+    for (const EventRow &row : rows) {
+        const DisplayEvent e = display(mailboxKey, row);
+        if (e.lastDay >= from && e.firstDay <= to) {
+            result.append(e);
+        }
+    }
     return result;
 }
 

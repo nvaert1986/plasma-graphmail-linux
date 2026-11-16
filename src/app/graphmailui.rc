@@ -1,12 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<gui name="plasma-graphmail-linux" version="23"
+<gui name="plasma-graphmail-linux" version="36"
      xmlns="http://www.kde.org/standards/kxmlgui/1.0"
      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
      xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0 http://www.kde.org/standards/kxmlgui/1.0/kxmlgui.xsd">
   <MenuBar>
     <Menu name="file">
+      <Action name="new_folder"/>
+      <Separator/>
+      <Action name="save_pdf"/>
+      <Action name="message_details"/>
+      <Separator/>
       <Action name="open_message_file"/>
       <Action name="import_message_files"/>
       <Action name="import_pst"/>
@@ -20,12 +25,16 @@
       <Action name="reply"/>
       <Action name="reply_all"/>
       <Action name="forward"/>
+      <Action name="forward_as_attachment"/>
+      <Action name="reply_with_meeting"/>
+      <Action name="edit_as_new"/>
       <Separator/>
       <Action name="mark_read"/>
       <Action name="mark_unread"/>
       <Action name="flag"/>
       <Separator/>
       <Action name="move"/>
+      <Action name="sweep"/>
       <Action name="archive"/>
       <Action name="delete"/>
       <Separator/>
@@ -39,6 +48,9 @@
       <Action name="go_calendar"/>
       <Action name="go_contacts"/>
       <Action name="go_tasks"/>
+      <Action name="open_online_archive"/>
+      <Separator/>
+      <Action name="dark_messages"/>
       <Separator/>
       <Action name="sync"/>
       <Action name="waiting"/>
@@ -58,6 +70,11 @@
       <Action name="mailboxes" append="configure_merge"/>
       <Action name="offline_settings" append="configure_merge"/>
       <Action name="signatures" append="configure_merge"/>
+      <Action name="reply_options" append="configure_merge"/>
+      <Action name="office_preview" append="configure_merge"/>
+      <Action name="conditional_formatting" append="configure_merge"/>
+      <Action name="read_receipts" append="configure_merge"/>
+      <Action name="cleanup" append="configure_merge"/>
     </Menu>
   </MenuBar>
   <ToolBar name="searchToolBar" noEdit="true">
@@ -69,18 +86,26 @@
     <Action name="new_message"/>
     <Action name="sync"/>
     <Separator/>
+    <Action name="delete"/>
+    <Action name="empty_folder"/>
+    <Action name="archive"/>
+    <Separator/>
+    <Action name="report_junk"/>
+    <Action name="report_phishing"/>
+    <Separator/>
     <Action name="reply"/>
     <Action name="reply_all"/>
     <Action name="forward"/>
+    <Action name="reply_with_meeting"/>
     <Separator/>
-    <Action name="delete"/>
-    <Action name="archive"/>
+    <Action name="sweep"/>
     <Action name="move"/>
+    <Action name="rules"/>
     <Separator/>
-    <Action name="flag"/>
-    <Action name="categorize"/>
-    <Action name="mark_read"/>
     <Action name="quick_steps"/>
-    <Action name="mark_unread"/>
+    <Separator/>
+    <Action name="toggle_read"/>
+    <Action name="categorize"/>
+    <Action name="flag"/>
   </ToolBar>
 </gui>

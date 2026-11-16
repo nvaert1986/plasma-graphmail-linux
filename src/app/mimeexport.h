@@ -9,6 +9,8 @@
 #include <QObject>
 #include <QString>
 
+#include <functional>
+
 class QProgressDialog;
 class QWidget;
 
@@ -32,6 +34,22 @@ QByteArray rebuild(Store *store, BlobStore *blobs, qint64 message);
 QByteArray mboxEntry(const QByteArray &mime, const QString &sender, const QDateTime &when);
 // "=?UTF-8?B?...?=" when the text is not plain ASCII
 QByteArray encodeWord(const QString &text);
+// A display name for From/To/Cc: encoded when not ASCII, quoted when it holds RFC 5322 specials
+QByteArray displayName(const QString &name);
+// A folder for an import or export run in the cache, readable by the user only (it holds mail);
+// folders of that kind left behind by a run that crashed go after a day
+QString workDirectory(const QString &prefix);
+// A subject or folder name as a file name: without what file systems refuse, never empty
+QString safeFileName(QString name);
+// Where to save: one message as .eml or .msg (by the chosen type), several as an mbox; empty
+// when cancelled. name: the subject or folder, cleaned for file systems
+QString askFile(QWidget *parent, QString name, bool mbox);
+// Where to save a PDF; empty when cancelled
+QString askPdfFile(QWidget *parent, QString name);
+// The message as MIME: the original from Exchange through the daemon, else rebuilt from the cache
+// (original false). done is called once, in context's thread
+void fetch(MailboxSet *mailboxes, DaemonClient *daemon, const QString &mailboxKey, qint64 message, QObject *context,
+           const std::function<void(const QByteArray &mime, bool original)> &done);
 }
 
 // Runs one export: every message fetched as MIME through the daemon, rebuilt when that fails (and

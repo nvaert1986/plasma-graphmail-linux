@@ -6,21 +6,29 @@
 #include "calendarsharingdialog.h"
 #include "categorylist.h"
 #include "accesstext.h"
+#include "calendarexport.h"
+#include "calendaroptions.h"
 #include "calendarviews.h"
 #include "daemonclient.h"
 #include "eventdialog.h"
+#include "icsdialog.h"
 #include "mailboxset.h"
 #include "recipientedit.h"
 
 #include <KActionCollection>
 #include <KConfigGroup>
-#include <KDatePicker>
 #include <KLocalizedString>
 #include <KMessageBox>
 #include <KSharedConfig>
 #include <KStandardAction>
 
 #include <QActionGroup>
+#include <QAbstractItemView>
+#include <QMouseEvent>
+#include <QTextCharFormat>
+#include <QCalendarWidget>
+#include <QFile>
+#include <QFileDialog>
 #include <QCloseEvent>
 #include <QDesktopServices>
 #include <QDialog>
@@ -60,11 +68,6 @@ KConfigGroup windowGroup()
     return KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("CalendarWindow"));
 }
 
-QDate weekStart(QDate date)
-{
-    const int first = QLocale().firstDayOfWeek();
-    return date.addDays(-((date.dayOfWeek() - first + 7) % 7));
-}
 }
 
 CalendarWindow::CalendarWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *parent)
@@ -73,7 +76,7 @@ CalendarWindow::CalendarWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWid
     , m_daemon(daemon)
     , m_data(new CalendarData(mailboxes, this))
     , m_date(QDate::currentDate())
-    , m_picker(new KDatePicker(this))
+    , m_picker(new QCalendarWidget(this))
     , m_calendarList(new QTreeWidget(this))
     , m_title(new QLabel(this))
     , m_stack(new QStackedWidget(this))
@@ -126,11 +129,22 @@ CalendarWindow::CalendarWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWid
         }
         menu.exec(m_calendarList->viewport()->mapToGlobal(pos));
     });
-    connect(m_picker, &KDatePicker::dateChanged, this, [this](QDate date) {
-        if (date.isValid() && date != m_date) {
+    // The month to pick a day from, starting on the chosen first day of the week
+    m_picker->setGridVisible(false);
+    m_picker->setVerticalHeaderFormat(QCalendarWidget::NoVerticalHeader);
+    m_picker->setFirstDayOfWeek(CalendarOptions::firstDayOfWeek());
+    connect(m_picker, &QCalendarWidget::selectionChanged, this, [this] {
+        const QDate date = m_picker->selectedDate();
+        if (!date.isValid()) {
+            return;
+        }
+        if (date != m_date || m_span) {
             goTo(date);
         }
     });
+    if (QAbstractItemView *days = m_picker->findChild<QAbstractItemView *>()) {
+        days->viewport()->installEventFilter(this);
+    }
 
     auto *left = new QWidget(this);
     auto *leftLayout = new QVBoxLayout(left);
@@ -162,7 +176,23 @@ CalendarWindow::CalendarWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWid
     for (CalendarView *view : std::initializer_list<CalendarView *>{m_grid, m_month, m_agenda}) {
         connect(view, &CalendarView::eventActivated, this, &CalendarWindow::activate);
         connect(view, &CalendarView::eventMenuRequested, this, &CalendarWindow::showMenu);
-        connect(view, &CalendarView::newEventRequested, this, &CalendarWindow::newEvent);
+        connect(view, &CalendarView::newEventRequested, this, [this](const QDateTime &start, const QDateTime &end, bool allDay) {
+            newEvent(start, end, allDay);
+        });
+        connect(view, &CalendarView::newEventTyped, this, [this](const QDateTime &start, const QDateTime &end, bool allDay, const QString &text) {
+            if (m_typedDialog && m_typedDialog->isVisible()) {
+                m_typedDialog->typeIntoSubject(text);
+                return;
+            }
+            newEvent(start, end, allDay, text);
+        });
+        connect(view, &CalendarView::slotMenuRequested, this, &CalendarWindow::slotMenu);
+        connect(view, &CalendarView::selectionChanged, this, [this, view] {
+            const std::optional<DisplayEvent> e = view->selected();
+            if (QAction *join = actionCollection()->action(QStringLiteral("join_meeting"))) {
+                join->setEnabled(e && !m_data->joinUrlOf(*e).isEmpty());
+            }
+        });
         connect(view, &CalendarView::dayActivated, this, [this](QDate day) {
             m_date = day;
             setMode(Mode::Day);
@@ -244,9 +274,33 @@ void CalendarWindow::setupActions()
     newEventAction->setIcon(QIcon::fromTheme(QStringLiteral("appointment-new")));
     actions->setDefaultShortcut(newEventAction, QKeySequence(Qt::CTRL | Qt::Key_N));
     connect(newEventAction, &QAction::triggered, this, [this] {
-        // The next full hour of the day shown
-        QDateTime start(m_date, QTime(QTime::currentTime().hour() + 1 < 24 ? QTime::currentTime().hour() + 1 : 9, 0));
-        newEvent(start, start.addSecs(1800), false);
+        bool allDay = false;
+        const auto [start, end] = newEventTime(&allDay);
+        newEvent(start, end, allDay);
+    });
+    // Outlook's New Meeting: the same, with the attendees first and Send instead of Save
+    QAction *newMeetingAction = actions->addAction(QStringLiteral("new_meeting"));
+    newMeetingAction->setText(i18nc("@action", "New Meeting"));
+    newMeetingAction->setIcon(QIcon::fromTheme(QStringLiteral("resource-group-new")));
+    actions->setDefaultShortcut(newMeetingAction, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Q));
+    connect(newMeetingAction, &QAction::triggered, this, [this] {
+        bool allDay = false;
+        const auto [start, end] = newEventTime(&allDay);
+        newEvent(start, end, allDay, QString(), true);
+    });
+
+    // Outlook's Join on a selected Teams meeting
+    QAction *join = actions->addAction(QStringLiteral("join_meeting"));
+    join->setText(i18nc("@action", "Join Teams Meeting"));
+    join->setIconText(i18nc("@action short toolbar text", "Join"));
+    join->setIcon(QIcon::fromTheme(QStringLiteral("call-start")));
+    join->setEnabled(false);
+    connect(join, &QAction::triggered, this, [this] {
+        if (const std::optional<DisplayEvent> e = currentView()->selected()) {
+            if (const QString url = m_data->joinUrlOf(*e); !url.isEmpty()) {
+                QDesktopServices::openUrl(QUrl(url));
+            }
+        }
     });
 
     QAction *today = actions->addAction(QStringLiteral("go_today"));
@@ -335,7 +389,7 @@ void CalendarWindow::setupActions()
     remove->setIcon(QIcon::fromTheme(QStringLiteral("edit-delete")));
     actions->setDefaultShortcut(remove, Qt::Key_Delete);
     connect(remove, &QAction::triggered, this, [this] {
-        if (const std::optional<DisplayEvent> e = currentView()->selected(); e && !CalendarData::isFreeBusy(e->mailboxKey)) {
+        if (const std::optional<DisplayEvent> e = currentView()->selected(); e && !CalendarData::isFreeBusy(e->mailboxKey) && !CalendarData::isHoliday(e->mailboxKey)) {
             deleteEvent(*e);
         }
     });
@@ -359,6 +413,16 @@ void CalendarWindow::setupActions()
         group.writeEntry("DeleteRequestAfterResponding", on);
         group.sync();
     });
+    QAction *options = actions->addAction(QStringLiteral("calendar_options"));
+    options->setText(i18nc("@action", "Calendar Options..."));
+    options->setIcon(QIcon::fromTheme(QStringLiteral("view-calendar")));
+    connect(options, &QAction::triggered, this, [this] {
+        CalendarOptions::Dialog dialog(this);
+        if (dialog.exec() == QDialog::Accepted) {
+            m_picker->setFirstDayOfWeek(CalendarOptions::firstDayOfWeek());
+            refresh();
+        }
+    });
     QAction *secondZone = actions->addAction(QStringLiteral("second_time_zone"));
     secondZone->setText(i18nc("@action", "Second Time Zone..."));
     secondZone->setIcon(QIcon::fromTheme(QStringLiteral("preferences-system-time")));
@@ -368,6 +432,29 @@ void CalendarWindow::setupActions()
     colleague->setText(i18nc("@action", "Add a Colleague's Calendar..."));
     colleague->setIcon(QIcon::fromTheme(QStringLiteral("resource-calendar-insert")));
     connect(colleague, &QAction::triggered, this, &CalendarWindow::openColleagueCalendar);
+
+    // File > Import / Export: whole .ics files (docs/PHASE9B.md 9b.29)
+    QAction *importIcs = actions->addAction(QStringLiteral("import_ics"));
+    importIcs->setText(i18nc("@action", "Import Calendar File..."));
+    importIcs->setIcon(QIcon::fromTheme(QStringLiteral("document-import")));
+    connect(importIcs, &QAction::triggered, this, [this] {
+        const QString file = QFileDialog::getOpenFileName(this, i18nc("@title:window", "Import Calendar File"), QString(),
+                                                          i18nc("@item:inlistbox file type", "Calendar files (*.ics *.ical *.ifb)"));
+        if (file.isEmpty()) {
+            return;
+        }
+        if (IcsDialog *dialog = IcsDialog::open(file, m_mailboxes, m_daemon, this)) {
+            dialog->show();
+        } else {
+            KMessageBox::error(this, i18nc("@info", "There are no events in this file."));
+        }
+    });
+    QAction *exportIcs = actions->addAction(QStringLiteral("export_ics"));
+    exportIcs->setText(i18nc("@action", "Export Calendar..."));
+    exportIcs->setIcon(QIcon::fromTheme(QStringLiteral("document-export")));
+    connect(exportIcs, &QAction::triggered, this, [this] {
+        exportCalendar();
+    });
 
     KStandardAction::print(
         this,
@@ -423,23 +510,47 @@ void CalendarWindow::fillCalendarList()
 
 QPair<QDate, QDate> CalendarWindow::range() const
 {
+    if (m_span) {
+        if (m_span->first.daysTo(m_span->second) < 14) {
+            return *m_span;
+        }
+        // Longer spans as whole weeks
+        const QDate first = CalendarOptions::weekStart(m_span->first);
+        const QDate last = CalendarOptions::weekStart(m_span->second).addDays(6);
+        return {first, last};
+    }
     switch (m_mode) {
     case Mode::Day:
         return {m_date, m_date};
     case Mode::WorkWeek: {
-        // The working days of the week (Monday to Friday unless the mailbox says otherwise)
-        const QDate monday = m_date.addDays(1 - m_date.dayOfWeek());
-        if (m_workingHours.days.isEmpty()) {
+        // The working days of the week (Monday to Friday unless the mailbox says otherwise). They
+        // may run over the weekend (Sunday to Thursday): the work week starts after the longest gap
+        // between working days. The views show one span, so a day off inside it stays visible.
+        const QList<int> days = m_workingHours.days;
+        if (days.isEmpty()) {
+            const QDate monday = m_date.addDays(1 - m_date.dayOfWeek());
             return {monday, monday.addDays(4)};
         }
-        return {monday.addDays(m_workingHours.days.constFirst() - 1), monday.addDays(m_workingHours.days.constLast() - 1)};
+        int start = days.constFirst();
+        int widest = -1;
+        for (qsizetype i = 0; i < days.size(); ++i) {
+            const int next = days.at((i + 1) % days.size());
+            const int gap = (next - days.at(i) + 7) % 7;
+            if (gap > widest) {
+                widest = gap;
+                start = next;
+            }
+        }
+        const int span = days.size() == 1 ? 1 : 8 - widest;
+        const QDate first = m_date.addDays(-((m_date.dayOfWeek() - start + 7) % 7));
+        return {first, first.addDays(span - 1)};
     }
     case Mode::Week: {
-        const QDate first = weekStart(m_date);
+        const QDate first = CalendarOptions::weekStart(m_date);
         return {first, first.addDays(6)};
     }
     case Mode::Month: {
-        const QDate first = weekStart(QDate(m_date.year(), m_date.month(), 1));
+        const QDate first = CalendarOptions::weekStart(QDate(m_date.year(), m_date.month(), 1));
         return {first, first.addDays(41)};
     }
     case Mode::Agenda:
@@ -456,6 +567,7 @@ CalendarView *CalendarWindow::currentView() const
 void CalendarWindow::setMode(Mode mode)
 {
     m_mode = mode;
+    m_span.reset();
     const QStringList names{QStringLiteral("view_day"), QStringLiteral("view_workweek"), QStringLiteral("view_week"), QStringLiteral("view_month"), QStringLiteral("view_agenda")};
     if (QAction *action = actionCollection()->action(names.at(int(mode)))) {
         action->setChecked(true);
@@ -467,11 +579,137 @@ void CalendarWindow::setMode(Mode mode)
 void CalendarWindow::goTo(QDate date)
 {
     m_date = date;
+    if (m_span) {
+        endSpan();
+        return;
+    }
     refresh();
+}
+
+void CalendarWindow::showSpan(QDate from, QDate to)
+{
+    const QDate first = std::min(from, to);
+    // Six weeks at most, as in Outlook
+    const QDate last = std::min(std::max(from, to), first.addDays(41));
+    m_span = qMakePair(first, last);
+    m_date = first;
+    m_stack->setCurrentWidget(first.daysTo(last) < 14 ? static_cast<QWidget *>(m_grid) : m_month);
+    refresh();
+}
+
+void CalendarWindow::endSpan()
+{
+    m_span.reset();
+    m_stack->setCurrentWidget(m_mode == Mode::Month ? static_cast<QWidget *>(m_month) : m_mode == Mode::Agenda ? static_cast<QWidget *>(m_agenda) : m_grid);
+    refresh();
+}
+
+void CalendarWindow::markSpan()
+{
+    // The span stays marked in the picker (it highlights only one day itself)
+    for (const QDate &day : std::as_const(m_marked)) {
+        m_picker->setDateTextFormat(day, {});
+    }
+    m_marked.clear();
+    if (!m_span) {
+        return;
+    }
+    QTextCharFormat format;
+    QColor highlight = m_picker->palette().color(QPalette::Highlight);
+    highlight.setAlpha(70);
+    format.setBackground(highlight);
+    for (QDate day = m_span->first; day <= m_span->second; day = day.addDays(1)) {
+        m_picker->setDateTextFormat(day, format);
+        m_marked.append(day);
+    }
+}
+
+QString CalendarWindow::pickerDragForTests(int fromDay, int toDay)
+{
+    QAbstractItemView *days = m_picker->findChild<QAbstractItemView *>();
+    if (!days) {
+        return QStringLiteral("no picker");
+    }
+    // The cell of a day number in the middle rows (where every number is of the month shown)
+    const auto cell = [days](int day) {
+        const QAbstractItemModel *model = days->model();
+        for (int row = 2; row < model->rowCount() - 1; ++row) {
+            for (int column = 0; column < model->columnCount(); ++column) {
+                const QModelIndex index = model->index(row, column);
+                if (index.data().toInt() == day) {
+                    return days->visualRect(index).center();
+                }
+            }
+        }
+        return QPoint();
+    };
+    const QPoint from = cell(fromDay);
+    const QPoint to = cell(toDay);
+    QMouseEvent press(QEvent::MouseButtonPress, from, days->viewport()->mapToGlobal(from), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(days->viewport(), &press);
+    QCoreApplication::processEvents();
+    QMouseEvent move(QEvent::MouseMove, to, days->viewport()->mapToGlobal(to), Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(days->viewport(), &move);
+    QMouseEvent release(QEvent::MouseButtonRelease, to, days->viewport()->mapToGlobal(to), Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(days->viewport(), &release);
+    QCoreApplication::processEvents();
+    const auto [first, last] = range();
+    return QStringLiteral("%1 - %2, %3").arg(first.toString(Qt::ISODate), last.toString(Qt::ISODate), m_stack->currentWidget() == m_month ? QStringLiteral("weeks") : QStringLiteral("days"));
+}
+
+QDate CalendarWindow::pickerDateAt(const QPoint &pos) const
+{
+    const auto *days = m_picker->findChild<QAbstractItemView *>();
+    const QModelIndex index = days ? days->indexAt(pos) : QModelIndex();
+    const int day = index.isValid() && index.row() > 0 ? index.data().toInt() : 0;
+    if (day <= 0) {
+        return {};
+    }
+    // The grid shows the end of the month before and the start of the next in grey
+    QDate month(m_picker->yearShown(), m_picker->monthShown(), 1);
+    if (index.row() == 1 && day > 20) {
+        month = month.addMonths(-1);
+    } else if (index.row() >= 5 && day < 15) {
+        month = month.addMonths(1);
+    }
+    return QDate(month.year(), month.month(), day);
+}
+
+bool CalendarWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    // The date picker's days: a press on a day and a drag to another shows the days in between
+    // (the picker itself only selects one day, on release)
+    const auto *mouse = static_cast<QMouseEvent *>(event);
+    if (event->type() == QEvent::MouseButtonPress && mouse->button() == Qt::LeftButton) {
+        m_pickerPressed = true;
+        m_pickAnchor = pickerDateAt(mouse->position().toPoint());
+    } else if (event->type() == QEvent::MouseMove && m_pickerPressed && m_pickAnchor.isValid()) {
+        const QDate over = pickerDateAt(mouse->position().toPoint());
+        if (over.isValid() && over != m_pickAnchor) {
+            showSpan(m_pickAnchor, over);
+        }
+    } else if (event->type() == QEvent::MouseButtonRelease && m_pickerPressed) {
+        m_pickerPressed = false;
+        const QDate over = pickerDateAt(mouse->position().toPoint());
+        if (m_pickAnchor.isValid() && over.isValid() && over != m_pickAnchor) {
+            showSpan(m_pickAnchor, over);
+            m_pickAnchor = QDate();
+            // Not to the picker: it would select the single day released on
+            return true;
+        }
+        m_pickAnchor = QDate();
+    }
+    return KXmlGuiWindow::eventFilter(watched, event);
 }
 
 void CalendarWindow::step(int direction)
 {
+    // A span from the date picker moves by its own length
+    if (m_span) {
+        const qint64 days = (m_span->first.daysTo(m_span->second) + 1) * direction;
+        showSpan(m_span->first.addDays(days), m_span->second.addDays(days));
+        return;
+    }
     switch (m_mode) {
     case Mode::Day:
         m_date = m_date.addDays(direction);
@@ -497,10 +735,11 @@ void CalendarWindow::refresh()
     currentView()->setEvents(first, last, events);
     fetchFreeBusy(first, last);
     m_picker->blockSignals(true);
-    m_picker->setDate(m_date);
+    m_picker->setSelectedDate(m_date);
     m_picker->blockSignals(false);
+    markSpan();
     QString title;
-    if (m_mode == Mode::Month) {
+    if (m_mode == Mode::Month && !m_span) {
         title = QLocale().toString(m_date, QStringLiteral("MMMM yyyy"));
     } else if (first == last) {
         title = QLocale().toString(first, QStringLiteral("dddd d MMMM yyyy"));
@@ -511,9 +750,109 @@ void CalendarWindow::refresh()
     }
     // The week, as Outlook shows it with week numbers on
     if (m_mode != Mode::Month && m_mode != Mode::Agenda && calendarGroup().readEntry("WeekNumbers", false)) {
-        title = i18nc("@title %1 days, %2 a week number", "%1 (week %2)", title, first.weekNumber());
+        title = i18nc("@title %1 days, %2 a week number", "%1 (week %2)", title, CalendarOptions::weekNumber(first));
     }
     m_title->setText(title);
+}
+
+void CalendarWindow::mouseForTests(const QString &script)
+{
+    // "press day hour; move day hour; release ...; dclick ...; click ...; right ..." (hours as 10.5)
+    QWidget *grid = m_grid->gridForTests();
+    const auto at = [this, grid](int day, double hour) {
+        const int width = grid->width();
+        const int timeColumn = width - (width - 60) / 7 * 7;
+        Q_UNUSED(timeColumn)
+        // Column x from the view's own geometry: probe the middle of the column
+        const qreal columnWidth = (width - 64) / 7.0;
+        return QPointF(64 + columnWidth * (day + 0.5), hour * 48 + 3);
+    };
+    const auto send = [grid](QEvent::Type type, const QPointF &pos, Qt::MouseButton button, Qt::MouseButtons buttons) {
+        QMouseEvent event(type, pos, grid->mapToGlobal(pos), button, buttons, Qt::NoModifier);
+        QCoreApplication::sendEvent(grid, &event);
+    };
+    const QStringList steps = script.split(QLatin1Char(';'), Qt::SkipEmptyParts);
+    for (const QString &step : steps) {
+        const QStringList parts = step.simplified().split(QLatin1Char(' '));
+        const QPointF pos = at(parts.value(1).toInt(), parts.value(2).toDouble());
+        const QString what = parts.value(0);
+        if (what == QLatin1String("press")) {
+            send(QEvent::MouseButtonPress, pos, Qt::LeftButton, Qt::LeftButton);
+        } else if (what == QLatin1String("move")) {
+            send(QEvent::MouseMove, pos, Qt::NoButton, Qt::LeftButton);
+        } else if (what == QLatin1String("release")) {
+            send(QEvent::MouseButtonRelease, pos, Qt::LeftButton, Qt::NoButton);
+        } else if (what == QLatin1String("dclick")) {
+            send(QEvent::MouseButtonPress, pos, Qt::LeftButton, Qt::LeftButton);
+            send(QEvent::MouseButtonRelease, pos, Qt::LeftButton, Qt::NoButton);
+            send(QEvent::MouseButtonDblClick, pos, Qt::LeftButton, Qt::LeftButton);
+            send(QEvent::MouseButtonRelease, pos, Qt::LeftButton, Qt::NoButton);
+        } else if (what == QLatin1String("type")) {
+            // "type <text>": keys on the grid
+            const QString text = step.simplified().section(QLatin1Char(' '), 1);
+            for (const QChar c : text) {
+                QKeyEvent key(QEvent::KeyPress, 0, Qt::NoModifier, QString(c));
+                QCoreApplication::sendEvent(grid, &key);
+            }
+        } else if (what == QLatin1String("right")) {
+            QContextMenuEvent event(QContextMenuEvent::Mouse, pos.toPoint(), grid->mapToGlobal(pos.toPoint()));
+            QCoreApplication::sendEvent(grid, &event);
+        }
+        const std::optional<CalendarView::Slot> slot = currentView()->selectedSlot();
+        qWarning().noquote() << "mouse test:" << step.simplified() << "->"
+                             << (slot ? slot->start.toString(QStringLiteral("ddd HH:mm")) + QLatin1Char('-') + slot->end.toString(QStringLiteral("HH:mm")) : QStringLiteral("no selection"));
+    }
+    int dialogs = 0;
+    const QWidgetList all = QApplication::topLevelWidgets();
+    for (QWidget *w : all) {
+        if (qobject_cast<EventDialog *>(w) && w->isVisible()) {
+            ++dialogs;
+        }
+    }
+    qWarning() << "mouse test: event dialogs open" << dialogs;
+}
+
+void CalendarWindow::selectSlotForTests(const QDateTime &start, const QDateTime &end)
+{
+    currentView()->setSelectedSlot({start, end, false});
+}
+
+QString CalendarWindow::exportCalendar(const QString &testFile)
+{
+    CalendarInfo calendar;
+    QDate from = QDate::currentDate().addMonths(-1);
+    QDate to = QDate::currentDate().addYears(1);
+    QString file = testFile;
+    if (file.isEmpty()) {
+        CalendarExportDialog dialog(m_data, this);
+        if (dialog.exec() != QDialog::Accepted) {
+            return {};
+        }
+        calendar = dialog.calendar();
+        from = dialog.from();
+        to = dialog.to();
+        file = QFileDialog::getSaveFileName(this, i18nc("@title:window", "Export Calendar"), calendar.name + QStringLiteral(".ics"),
+                                            i18nc("@item:inlistbox file type", "Calendar files (*.ics)"));
+        if (file.isEmpty()) {
+            return {};
+        }
+    } else {
+        // Tests: the default calendar of the first mailbox
+        const QList<CalendarInfo> all = m_data->calendars();
+        for (const CalendarInfo &c : all) {
+            if (c.isDefault) {
+                calendar = c;
+                break;
+            }
+        }
+    }
+    const QByteArray ics = CalendarExport::toIcs(m_data->eventsOf(calendar.mailboxKey, calendar.id, from, to), calendar.name);
+    QFile out(file);
+    if (!out.open(QIODevice::WriteOnly) || out.write(ics) != ics.size()) {
+        KMessageBox::error(this, i18nc("@info", "Could not save %1: %2", file, out.errorString()));
+        return {};
+    }
+    return file;
 }
 
 KConfigGroup CalendarWindow::calendarGroup()
@@ -631,21 +970,116 @@ void CalendarWindow::setSecondTimeZoneForTests(const QString &zone, const QStrin
     applySecondTimeZone();
 }
 
-void CalendarWindow::newEvent(const QDateTime &start, const QDateTime &end, bool allDay)
+QPair<QDateTime, QDateTime> CalendarWindow::newEventTime(bool *allDay) const
+{
+    // The selected time (Outlook's blue), else the next full hour of the day shown
+    const auto [first, last] = range();
+    if (const std::optional<CalendarView::Slot> slot = currentView()->selectedSlot(); slot && slot->start.date() >= first && slot->start.date() <= last) {
+        *allDay = slot->allDay;
+        return {slot->start, slot->end};
+    }
+    *allDay = false;
+    const QDateTime start(m_date, QTime(QTime::currentTime().hour() + 1 < 24 ? QTime::currentTime().hour() + 1 : 9, 0));
+    return {start, start.addSecs(1800)};
+}
+
+void CalendarWindow::slotMenu(const QPoint &globalPos)
+{
+    // Outlook's menu on empty time
+    const std::optional<CalendarView::Slot> slot = currentView()->selectedSlot();
+    if (!slot) {
+        return;
+    }
+    QMenu menu(this);
+    menu.addAction(QIcon::fromTheme(QStringLiteral("appointment-new")), i18nc("@action:inmenu", "New Event"), this, [this, slot] {
+        newEvent(slot->start, slot->end, slot->allDay);
+    });
+    menu.addAction(QIcon::fromTheme(QStringLiteral("view-calendar-day")), i18nc("@action:inmenu", "New All-Day Event"), this, [this, slot] {
+        const QDate day = slot->start.date();
+        newEvent(QDateTime(day, QTime(0, 0)), QDateTime(day.addDays(1), QTime(0, 0)), true);
+    });
+    menu.addAction(QIcon::fromTheme(QStringLiteral("resource-group-new")), i18nc("@action:inmenu", "New Meeting"), this, [this, slot] {
+        newEvent(slot->start, slot->end, slot->allDay, QString(), true);
+    });
+    menu.addSeparator();
+    if (QAction *today = actionCollection()->action(QStringLiteral("go_today"))) {
+        menu.addAction(today);
+    }
+    if (QAction *options = actionCollection()->action(QStringLiteral("calendar_options"))) {
+        menu.addAction(options);
+    }
+    menu.exec(globalPos);
+}
+
+void CalendarWindow::newEvent(const QDateTime &start, const QDateTime &end, bool allDay, const QString &subject, bool meeting)
 {
     const QList<CalendarInfo> writable = m_data->writable();
     if (writable.isEmpty()) {
         return;
     }
+    // The default calendar of the first own mailbox (the user's own), else any writable one
+    CalendarInfo target = writable.first();
+    const QList<MailboxInfo> boxes = m_mailboxes->mailboxes();
+    const auto own = std::find_if(boxes.cbegin(), boxes.cend(), [](const MailboxInfo &b) {
+        return b.own;
+    });
+    for (const CalendarInfo &c : writable) {
+        if (own != boxes.cend() && c.mailboxKey == own->key() && c.isDefault) {
+            target = c;
+            break;
+        }
+    }
     EventEditRequest request;
-    request.mailboxKey = writable.first().mailboxKey;
-    request.calendar = writable.first().id;
+    request.mailboxKey = target.mailboxKey;
+    request.calendar = target.id;
     request.start = start;
     request.end = end;
     request.allDay = allDay;
+    request.subject = subject;
+    request.meeting = meeting;
     auto *dialog = new EventDialog(m_mailboxes, m_daemon, m_data, request, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->show();
+    dialog->activateWindow();
+    m_typedDialog = subject.isEmpty() ? nullptr : dialog;
+}
+
+QWidget *CalendarWindow::newMeeting(const QString &mailboxKey, const QString &subject, const QList<OutgoingRecipient> &required, const QList<OutgoingRecipient> &optional,
+                                    const QString &description)
+{
+    const QList<CalendarInfo> writable = m_data->writable();
+    if (writable.isEmpty()) {
+        return nullptr;
+    }
+    // That mailbox's default calendar, else any of its calendars, else the first writable one
+    auto own = std::find_if(writable.cbegin(), writable.cend(), [&mailboxKey](const CalendarInfo &c) {
+        return c.mailboxKey == mailboxKey && c.isDefault;
+    });
+    if (own == writable.cend()) {
+        own = std::find_if(writable.cbegin(), writable.cend(), [&mailboxKey](const CalendarInfo &c) {
+            return c.mailboxKey == mailboxKey;
+        });
+    }
+    const CalendarInfo &target = own != writable.cend() ? *own : writable.first();
+    // The next half hour, half an hour long, as Outlook proposes
+    const QDateTime now = QDateTime::currentDateTime();
+    QDateTime start(now.date(), QTime(now.time().hour(), now.time().minute() < 30 ? 30 : 0));
+    if (now.time().minute() >= 30) {
+        start = start.addSecs(3600);
+    }
+    EventEditRequest request;
+    request.mailboxKey = target.mailboxKey;
+    request.calendar = target.id;
+    request.start = start;
+    request.end = start.addSecs(30 * 60);
+    request.subject = subject;
+    request.required = required;
+    request.optional = optional;
+    request.description = description;
+    auto *dialog = new EventDialog(m_mailboxes, m_daemon, m_data, request, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->show();
+    return dialog;
 }
 
 QWidget *CalendarWindow::newEventForTests(const QDateTime &start, const QDateTime &end)
@@ -718,8 +1152,8 @@ std::optional<DisplayEvent> CalendarWindow::chooseOccurrenceOrSeries(const Displ
 
 void CalendarWindow::activate(const DisplayEvent &event)
 {
-    // A colleague's free/busy block: nothing to open
-    if (CalendarData::isFreeBusy(event.mailboxKey)) {
+    // A colleague's free/busy block or a holiday: nothing to open
+    if (CalendarData::isFreeBusy(event.mailboxKey) || CalendarData::isHoliday(event.mailboxKey)) {
         return;
     }
     bool series = false;
@@ -889,14 +1323,14 @@ void CalendarWindow::respond(const DisplayEvent &event, const QString &action, i
 
 void CalendarWindow::showMenu(const DisplayEvent &event, const QPoint &globalPos)
 {
-    if (CalendarData::isFreeBusy(event.mailboxKey)) {
+    if (CalendarData::isFreeBusy(event.mailboxKey) || CalendarData::isHoliday(event.mailboxKey)) {
         return;
     }
     QMenu menu(this);
     menu.addAction(QIcon::fromTheme(QStringLiteral("document-open")), i18nc("@action:inmenu", "Open"), this, [this, event] {
         activate(event);
     });
-    const QString joinUrl = event.json.value(QLatin1String("onlineMeeting")).toObject().value(QLatin1String("joinUrl")).toString();
+    const QString joinUrl = m_data->joinUrlOf(event);
     if (!joinUrl.isEmpty()) {
         menu.addAction(QIcon::fromTheme(QStringLiteral("call-start")), i18nc("@action:inmenu", "Join Teams Meeting"), this, [joinUrl] {
             QDesktopServices::openUrl(QUrl(joinUrl));

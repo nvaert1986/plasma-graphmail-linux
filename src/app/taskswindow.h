@@ -12,6 +12,7 @@ class KToggleAction;
 class QCheckBox;
 class QDateEdit;
 class QDateTimeEdit;
+class QDialog;
 class QLabel;
 class QLineEdit;
 class QListWidget;
@@ -40,6 +41,8 @@ public:
 
     // Selects a task (a reminder's Open)
     void showTask(const QString &mailboxKey, qint64 task);
+    // A new task in the mailbox's default list (a message dropped on Tasks); false without a list
+    bool newTask(const QString &mailboxKey, const QString &title, const QString &notes);
     // Tests: the same paths as the window's controls; only titles marked [TEST Graph Mail]
     bool addTaskForTests(const QString &listName, const QString &title);
     bool completeForTests(const QString &mailboxKey, qint64 task, bool done);
@@ -53,12 +56,18 @@ public:
     bool listActionForTests(const QString &action, const QString &name, const QString &newName);
     // Categories (docs/PHASE9.md): shown in the details, Categorize
     void setCategoryList(CategoryList *categories);
+    // New Task (Ctrl+N, a double click on empty space): a window, as New Event and New Message;
+    // nullptr when there is no list to put it in
+    QDialog *newTaskDialog();
     bool categorizeForTests(const QString &mailboxKey, qint64 task, const QString &name, bool on);
 
 Q_SIGNALS:
     void navigate(int module);
     // A flagged mail's task: show the mail
     void openMail(const QString &mailboxKey, qint64 message);
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     struct Task {
@@ -76,7 +85,7 @@ private:
     void loadSteps();
     std::optional<Task> currentTask() const;
     QPair<QString, qint64> currentList() const;
-    void addTask();
+    void createTask(const QString &mailboxKey, qint64 list, const QJsonObject &task);
     void setDone(const Task &task, bool done);
     void saveDetails();
     QJsonObject detailChanges(const Task &task) const;
@@ -90,7 +99,6 @@ private:
     MailboxSet *m_mailboxes;
     DaemonClient *m_daemon;
     QTreeWidget *m_lists;
-    QLineEdit *m_add;
     QTreeWidget *m_tasks;
     QWidget *m_details;
     QLineEdit *m_title;

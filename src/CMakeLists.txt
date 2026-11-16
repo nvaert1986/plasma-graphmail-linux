@@ -97,16 +97,19 @@ target_link_libraries(graphmailcore PUBLIC
 add_executable(graphmailctl graphmailctl/main.cpp)
 target_link_libraries(graphmailctl PRIVATE graphcore graphmailcore Qt6::DBus)
 
-add_executable(graphmaild graphmaild/main.cpp graphmaild/daemon.cpp)
+add_executable(graphmaild graphmaild/main.cpp graphmaild/daemon.cpp graphmaild/mailrunner.cpp)
 target_link_libraries(graphmaild PRIVATE graphmailcore Qt6::DBus KF6::CoreAddons KF6::I18n KF6::Notifications)
 target_compile_definitions(graphmaild PRIVATE TRANSLATION_DOMAIN="plasma-graphmail-linux")
 
 # The app: Outlook-like window over the read-only caches (phase 3)
 add_executable(plasma-graphmail-linux
     app/main.cpp
+    app/attachmentpreview.cpp
     app/attachmentstrip.cpp
     app/avatar.cpp
     app/calendardata.cpp
+    app/calendarexport.cpp
+    app/calendaroptions.cpp
     app/calendarviews.cpp
     app/calendarsharingdialog.cpp
     app/categoriesdialog.cpp
@@ -124,7 +127,12 @@ add_executable(plasma-graphmail-linux
     app/pstimport.cpp
     app/categorylist.cpp
     app/calendarwindow.cpp
+    app/cleanup.cpp
     app/composer.cpp
+    app/coloraction.cpp
+    app/pastedimages.cpp
+    app/maileditor.cpp
+    app/conditionalformat.cpp
     app/accesstext.cpp
     app/contactdialog.cpp
     app/contactswindow.cpp
@@ -135,19 +143,27 @@ add_executable(plasma-graphmail-linux
     app/icsdialog.cpp
     app/mailboxesdialog.cpp
     app/mailboxset.cpp
+    app/mailto.cpp
     app/mailview.cpp
     app/mainwindow.cpp
     app/messagedelegate.cpp
+    app/messagedetails.cpp
+    app/messagedrag.cpp
     app/messagelistmodel.cpp
     app/messagewindow.cpp
     app/movedialog.cpp
     app/quote.cpp
     app/offlinedialog.cpp
     app/readingpane.cpp
+    app/readreceipts.cpp
     app/recurrence.cpp
     app/recipientedit.cpp
+    app/replyoptions.cpp
+    app/unsubscribe.cpp
+    app/vcard.cpp
     app/searchfolderdialog.cpp
     app/signaturedialog.cpp
+    app/sweepdialog.cpp
     app/waitingwindow.cpp
     app/signatures.cpp
     app/taskswindow.cpp
@@ -172,12 +188,17 @@ target_link_libraries(plasma-graphmail-linux PRIVATE
     KF6::IconThemes
     KF6::KIOGui
     KF6::KIOWidgets
+    KF6::NotifyConfig
     KF6::WidgetsAddons
     KF6::XmlGui
+    KF6::Parts
+    KF6::Notifications
     KPim6::MimeTreeParserWidgets
     KPim6::Mime
     KPim6::Tnef
     KPim6::PimTextEdit
+    KF6::TextEmoticonsWidgets
+    KF6::Holidays
     KF6::CalendarCore
 )
 target_compile_definitions(plasma-graphmail-linux PRIVATE TRANSLATION_DOMAIN="plasma-graphmail-linux")

@@ -268,12 +268,16 @@ Body deencapsulate(const QByteArray &rtf)
         }
     };
 
+    int overflow = 0;
     for (qsizetype i = 0; i < n;) {
         const char c = rtf.at(i);
         if (c == '{') {
             flush();
+            // Deeper than the stack keeps: counted, so each '}' still closes its own '{'
             if (stack.size() < maxDepth) {
                 stack.append(st);
+            } else {
+                ++overflow;
             }
             starPending = false;
             ++i;
@@ -281,6 +285,12 @@ Body deencapsulate(const QByteArray &rtf)
         }
         if (c == '}') {
             flush();
+            if (overflow > 0) {
+                --overflow;
+                starPending = false;
+                ++i;
+                continue;
+            }
             if (stack.isEmpty()) {
                 break;
             }

@@ -41,6 +41,13 @@ public:
         IsSearchGroupRole,
         SearchFolderIdRole,
         SearchFilterRole,
+        // Favorites (docs/PHASE9B.md 9b.27): the group, a favourite folder, All Inboxes
+        IsFavoritesGroupRole,
+        IsFavoriteRole,
+        IsAllInboxesRole,
+        // The folder's item count from Exchange, and whether the pane shows it instead of unread
+        TotalRole,
+        ShowsTotalRole,
     };
 
     explicit FolderModel(MailboxSet *mailboxes, QObject *parent = nullptr);
@@ -52,7 +59,16 @@ public:
     // Graph does not mark them hidden, so they are recognised by role or name. Off by default.
     void setShowAllFolders(bool show);
     static bool isSystemFolder(const QString &name, const QString &wellKnown);
-    // The mailbox's Outlook search folders, below its folders
+    // Favorites: "mailbox key|folder graph id", kept in graphmailrc [Folders]; reload() shows them
+    static QStringList favorites();
+    // Change Folder Count: the total ("[12]") instead of the unread count. Drafts and Outbox show the
+    // total unless set otherwise, as in Outlook. Kept in graphmailrc [FolderCount] per folder.
+    static bool showsTotal(const QString &mailboxKey, const QString &graphId, const QString &wellKnown);
+    static void setShowsTotal(const QString &mailboxKey, const QString &graphId, bool total);
+    void setFavorite(const QString &mailboxKey, const QString &graphId, bool on);
+    // Local .msg and .eml files among dropped URLs; empty when anything else is there
+    static QStringList messageFiles(const QMimeData *data);
+    // The mailbox's Outlook search folders, below its folders; shown after the next reload()
     void setSearchFolders(const QString &mailboxKey, const QList<SearchFolderInfo> &folders);
     // Only the unread counts of one mailbox
     void updateCounts(const QString &mailboxKey);
@@ -88,10 +104,15 @@ private:
         QString wellKnown;
         QString filter;
         int unread = 0;
+        int total = 0;
+        // A copy of a folder under Favorites
+        bool favorite = false;
         Node *parent = nullptr;
         std::vector<std::unique_ptr<Node>> children;
     };
     Node *nodeFor(const QModelIndex &index) const;
+    // PathKeyRole: what keeps a node expanded and selected across a reload
+    static QString pathOf(const Node *node);
     QModelIndex indexOf(Node *node) const;
     void sortChildren(Node *node);
     Node *findNode(Node *node, const std::function<bool(const Node *)> &match) const;

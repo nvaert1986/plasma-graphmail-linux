@@ -7,6 +7,8 @@
 #include "messagelistmodel.h"
 
 #include <KLocalizedString>
+#include <KSharedConfig>
+#include <KConfigGroup>
 
 #include <QCollator>
 #include <QHash>
@@ -55,6 +57,12 @@ QIcon folderIcon(const QString &wellKnown)
     }
     if (wellKnown == QLatin1String("outbox")) {
         return QIcon::fromTheme(QStringLiteral("mail-folder-outbox"));
+    }
+    if (wellKnown == QLatin1String("favorites")) {
+        return QIcon::fromTheme(QStringLiteral("starred-symbolic"));
+    }
+    if (wellKnown == QLatin1String("allinboxes")) {
+        return QIcon::fromTheme(QStringLiteral("mail-folder-inbox"));
     }
     if (wellKnown == QLatin1String("searchfolders") || wellKnown == QLatin1String("searchfolder")) {
         return QIcon::fromTheme(QStringLiteral("folder-saved-search"));
@@ -159,6 +167,7 @@ void FolderModel::reload()
                 node->name = f.name;
                 node->wellKnown = f.wellKnown;
                 node->unread = unread.value(f.id);
+                node->total = f.total;
                 byGraphId.insert(f.graphId, node.get());
                 nodes.push_back(std::move(node));
             }
@@ -206,13 +215,104 @@ void FolderModel::reload()
         }
         m_root.children.push_back(std::move(mailboxNode));
     }
+    // Favorites on top, as in Outlook: All Inboxes when there is more than one, then the user's
+    auto favorites = std::make_unique<Node>();
+    favorites->wellKnown = QStringLiteral("favorites");
+    favorites->name = i18nc("@item folder pane", "Favorites");
+    favorites->parent = &m_root;
+    if (m_root.children.size() > 1) {
+        auto all = std::make_unique<Node>();
+        all->wellKnown = QStringLiteral("allinboxes");
+        all->name = i18nc("@item folder pane, the Inboxes of every mailbox", "All Inboxes");
+        all->parent = favorites.get();
+        favorites->children.push_back(std::move(all));
+    }
+    const QStringList chosen = FolderModel::favorites();
+    for (const QString &entry : chosen) {
+        const QString key = entry.section(QLatin1Char('|'), 0, 0);
+        const QString graphId = entry.section(QLatin1Char('|'), 1);
+        const Node *source = findNode(&m_root, [&](const Node *n) {
+            return !n->isMailbox && n->mailboxKey == key && n->graphId == graphId && n->folder != 0;
+        });
+        if (!source) {
+            continue;
+        }
+        auto copy = std::make_unique<Node>();
+        copy->mailboxKey = source->mailboxKey;
+        copy->folder = source->folder;
+        copy->graphId = source->graphId;
+        copy->wellKnown = source->wellKnown;
+        copy->unread = source->unread;
+        copy->total = source->total;
+        copy->favorite = true;
+        // Another mailbox's folder says whose it is
+        const std::optional<MailboxInfo> box = m_mailboxes->mailbox(key);
+        copy->name = box && !box->own ? i18nc("@item folder pane, %1 a folder, %2 a mailbox", "%1 (%2)", source->name, box->label()) : source->name;
+        copy->parent = favorites.get();
+        favorites->children.push_back(std::move(copy));
+    }
+    if (!favorites->children.empty()) {
+        m_root.children.insert(m_root.children.begin(), std::move(favorites));
+    }
     endResetModel();
+}
+
+QString FolderModel::pathOf(const Node *node)
+{
+    if (node->wellKnown == QLatin1String("searchfolders")) {
+        return node->mailboxKey + QStringLiteral("/searchfolders");
+    }
+    if (node->wellKnown == QLatin1String("searchfolder")) {
+        return node->mailboxKey + QStringLiteral("/searchfolder:") + node->graphId;
+    }
+    if (node->wellKnown == QLatin1String("favorites") || node->wellKnown == QLatin1String("allinboxes")) {
+        return node->wellKnown;
+    }
+    if (node->favorite) {
+        return QStringLiteral("favorite:") + node->mailboxKey + QLatin1Char('/') + QString::number(node->folder);
+    }
+    return node->isMailbox ? node->mailboxKey : node->mailboxKey + QLatin1Char('/') + QString::number(node->folder);
+}
+
+bool FolderModel::showsTotal(const QString &mailboxKey, const QString &graphId, const QString &wellKnown)
+{
+    const QString chosen = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)
+                               ->group(QStringLiteral("FolderCount"))
+                               .readEntry(mailboxKey + QLatin1Char('|') + graphId, QString());
+    if (!chosen.isEmpty()) {
+        return chosen == QLatin1String("total");
+    }
+    return wellKnown == QLatin1String("drafts") || wellKnown == QLatin1String("outbox");
+}
+
+void FolderModel::setShowsTotal(const QString &mailboxKey, const QString &graphId, bool total)
+{
+    KConfigGroup group = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("FolderCount"));
+    group.writeEntry(mailboxKey + QLatin1Char('|') + graphId, total ? QStringLiteral("total") : QStringLiteral("unread"));
+    group.sync();
+}
+
+QStringList FolderModel::favorites()
+{
+    return KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("Folders")).readEntry("Favorites", QStringList());
+}
+
+void FolderModel::setFavorite(const QString &mailboxKey, const QString &graphId, bool on)
+{
+    QStringList list = favorites();
+    const QString entry = mailboxKey + QLatin1Char('|') + graphId;
+    list.removeAll(entry);
+    if (on) {
+        list.append(entry);
+    }
+    KConfigGroup group = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("Folders"));
+    group.writeEntry("Favorites", list);
+    group.sync();
 }
 
 void FolderModel::setSearchFolders(const QString &mailboxKey, const QList<SearchFolderInfo> &folders)
 {
     m_searchFolders.insert(mailboxKey, folders);
-    reload();
 }
 
 void FolderModel::updateCounts(const QString &mailboxKey)
@@ -222,14 +322,20 @@ void FolderModel::updateCounts(const QString &mailboxKey)
         return;
     }
     const QHash<qint64, int> unread = store->unreadCounts();
+    QHash<qint64, int> totals;
+    for (const FolderRow &f : store->folders()) {
+        totals.insert(f.id, f.total);
+    }
     std::function<void(Node *)> visit = [&](Node *node) {
         for (auto &child : node->children) {
             if (!child->isMailbox && child->mailboxKey == mailboxKey) {
                 const int count = unread.value(child->folder);
-                if (count != child->unread) {
+                const int total = totals.value(child->folder, child->total);
+                if (count != child->unread || total != child->total) {
                     child->unread = count;
+                    child->total = total;
                     const QModelIndex index = indexOf(child.get());
-                    Q_EMIT dataChanged(index, index, {Qt::DisplayRole, UnreadRole});
+                    Q_EMIT dataChanged(index, index, {Qt::DisplayRole, UnreadRole, TotalRole});
                 }
             }
             visit(child.get());
@@ -273,7 +379,7 @@ FolderModel::Node *FolderModel::findNode(Node *node, const std::function<bool(co
 QModelIndex FolderModel::indexForPath(const QString &pathKey) const
 {
     Node *node = findNode(const_cast<Node *>(&m_root), [&pathKey](const Node *n) {
-        return (n->isMailbox ? n->mailboxKey : n->mailboxKey + QLatin1Char('/') + QString::number(n->folder)) == pathKey;
+        return pathOf(n) == pathKey;
     });
     return indexOf(node);
 }
@@ -281,14 +387,14 @@ QModelIndex FolderModel::indexForPath(const QString &pathKey) const
 QModelIndex FolderModel::indexForWellKnown(const QString &mailboxKey, const QString &wellKnown) const
 {
     return indexOf(findNode(const_cast<Node *>(&m_root), [&](const Node *n) {
-        return !n->isMailbox && n->mailboxKey == mailboxKey && n->wellKnown == wellKnown;
+        return !n->isMailbox && !n->favorite && n->mailboxKey == mailboxKey && n->wellKnown == wellKnown;
     }));
 }
 
 QModelIndex FolderModel::indexForFolder(const QString &mailboxKey, qint64 folder) const
 {
     return indexOf(findNode(const_cast<Node *>(&m_root), [&](const Node *n) {
-        return !n->isMailbox && n->mailboxKey == mailboxKey && n->folder == folder;
+        return !n->isMailbox && !n->favorite && n->mailboxKey == mailboxKey && n->folder == folder;
     }));
 }
 
@@ -342,10 +448,7 @@ Qt::DropActions FolderModel::supportedDropActions() const
     return Qt::MoveAction | Qt::CopyAction;
 }
 
-namespace
-{
-// Local .msg and .eml files among dropped URLs; empty when anything else is there
-QStringList messageFiles(const QMimeData *data)
+QStringList FolderModel::messageFiles(const QMimeData *data)
 {
     QStringList files;
     for (const QUrl &url : data->urls()) {
@@ -356,7 +459,6 @@ QStringList messageFiles(const QMimeData *data)
         files.append(path);
     }
     return files;
-}
 }
 
 bool FolderModel::canDropMimeData(const QMimeData *data, Qt::DropAction, int, int, const QModelIndex &parent) const
@@ -422,6 +524,10 @@ QVariant FolderModel::data(const QModelIndex &index, int role) const
         return node->name;
     case UnreadRole:
         return node->unread;
+    case TotalRole:
+        return node->total;
+    case ShowsTotalRole:
+        return !node->isMailbox && node->folder != 0 && showsTotal(node->mailboxKey, node->graphId, node->wellKnown);
     case MailboxKeyRole:
         return node->mailboxKey;
     case FolderIdRole:
@@ -431,13 +537,13 @@ QVariant FolderModel::data(const QModelIndex &index, int role) const
     case IsMailboxRole:
         return node->isMailbox;
     case PathKeyRole:
-        if (node->wellKnown == QLatin1String("searchfolders")) {
-            return QString(node->mailboxKey + QStringLiteral("/searchfolders"));
-        }
-        if (node->wellKnown == QLatin1String("searchfolder")) {
-            return QString(node->mailboxKey + QStringLiteral("/searchfolder:") + node->graphId);
-        }
-        return node->isMailbox ? node->mailboxKey : node->mailboxKey + QLatin1Char('/') + QString::number(node->folder);
+        return pathOf(node);
+    case IsFavoritesGroupRole:
+        return node->wellKnown == QLatin1String("favorites");
+    case IsFavoriteRole:
+        return node->favorite;
+    case IsAllInboxesRole:
+        return node->wellKnown == QLatin1String("allinboxes");
     case IsSearchGroupRole:
         return node->wellKnown == QLatin1String("searchfolders");
     case SearchFolderIdRole:

@@ -6,19 +6,27 @@
 #include "graphmail_debug.h"
 #include "store.h"
 
+#include <KConfigGroup>
 #include <KLocalizedString>
+#include <KSharedConfig>
 
 #include <QApplication>
 #include <QBuffer>
 #include <QClipboard>
 #include <QContextMenuEvent>
 #include <QDesktopServices>
+#include <QDir>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFontDatabase>
 #include <QMenu>
+#include <QMetaMethod>
 #include <QMimeDatabase>
 #include <QOpenGLWidget>
 #include <QRegularExpression>
+#include <QStandardPaths>
 #include <QWebEngineContextMenuRequest>
+#include <QWebEngineDownloadRequest>
 #include <QWebEngineProfile>
 #include <QWebEngineSettings>
 #include <QWebEngineUrlRequestInfo>
@@ -27,6 +35,7 @@
 #include <QWebEngineUrlScheme>
 #include <QWebEngineUrlSchemeHandler>
 
+#include <algorithm>
 #include <atomic>
 
 namespace GraphMail
@@ -102,6 +111,11 @@ public:
             }
             const bool printing = !m_printHeader.isEmpty();
             QByteArray html = m->bodyType == 1 ? *body : plainToHtml(QString::fromUtf8(*body), printing).toUtf8();
+            if (!printing && m->bodyType == 1 && MailView::darkMessages()) {
+                // Everything inverted, pictures inverted back: light mail reads dark, logos stay
+                html += QByteArrayLiteral("<style>html{filter:invert(1) hue-rotate(180deg);background:#e6e6e6}"
+                                          "img,video,picture,svg,[style*=\"background-image\"]{filter:invert(1) hue-rotate(180deg)}</style>");
+            }
             if (printing) {
                 // Right after <body ...>, else at the start
                 static const QRegularExpression bodyTag(QStringLiteral("<body[^>]*>"), QRegularExpression::CaseInsensitiveOption);
@@ -216,6 +230,33 @@ MailView::MailView(QWidget *parent)
     m_profile->installUrlSchemeHandler(bodyScheme, m_handler);
     m_profile->installUrlSchemeHandler(cidScheme, m_handler);
     m_profile->setUrlRequestInterceptor(m_blocker);
+    // Open Image / Save Image As... from the right-click menu
+    connect(m_profile, &QWebEngineProfile::downloadRequested, this, [this](QWebEngineDownloadRequest *download) {
+        const QString suggested = download->suggestedFileName().isEmpty() ? QStringLiteral("image.png") : download->suggestedFileName();
+        if (m_openDownload) {
+            const QString folder = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/opened");
+            QDir().mkpath(folder);
+            download->setDownloadDirectory(folder);
+            download->setDownloadFileName(suggested);
+            connect(download, &QWebEngineDownloadRequest::isFinishedChanged, this, [download] {
+                if (download->state() == QWebEngineDownloadRequest::DownloadCompleted) {
+                    QDesktopServices::openUrl(QUrl::fromLocalFile(QDir(download->downloadDirectory()).filePath(download->downloadFileName())));
+                }
+            });
+            download->accept();
+            return;
+        }
+        const QString file = QFileDialog::getSaveFileName(this,
+                                                          i18nc("@title:window", "Save Image As"),
+                                                          QDir(QStandardPaths::writableLocation(QStandardPaths::PicturesLocation)).filePath(suggested));
+        if (file.isEmpty()) {
+            download->cancel();
+            return;
+        }
+        download->setDownloadDirectory(QFileInfo(file).absolutePath());
+        download->setDownloadFileName(QFileInfo(file).fileName());
+        download->accept();
+    });
     m_profile->setHttpCacheType(QWebEngineProfile::MemoryHttpCache);
     m_profile->setPersistentCookiesPolicy(QWebEngineProfile::NoPersistentCookies);
 
@@ -273,8 +314,40 @@ void MailView::prepareWindow(QWidget *window)
     gl->hide();
 }
 
+double MailView::zoom()
+{
+    const double factor = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("Reading")).readEntry("Zoom", 1.0);
+    return std::clamp(factor, 0.5, 3.0);
+}
+
+void MailView::setZoom(double factor)
+{
+    KConfigGroup group = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("Reading"));
+    group.writeEntry("Zoom", std::clamp(factor, 0.5, 3.0));
+    group.sync();
+}
+
+bool MailView::darkTheme()
+{
+    return QApplication::palette().color(QPalette::Base).lightness() < 128;
+}
+
+bool MailView::darkMessages()
+{
+    return darkTheme()
+        && KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("Reading")).readEntry("DarkMessages", true);
+}
+
+void MailView::setDarkMessages(bool on)
+{
+    KConfigGroup group = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("Reading"));
+    group.writeEntry("DarkMessages", on);
+    group.sync();
+}
+
 void MailView::showBody(Store *store, BlobStore *blobs, qint64 message, bool allowRemote)
 {
+    setZoomFactor(zoom());
     m_handler->setMessage(store, blobs, message);
     m_blocker->setAllowRemote(allowRemote);
     // The body is served by a local scheme, and Chromium keeps local pages away from the internet
@@ -288,6 +361,7 @@ void MailView::showBody(Store *store, BlobStore *blobs, qint64 message, bool all
 void MailView::showForPrinting(Store *store, BlobStore *blobs, qint64 message, bool allowRemote, const QString &headerHtml)
 {
     showBody(store, blobs, message, allowRemote);
+    setZoomFactor(1.0);
     // After showBody, which clears it: the next request of the page gets the header
     m_handler->setPrintHeader(headerHtml);
 }
@@ -303,23 +377,85 @@ void MailView::showText(const QString &text)
 
 void MailView::contextMenuEvent(QContextMenuEvent *event)
 {
-    // Only what makes sense for mail: copy, select all, and links (opened outside)
+    // What a browser offers on mail content, without its page navigation: copy, links (opened
+    // outside), pictures, zoom and print
     QMenu menu(this);
     QWebEngineContextMenuRequest *request = lastContextMenuRequest();
     if (request && !request->selectedText().isEmpty()) {
         menu.addAction(pageAction(QWebEnginePage::Copy));
     }
     if (request && request->linkUrl().isValid()) {
+        if (!menu.isEmpty()) {
+            menu.addSeparator();
+        }
         const QUrl link = request->linkUrl();
-        menu.addAction(QIcon::fromTheme(QStringLiteral("internet-web-browser")), i18nc("@action:inmenu", "Open Link in Browser"), this, [link] {
-            QDesktopServices::openUrl(link);
+        if (link.scheme() == QLatin1String("mailto")) {
+            menu.addAction(QIcon::fromTheme(QStringLiteral("mail-message-new")), i18nc("@action:inmenu", "New Message To..."), this, [this, link] {
+                Q_EMIT mailtoRequested(link.toString());
+            });
+            menu.addAction(QIcon::fromTheme(QStringLiteral("edit-copy")), i18nc("@action:inmenu", "Copy E-mail Address"), this, [link] {
+                QApplication::clipboard()->setText(link.path());
+            });
+        } else {
+            menu.addAction(QIcon::fromTheme(QStringLiteral("internet-web-browser")), i18nc("@action:inmenu", "Open Link in Browser"), this, [link] {
+                QDesktopServices::openUrl(link);
+            });
+            menu.addAction(QIcon::fromTheme(QStringLiteral("edit-copy")), i18nc("@action:inmenu", "Copy Link Address"), this, [link] {
+                QApplication::clipboard()->setText(link.toString());
+            });
+        }
+    }
+    if (request && request->mediaType() == QWebEngineContextMenuRequest::MediaTypeImage && request->mediaUrl().isValid()) {
+        if (!menu.isEmpty()) {
+            menu.addSeparator();
+        }
+        const QUrl image = request->mediaUrl();
+        menu.addAction(QIcon::fromTheme(QStringLiteral("document-open")), i18nc("@action:inmenu", "Open Image"), this, [this] {
+            downloadImage(true);
         });
-        menu.addAction(QIcon::fromTheme(QStringLiteral("edit-copy")), i18nc("@action:inmenu", "Copy Link Address"), this, [link] {
-            QApplication::clipboard()->setText(link.toString());
+        menu.addAction(QIcon::fromTheme(QStringLiteral("document-save-as")), i18nc("@action:inmenu", "Save Image As..."), this, [this] {
+            downloadImage(false);
         });
+        menu.addAction(QIcon::fromTheme(QStringLiteral("edit-copy")), i18nc("@action:inmenu", "Copy Image"), this, [this] {
+            triggerPageAction(QWebEnginePage::CopyImageToClipboard);
+        });
+        // A picture on the web has an address worth copying; one inside the message does not
+        if (image.scheme() == QLatin1String("http") || image.scheme() == QLatin1String("https")) {
+            menu.addAction(QIcon::fromTheme(QStringLiteral("edit-copy")), i18nc("@action:inmenu", "Copy Image Address"), this, [image] {
+                QApplication::clipboard()->setText(image.toString());
+            });
+        }
+    }
+    if (!menu.isEmpty()) {
+        menu.addSeparator();
     }
     menu.addAction(pageAction(QWebEnginePage::SelectAll));
+    menu.addSeparator();
+    menu.addAction(QIcon::fromTheme(QStringLiteral("zoom-in")), i18nc("@action:inmenu", "Zoom In"), this, [this] {
+        setZoom(zoom() * 1.1);
+        setZoomFactor(zoom());
+    });
+    menu.addAction(QIcon::fromTheme(QStringLiteral("zoom-out")), i18nc("@action:inmenu", "Zoom Out"), this, [this] {
+        setZoom(zoom() / 1.1);
+        setZoomFactor(zoom());
+    });
+    menu.addAction(QIcon::fromTheme(QStringLiteral("zoom-original")), i18nc("@action:inmenu", "Actual Size"), this, [this] {
+        setZoom(1.0);
+        setZoomFactor(zoom());
+    });
+    if (isSignalConnected(QMetaMethod::fromSignal(&MailView::printRequested))) {
+        menu.addSeparator();
+        menu.addAction(QIcon::fromTheme(QStringLiteral("document-print")), i18nc("@action:inmenu", "Print..."), this, &MailView::printRequested);
+    }
     menu.exec(event->globalPos());
+}
+
+void MailView::downloadImage(bool open)
+{
+    // The engine fetches the picture (also cid: ones from the message); downloadRequested decides
+    // where it goes
+    m_openDownload = open;
+    triggerPageAction(QWebEnginePage::DownloadImageToDisk);
 }
 
 }

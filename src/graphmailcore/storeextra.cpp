@@ -5,6 +5,7 @@
 // items. The message and folder basics are in store.cpp.
 
 #include "store.h"
+#include "store_p.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -195,6 +196,19 @@ QList<AttachmentRow> Store::attachments(qint64 message) const
     return result;
 }
 
+QString Store::blobOfContentId(const QString &contentId) const
+{
+    QString bare = contentId;
+    if (bare.startsWith(QLatin1Char('<')) && bare.endsWith(QLatin1Char('>'))) {
+        bare = bare.mid(1, bare.size() - 2);
+    }
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT blob FROM attachments WHERE (content_id = ? OR content_id = ?) AND coalesce(blob, '') <> '' ORDER BY id DESC LIMIT 1"));
+    q.addBindValue(bare);
+    q.addBindValue(QString(QLatin1Char('<') + bare + QLatin1Char('>')));
+    return q.exec() && q.next() ? q.value(0).toString() : QString();
+}
+
 bool Store::setAttachmentBlob(qint64 attachment, const QString &blob, const QString &contentId)
 {
     QSqlQuery q(m_db);
@@ -256,35 +270,19 @@ QList<ListRow> Store::conversationMessages(qint64 folder, const QString &key, in
     QSqlQuery q(m_db);
     const QString focusFilter = focus >= 0 ? QStringLiteral(" AND focused = %1").arg(focus > 0 ? 1 : 0) : QString();
     if (key.startsWith(QLatin1String("msg:"))) {
-        q.prepare(QStringLiteral("SELECT id, sender_name, sender_address, subject, preview, received, is_read, flag, importance, has_attachments, to_list, categories "
-                                 "FROM messages WHERE id = ? AND folder = ?")
-                  + focusFilter);
+        q.prepare(QStringLiteral("SELECT %1 FROM messages WHERE id = ? AND folder = ?").arg(StoreRows::listColumns) + focusFilter);
         q.addBindValue(key.mid(4).toLongLong());
     } else {
-        q.prepare(QStringLiteral("SELECT id, sender_name, sender_address, subject, preview, received, is_read, flag, importance, has_attachments, to_list, categories "
-                                 // SQLite prefers the folder index here and then scans the whole folder (2.3 s for
-                                 // 200 conversations in a 56k folder); a conversation has few messages
-                                 "FROM messages INDEXED BY messages_by_conversation WHERE conversation = ? AND folder = ?")
-                  + focusFilter + QStringLiteral(" ORDER BY received DESC, id DESC"));
+        // SQLite prefers the folder index here and then scans the whole folder (2.3 s for 200
+        // conversations in a 56k folder); a conversation has few messages
+        q.prepare(QStringLiteral("SELECT %1 FROM messages INDEXED BY messages_by_conversation WHERE conversation = ? AND folder = ?").arg(StoreRows::listColumns) + focusFilter
+                  + QStringLiteral(" ORDER BY received DESC, id DESC"));
         q.addBindValue(key);
     }
     q.addBindValue(folder);
     if (q.exec()) {
         while (q.next()) {
-            ListRow row{q.value(0).toLongLong(),
-                        q.value(1).toString(),
-                        q.value(2).toString(),
-                        q.value(3).toString(),
-                        q.value(4).toString(),
-                        q.value(5).toLongLong(),
-                        q.value(6).toBool(),
-                        q.value(7).toInt(),
-                        q.value(8).toInt(),
-                        q.value(9).toBool(),
-                        q.value(10).toString(),
-                        0,
-                        categoriesFromJson(q.value(11).toString())};
-            rows.append(row);
+            rows.append(StoreRows::readListRow(q));
         }
     }
     return rows;
@@ -613,7 +611,34 @@ bool Store::removeItem(ItemKind kind, const QString &graphId)
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral("DELETE FROM %1 WHERE graph_id = ?").arg(tables(kind).items));
     q.addBindValue(graphId);
-    return q.exec() || fail(QStringLiteral("removeItem"), q.lastError().text());
+    if (!q.exec()) {
+        return fail(QStringLiteral("removeItem"), q.lastError().text());
+    }
+    // A series goes with its occurrences and exceptions: the delta names only the series (they
+    // stayed as "(no subject)" items that Exchange no longer knows)
+    if (kind == ItemKind::Event) {
+        QSqlQuery occurrences(m_db);
+        occurrences.prepare(QStringLiteral("DELETE FROM events WHERE series_master = ?"));
+        occurrences.addBindValue(graphId);
+        if (!occurrences.exec()) {
+            return fail(QStringLiteral("removeItem"), occurrences.lastError().text());
+        }
+    }
+    return true;
+}
+
+int Store::sweepOrphanOccurrences(qint64 calendar)
+{
+    // Occurrences and exceptions whose series is gone (a series removed before the fix above)
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("DELETE FROM events WHERE calendar = ? AND coalesce(series_master, '') <> '' "
+                             "AND NOT EXISTS (SELECT 1 FROM events m WHERE m.graph_id = events.series_master)"));
+    q.addBindValue(calendar);
+    if (!q.exec()) {
+        fail(QStringLiteral("sweepOrphanOccurrences"), q.lastError().text());
+        return 0;
+    }
+    return q.numRowsAffected();
 }
 
 int Store::beginParentResync(ItemKind kind, qint64 parent)
