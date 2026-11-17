@@ -8,6 +8,8 @@
 #include "graphutil.h"
 #include "graphmail_debug.h"
 
+#include <graphcore/connectivity.h>
+
 #include <QDateTime>
 #include <QJsonArray>
 #include <QScopeGuard>
@@ -46,6 +48,11 @@ void BodyFetcher::setWindowDays(int days)
 void BodyFetcher::setAttachmentsOffline(bool on)
 {
     m_attachmentsOffline = on;
+}
+
+void BodyFetcher::setPrefetchOnMetered(bool on)
+{
+    m_prefetchOnMetered = on;
 }
 
 int BodyFetcher::inFlight() const
@@ -167,6 +174,11 @@ void BodyFetcher::process(int slots)
         }
     }
     if (m_windowDays == 0 || slots <= 0) {
+        return;
+    }
+    // On a metered connection only what is opened, unless the user wants everything anyway; the
+    // scheduler asks again, so the downloads go on once the connection is no longer metered
+    if (!m_prefetchOnMetered && GraphCore::Connectivity::isMetered()) {
         return;
     }
     if (m_queue.isEmpty() && now() >= m_nextRefill) {

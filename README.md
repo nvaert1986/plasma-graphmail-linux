@@ -3,7 +3,7 @@
 A native KDE Plasma client for Microsoft 365 mailboxes: mail, calendar, contacts and tasks from
 Exchange Online, through Microsoft Graph. Written in C++ with Qt 6 and KDE Frameworks 6.
 
-Status: version 0.13.0, in development; not packaged yet.
+Status: version 0.14.0, in development; not packaged yet.
 
 ## Scope
 
@@ -16,6 +16,10 @@ Status: version 0.13.0, in development; not packaged yet.
   saved to OneDrive or SharePoint, synced files attached as links (the recipients get access on
   Send), attachments over 25 MB go to OneDrive as a link
 - A daily check for a new release on GitHub (Settings > Updates; off with `-DGRAPHMAIL_UPDATE_CHECK=OFF`)
+- Accounts are added and signed in under System Settings > Microsoft 365 Accounts (also through
+  Settings > Microsoft 365 Accounts...), shared with the suite's other apps
+- The system's proxy settings for every request; on a metered connection only the messages you open
+  are downloaded (Settings > Offline)
 
 Not planned: IMAP/POP3, on-premises Exchange, Outlook add-ins, public folders.
 
@@ -33,7 +37,7 @@ Gentoo package that provides it):
 | Tray icon | Plasma (the widget is a Plasma applet) | kde-plasma/libplasma |
 | Composer | KPim6TextEdit, KF6TextEmoticonsWidgets | kde-apps/kpimtextedit, dev-libs/ktextaddons |
 | Attached mails, winmail.dat | KPim6MimeTreeParserWidgets, KPim6Mime, KPim6Tnef, KPim6Libkleo | kde-apps/mimetreeparser, kde-apps/kmime, kde-apps/libktnef, kde-apps/libkleo |
-| Accounts and sign-in | GraphCore: the suite's shared Microsoft Graph library and its account service `graphaccountsd`, which owns the sign-in for every app of the suite | [plasma-graphcore-linux](https://github.com/nvaert1986/plasma-graphcore-linux) 0.13 (not packaged yet: build and install it first) |
+| Accounts and sign-in | GraphCore: the suite's shared Microsoft Graph library and its account service `graphaccountsd`, which owns the sign-in for every app of the suite | [plasma-graphcore-linux](https://github.com/nvaert1986/plasma-graphcore-linux) 0.14 (not packaged yet: build and install it first) |
 | Cache | libzstd | app-arch/zstd |
 
 ```

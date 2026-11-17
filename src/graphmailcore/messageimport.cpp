@@ -189,7 +189,7 @@ void MessageImport::nextItem()
 
 void MessageImport::fail(const GraphResponse &response)
 {
-    failWith({{QStringLiteral("ok"), false}, {QStringLiteral("problem"), accessProblem(response)}, {QStringLiteral("detail"), response.describe()}});
+    failWith({{QStringLiteral("ok"), false}, {QStringLiteral("problem"), accessProblem(response)}, {QStringLiteral("detail"), response.userMessage()}});
 }
 
 void MessageImport::fail(const QString &detail)

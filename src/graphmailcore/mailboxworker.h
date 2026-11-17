@@ -48,6 +48,7 @@ struct MailboxConfig {
     SyncSettings settings;
     int bodyWindowDays = 90;
     bool attachmentsOffline = false;
+    bool prefetchOnMetered = false;
     int hotSeconds = 60;
     int warmSeconds = 300;
     int coldSeconds = 1800;
@@ -81,7 +82,7 @@ public Q_SLOTS:
     void syncNow();
     // Settings > Offline (docs/PHASE8.md): days of bodies to keep (-1 all, 0 none), attachments;
     // freeSpace drops what is outside the window now and shrinks the cache file
-    void applyOffline(int bodyWindowDays, bool attachmentsOffline, bool freeSpace);
+    void applyOffline(int bodyWindowDays, bool attachmentsOffline, bool prefetchOnMetered, bool freeSpace);
     // The "Waiting to be sent" window: try every waiting change now; undo and drop one
     void retryNow();
     void discardOperation(qint64 op);

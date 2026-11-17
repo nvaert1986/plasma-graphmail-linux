@@ -26,6 +26,8 @@ public:
     // 0 = no prefetch (bodies only when opened), -1 = everything (the OST-like mode)
     void setWindowDays(int days);
     void setAttachmentsOffline(bool on);
+    // Background downloads also on a metered connection (mobile hotspot); off: only what is opened
+    void setPrefetchOnMetered(bool on);
 
     void fetchNow(qint64 message);
     // The content of one attachment row (opening or saving it); attachmentReady() when stored
@@ -54,6 +56,7 @@ private:
     SyncContext *m_ctx;
     int m_windowDays = 90;
     bool m_attachmentsOffline = false;
+    bool m_prefetchOnMetered = false;
     QList<qint64> m_urgent;
     QList<QPair<qint64, QString>> m_queue;
     QSet<qint64> m_inFlight;

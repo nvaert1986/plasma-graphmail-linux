@@ -85,6 +85,7 @@ GraphMail::MailboxConfig Daemon::baseConfig() const
     GraphMail::MailboxConfig config;
     config.bodyWindowDays = general.readEntry("BodyWindowDays", 90);
     config.attachmentsOffline = general.readEntry("AttachmentsOffline", false);
+    config.prefetchOnMetered = general.readEntry("PrefetchOnMetered", false);
     config.hotSeconds = std::max(15, general.readEntry("HotSeconds", 60));
     config.warmSeconds = std::max(60, general.readEntry("WarmSeconds", 300));
     config.coldSeconds = std::max(300, general.readEntry("ColdSeconds", 1800));
@@ -921,7 +922,7 @@ void Daemon::ApplyOfflineSettings(bool freeSpace)
     for (auto it = m_mailboxes.cbegin(); it != m_mailboxes.cend(); ++it) {
         GraphMail::MailboxWorker *worker = it->worker;
         QMetaObject::invokeMethod(worker, [worker, config, freeSpace] {
-            worker->applyOffline(config.bodyWindowDays, config.attachmentsOffline, freeSpace);
+            worker->applyOffline(config.bodyWindowDays, config.attachmentsOffline, config.prefetchOnMetered, freeSpace);
         });
     }
 }

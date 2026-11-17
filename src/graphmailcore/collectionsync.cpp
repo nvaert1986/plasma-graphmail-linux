@@ -136,19 +136,19 @@ void CollectionSync::followChain(const QString &link, const HeaderList &headers,
         const GraphResponse response = request->response();
         request->deleteLater();
         if (isGone(response)) {
-            done(ChainEnd::Gone, response.describe());
+            done(ChainEnd::Gone, response.userMessage());
             return;
         }
         if (response.isNetworkError()) {
-            done(ChainEnd::Network, response.describe());
+            done(ChainEnd::Network, response.userMessage());
             return;
         }
         if (isAccessDenied(response)) {
-            done(ChainEnd::AccessDenied, response.describe());
+            done(ChainEnd::AccessDenied, response.userMessage());
             return;
         }
         if (!response.ok()) {
-            done(ChainEnd::Failed, response.describe());
+            done(ChainEnd::Failed, response.userMessage());
             return;
         }
         const QJsonObject page = response.json();
@@ -720,7 +720,7 @@ void ParentItemSync::withParent(const std::function<void(const ParentRow &)> &ne
         request->deleteLater();
         if (!response.ok()) {
             finishWithEnd(response.isNetworkError() ? ChainEnd::Network : (listingDenied(response, m_ctx->root) ? ChainEnd::AccessDenied : ChainEnd::Failed),
-                          response.describe(),
+                          response.userMessage(),
                           0);
             return;
         }
@@ -758,7 +758,7 @@ void ParentItemSync::start()
                         }
                     }
                 } else if (response.isNetworkError()) {
-                    finishWithEnd(ChainEnd::Network, response.describe(), 0);
+                    finishWithEnd(ChainEnd::Network, response.userMessage(), 0);
                     return;
                 }
                 m_parents = store->parents(ItemKind::Contact);
@@ -780,7 +780,7 @@ void ParentItemSync::start()
         request->deleteLater();
         if (!response.ok()) {
             finishWithEnd(response.isNetworkError() ? ChainEnd::Network : (listingDenied(response, m_ctx->root) ? ChainEnd::AccessDenied : ChainEnd::Failed),
-                          response.describe(),
+                          response.userMessage(),
                           0);
             return;
         }
@@ -857,7 +857,7 @@ void TodoSync::start()
         const GraphResponse response = request->response();
         request->deleteLater();
         if (!response.ok()) {
-            finishWithEnd(response.isNetworkError() ? ChainEnd::Network : ChainEnd::Failed, response.describe(), 0);
+            finishWithEnd(response.isNetworkError() ? ChainEnd::Network : ChainEnd::Failed, response.userMessage(), 0);
             return;
         }
         Store *store = m_ctx->store;

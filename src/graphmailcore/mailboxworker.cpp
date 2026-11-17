@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "mailboxworker.h"
+
+#include <graphcore/people.h>
 #include "messageimport.h"
 #include "blobstore.h"
 #include "bodyfetcher.h"
@@ -231,6 +233,7 @@ void MailboxWorker::start()
     m_bodies = new BodyFetcher(&m_ctx, this);
     m_bodies->setWindowDays(m_config.bodyWindowDays);
     m_bodies->setAttachmentsOffline(m_config.attachmentsOffline);
+    m_bodies->setPrefetchOnMetered(m_config.prefetchOnMetered);
     connect(m_bodies, &BodyFetcher::bodyReady, this, [this](qint64 message) {
         Q_EMIT bodyReady(m_config.account, m_config.mailbox, message);
     });
@@ -275,7 +278,7 @@ void MailboxWorker::start()
     tick();
 }
 
-void MailboxWorker::applyOffline(int bodyWindowDays, bool attachmentsOffline, bool freeSpace)
+void MailboxWorker::applyOffline(int bodyWindowDays, bool attachmentsOffline, bool prefetchOnMetered, bool freeSpace)
 {
     if (!m_bodies || !m_store) {
         return;
@@ -283,8 +286,10 @@ void MailboxWorker::applyOffline(int bodyWindowDays, bool attachmentsOffline, bo
     const bool smaller = bodyWindowDays >= 0 && (m_config.bodyWindowDays < 0 || bodyWindowDays < m_config.bodyWindowDays);
     m_config.bodyWindowDays = bodyWindowDays;
     m_config.attachmentsOffline = attachmentsOffline;
+    m_config.prefetchOnMetered = prefetchOnMetered;
     m_bodies->setWindowDays(bodyWindowDays);
     m_bodies->setAttachmentsOffline(attachmentsOffline);
+    m_bodies->setPrefetchOnMetered(prefetchOnMetered);
     if (smaller || freeSpace) {
         m_bodies->sweep();
     }
@@ -1036,7 +1041,9 @@ void MailboxWorker::loadMessage(quint64 request, qint64 message)
 
 void MailboxWorker::fetchPeople()
 {
-    GraphCore::GraphRequest *r = m_client->start({"GET", QStringLiteral("/me/people?$top=500&$select=displayName,scoredEmailAddresses"), {}, {}, true, nullptr});
+    // The suite's people search (GraphCore::People): everyone the user works with, for completion
+    const GraphCore::People::Request people = GraphCore::People::relevant({}, 500);
+    GraphCore::GraphRequest *r = m_client->start({"GET", people.path, {}, people.headers, true, nullptr});
     const QString file = peopleFile(m_config.account);
     connect(r, &GraphCore::GraphRequest::finished, this, [r, file] {
         const GraphCore::GraphResponse response = r->response();
@@ -1047,15 +1054,10 @@ void MailboxWorker::fetchPeople()
             return;
         }
         QJsonArray people;
-        const QJsonArray value = response.json().value(QLatin1String("value")).toArray();
-        for (const QJsonValue &v : value) {
-            const QJsonObject p = v.toObject();
-            const QJsonArray addresses = p.value(QLatin1String("scoredEmailAddresses")).toArray();
-            for (const QJsonValue &a : addresses) {
-                const QString address = a.toObject().value(QLatin1String("address")).toString();
-                if (!address.isEmpty()) {
-                    people.append(QJsonObject{{QStringLiteral("name"), p.value(QLatin1String("displayName")).toString()}, {QStringLiteral("address"), address}});
-                }
+        const QList<GraphCore::People::Person> found = GraphCore::People::parseRelevant(response.json());
+        for (const GraphCore::People::Person &person : found) {
+            for (const QString &address : person.emails) {
+                people.append(QJsonObject{{QStringLiteral("name"), person.name}, {QStringLiteral("address"), address}});
             }
         }
         QSaveFile out(file);
@@ -1286,7 +1288,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
             r->deleteLater();
             const QJsonObject answer{{QStringLiteral("ok"), response.ok()},
                                      {QStringLiteral("problem"), accessProblem(response)},
-                                     {QStringLiteral("detail"), response.ok() ? QString() : response.describe()}};
+                                     {QStringLiteral("detail"), response.ok() ? QString() : response.userMessage()}};
             Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
         });
         return;
@@ -1321,7 +1323,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
             r->deleteLater();
             const QJsonObject answer{{QStringLiteral("ok"), response.ok()},
                                      {QStringLiteral("problem"), accessProblem(response)},
-                                     {QStringLiteral("detail"), response.ok() ? QString() : response.describe()},
+                                     {QStringLiteral("detail"), response.ok() ? QString() : response.userMessage()},
                                      {QStringLiteral("body"), response.json()}};
             Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
         });
@@ -1343,7 +1345,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
             r->deleteLater();
             const QJsonObject answer{{QStringLiteral("ok"), response.ok()},
                                      {QStringLiteral("problem"), accessProblem(response)},
-                                     {QStringLiteral("detail"), response.ok() ? QString() : response.describe()},
+                                     {QStringLiteral("detail"), response.ok() ? QString() : response.userMessage()},
                                      {QStringLiteral("body"), response.json()}};
             Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
         });
@@ -1415,7 +1417,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
             r->deleteLater();
             const QJsonObject answer{{QStringLiteral("ok"), response.ok()},
                                      {QStringLiteral("problem"), accessProblem(response)},
-                                     {QStringLiteral("detail"), response.ok() ? QString() : response.describe()}};
+                                     {QStringLiteral("detail"), response.ok() ? QString() : response.userMessage()}};
             Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
             // The message moved (or was copied) in Exchange: the folders show it at once
             if (response.ok() && kind != QLatin1String("focusOverride")) {
@@ -1471,7 +1473,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
             }
             const QJsonObject answer{{QStringLiteral("ok"), response.ok()},
                                      {QStringLiteral("problem"), accessProblem(response)},
-                                     {QStringLiteral("detail"), response.ok() ? QString() : response.describe()},
+                                     {QStringLiteral("detail"), response.ok() ? QString() : response.userMessage()},
                                      {QStringLiteral("bytes"), bytes}};
             Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
         });
@@ -1505,7 +1507,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
             const auto reply = [this, request](const GraphCore::GraphResponse &res, const QString &id) {
                 const QJsonObject answer{{QStringLiteral("ok"), !id.isEmpty()},
                                          {QStringLiteral("problem"), id.isEmpty() ? accessProblem(res) : QString()},
-                                         {QStringLiteral("detail"), id.isEmpty() ? res.describe() : QString()},
+                                         {QStringLiteral("detail"), id.isEmpty() ? res.userMessage() : QString()},
                                          {QStringLiteral("id"), id}};
                 Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
             };
@@ -1594,7 +1596,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
             r->deleteLater();
             const QJsonObject answer{{QStringLiteral("ok"), response.ok()},
                                      {QStringLiteral("problem"), response.ok() ? QString() : accessProblem(response)},
-                                     {QStringLiteral("detail"), response.ok() ? QString() : response.describe()}};
+                                     {QStringLiteral("detail"), response.ok() ? QString() : response.userMessage()}};
             Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
             // The folder tree's delta brings the change into the cache
             if (response.ok()) {
@@ -1627,7 +1629,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
             }
             const QJsonObject answer{{QStringLiteral("ok"), taken},
                                      {QStringLiteral("problem"), taken ? QString() : accessProblem(response)},
-                                     {QStringLiteral("detail"), taken ? QString() : response.ok() ? QStringLiteral("not taken") : response.describe()}};
+                                     {QStringLiteral("detail"), taken ? QString() : response.ok() ? QStringLiteral("not taken") : response.userMessage()}};
             Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
         });
         return;
@@ -1656,7 +1658,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
             r->deleteLater();
             const QJsonObject answer{{QStringLiteral("ok"), response.ok()},
                                      {QStringLiteral("problem"), accessProblem(response)},
-                                     {QStringLiteral("detail"), response.ok() ? QString() : response.describe()},
+                                     {QStringLiteral("detail"), response.ok() ? QString() : response.userMessage()},
                                      {QStringLiteral("id"), response.json().value(QLatin1String("id")).toString()}};
             Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
         });
@@ -1683,7 +1685,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
         const auto reply = [this, request](const GraphCore::GraphResponse &res, const QString &id) {
             const QJsonObject answer{{QStringLiteral("ok"), !id.isEmpty()},
                                      {QStringLiteral("problem"), id.isEmpty() ? accessProblem(res) : QString()},
-                                     {QStringLiteral("detail"), id.isEmpty() ? (res.ok() ? QStringLiteral("not found") : res.describe()) : QString()},
+                                     {QStringLiteral("detail"), id.isEmpty() ? (res.ok() ? QStringLiteral("not found") : res.userMessage()) : QString()},
                                      {QStringLiteral("id"), id}};
             Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
         };
@@ -1758,7 +1760,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
             r->deleteLater();
             const QJsonObject answer{{QStringLiteral("ok"), response.ok()},
                                      {QStringLiteral("problem"), accessProblem(response)},
-                                     {QStringLiteral("detail"), response.ok() ? QString() : response.describe()},
+                                     {QStringLiteral("detail"), response.ok() ? QString() : response.userMessage()},
                                      {QStringLiteral("status"), response.status}};
             Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
         });
@@ -1771,18 +1773,18 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
     } else if (kind == QLatin1String("rooms")) {
         spec.pathOrUrl = QStringLiteral("/places/microsoft.graph.room?$top=200");
     } else if (kind == QLatin1String("directory")) {
-        // The organisation's people (read only), as Outlook's People search. No accountEnabled
-        // filter: that needs User.Read.All, the app has User.ReadBasic.All
-        QString text = args.value(QLatin1String("text")).toString();
-        text.remove(QLatin1Char('"'));
-        spec.pathOrUrl = QStringLiteral("/users?$top=40&$count=true&$select=id,displayName,givenName,surname,mail,userPrincipalName,jobTitle,department,officeLocation,companyName,businessPhones,mobilePhone"
-                                        "&$search=")
-            + QString::fromLatin1(QUrl::toPercentEncoding(QStringLiteral("\"displayName:%1\" OR \"mail:%1\"").arg(text)));
-        spec.headers.append({QByteArrayLiteral("ConsistencyLevel"), QByteArrayLiteral("eventual")});
+        // The organisation's people (read only), as Outlook's People search: the suite's directory
+        // search (GraphCore::People) with the fields of a contact card
+        const GraphCore::People::Request directory = GraphCore::People::directory(args.value(QLatin1String("text")).toString(), 40,
+                                                                                  {QStringLiteral("id"), QStringLiteral("displayName"), QStringLiteral("givenName"), QStringLiteral("surname"),
+                                                                                   QStringLiteral("mail"), QStringLiteral("userPrincipalName"), QStringLiteral("jobTitle"), QStringLiteral("department"),
+                                                                                   QStringLiteral("officeLocation"), QStringLiteral("companyName"), QStringLiteral("businessPhones"), QStringLiteral("mobilePhone")});
+        spec.pathOrUrl = directory.path;
+        spec.headers.append(directory.headers);
     } else if (kind == QLatin1String("photo")) {
         // A contact's photo (contact: graph id) or a colleague's (user: id); answered as base64
         const QString contact = args.value(QLatin1String("contact")).toString();
-        spec.pathOrUrl = QStringLiteral("/users/") + args.value(QLatin1String("user")).toString() + QStringLiteral("/photos/96x96/$value");
+        spec.pathOrUrl = GraphCore::People::photoPath(args.value(QLatin1String("user")).toString(), 96);
         if (!contact.isEmpty()) {
             spec.pathOrUrl = m_ctx.root + QStringLiteral("/contacts/") + contact + QStringLiteral("/photo/$value");
         }
@@ -1878,7 +1880,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
             r->deleteLater();
             const QJsonObject answer{{QStringLiteral("ok"), response.ok()},
                                      {QStringLiteral("problem"), accessProblem(response)},
-                                     {QStringLiteral("detail"), response.ok() ? QString() : response.describe()},
+                                     {QStringLiteral("detail"), response.ok() ? QString() : response.userMessage()},
                                      {QStringLiteral("body"), response.json()}};
             Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
         });
@@ -1905,7 +1907,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
             }
             const QJsonObject answer{{QStringLiteral("ok"), response.ok() || response.status == 404},
                                      {QStringLiteral("problem"), response.status == 404 ? QString() : accessProblem(response)},
-                                     {QStringLiteral("detail"), response.ok() ? QString() : response.describe()}};
+                                     {QStringLiteral("detail"), response.ok() ? QString() : response.userMessage()}};
             Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
         });
         return;
@@ -1951,7 +1953,7 @@ void MailboxWorker::query(quint64 request, const QString &kind, const QString &j
             r->deleteLater();
             const QJsonObject answer{{QStringLiteral("ok"), response.ok()},
                                      {QStringLiteral("problem"), accessProblem(response)},
-                                     {QStringLiteral("detail"), response.ok() ? QString() : response.describe()},
+                                     {QStringLiteral("detail"), response.ok() ? QString() : response.userMessage()},
                                      {QStringLiteral("body"), response.json()}};
             Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
         });

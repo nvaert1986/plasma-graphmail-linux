@@ -3,6 +3,8 @@
 
 #include "mainwindow.h"
 #include "graphsynclink.h"
+
+#include <graphcore/serviceclient.h>
 #include "updates.h"
 #include "updatesdialog.h"
 #include "graphmail_debug.h"
@@ -328,6 +330,20 @@ MainWindow::MainWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *par
     centralLayout->setSpacing(0);
     centralLayout->addWidget(m_undoBar);
     centralLayout->addWidget(m_autoRepliesBar);
+    m_accountsBar = new KMessageWidget(this);
+    m_accountsBar->setCloseButtonVisible(false);
+    m_accountsBar->setWordWrap(true);
+    m_accountsBar->hide();
+    auto *accountSettings = new QAction(QIcon::fromTheme(QStringLiteral("system-users")), i18nc("@action:button", "Microsoft 365 Accounts..."), m_accountsBar);
+    connect(accountSettings, &QAction::triggered, this, [] {
+        GraphCore::AccountService::openSettings();
+    });
+    m_accountsBar->addAction(accountSettings);
+    centralLayout->addWidget(m_accountsBar);
+    m_accounts = new GraphCore::AccountsClient(this);
+    connect(m_accounts, &GraphCore::AccountsClient::accountsChanged, this, &MainWindow::updateAccountsBar);
+    connect(m_accounts, &GraphCore::AccountsClient::signInNeeded, this, &MainWindow::updateAccountsBar);
+    QTimer::singleShot(0, this, &MainWindow::updateAccountsBar);
     centralLayout->addWidget(m_splitter, 1);
     m_readingSplitter = new QSplitter(Qt::Vertical, this);
     m_readingSplitter->setChildrenCollapsible(false);
@@ -1079,6 +1095,13 @@ void MainWindow::setupActions()
     offline->setIcon(QIcon::fromTheme(QStringLiteral("folder-sync")));
     connect(offline, &QAction::triggered, this, &MainWindow::openOfflineSettings);
 
+    QAction *accountsAction = actions->addAction(QStringLiteral("accounts"));
+    accountsAction->setText(i18nc("@action", "Microsoft 365 Accounts..."));
+    accountsAction->setIcon(QIcon::fromTheme(QStringLiteral("system-users")));
+    connect(accountsAction, &QAction::triggered, this, [] {
+        GraphCore::AccountService::openSettings();
+    });
+
     QAction *updates = actions->addAction(QStringLiteral("updates"));
     updates->setText(i18nc("@action", "Updates..."));
     updates->setIcon(QIcon::fromTheme(QStringLiteral("system-software-update")));
@@ -1223,6 +1246,39 @@ WaitingWindow *MainWindow::openWaiting()
     });
     window->show();
     return window;
+}
+
+void MainWindow::updateAccountsBar()
+{
+    QString error;
+    const QList<GraphCore::ServiceAccount> all = m_accounts->accounts(&error);
+    if (!error.isEmpty()) {
+        // The service does not answer: the mailboxes say so themselves
+        m_accountsBar->hide();
+        return;
+    }
+    QStringList waiting;
+    for (const GraphCore::ServiceAccount &a : all) {
+        if (a.state == QLatin1String("signInNeeded") || a.state == QLatin1String("signedOut")) {
+            waiting.append(a.userPrincipalName.isEmpty() ? a.displayName : a.userPrincipalName);
+        }
+    }
+    if (all.isEmpty()) {
+        m_accountsBar->setMessageType(KMessageWidget::Information);
+        m_accountsBar->setText(i18nc("@info", "No work account yet. Add one under Microsoft 365 Accounts to see your mail, calendar and contacts."));
+    } else if (!waiting.isEmpty()) {
+        m_accountsBar->setMessageType(KMessageWidget::Warning);
+        m_accountsBar->setText(i18ncp("@info %2 accounts", "%2 has to sign in again: its mail waits until then.", "These accounts have to sign in again: %2. Their mail waits until then.", waiting.size(),
+                                      waiting.join(QStringLiteral(", "))));
+    } else {
+        if (m_accountsBar->isVisible()) {
+            m_accountsBar->animatedHide();
+        }
+        return;
+    }
+    if (!m_accountsBar->isVisible()) {
+        m_accountsBar->animatedShow();
+    }
 }
 
 UpdatesDialog *MainWindow::openUpdates()

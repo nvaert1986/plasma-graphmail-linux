@@ -4,6 +4,7 @@
 // Command-line access to the graphcore library: sign in, list accounts, raw Graph requests.
 // Used to test the library against a real tenant until the daemon and the app exist.
 
+#include <graphcore/proxy.h>
 #include "accounts.h"
 #include "graphclient.h"
 #include "graphutil.h"
@@ -327,6 +328,8 @@ int main(int argc, char **argv)
     QCoreApplication::setApplicationName(QStringLiteral("graphmailctl"));
     // Accounts are shared by the suite; the app registration per account is this app's own
     QCoreApplication::setApplicationVersion(QStringLiteral(GRAPHMAIL_VERSION));
+    // Every Graph request through the system's proxy (System Settings > Network > Proxy)
+    GraphCore::Proxy::useSystemSettings();
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Test tool for the plasma-graphmail-linux Graph library"));

@@ -32,6 +32,11 @@ class QSplitter;
 class QToolButton;
 class QTreeView;
 
+namespace GraphCore
+{
+class AccountsClient;
+}
+
 namespace GraphMail
 {
 
@@ -345,6 +350,11 @@ private:
     QStringList m_autoRepliesForTests;
     QTimer m_autoRepliesTimer;
     KMessageWidget *m_undoBar = nullptr;
+    // No account yet, or an account that has to sign in again: the way to System Settings >
+    // Microsoft 365 Accounts (the suite's one sign-in)
+    KMessageWidget *m_accountsBar = nullptr;
+    GraphCore::AccountsClient *m_accounts = nullptr;
+    void updateAccountsBar();
     std::unique_ptr<QTemporaryDir> m_dragFiles;
     struct UndoStep {
         QString mailboxKey;

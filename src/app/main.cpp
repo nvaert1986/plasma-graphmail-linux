@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <graphcore/proxy.h>
 #include "accounts.h"
 #include "calendarsharingdialog.h"
 #include "calendaroptions.h"
@@ -166,6 +167,8 @@ int main(int argc, char **argv)
     }
     // Accounts are shared by the suite; the app registration per account is this app's own
     GraphCore::Accounts::setApplication(QStringLiteral("plasma-graphmail-linux"));
+    // Every Graph request through the system's proxy (System Settings > Network > Proxy)
+    GraphCore::Proxy::useSystemSettings();
 
     KAboutData about(QStringLiteral("plasma-graphmail-linux"),
                      i18n("Graph Mail"),

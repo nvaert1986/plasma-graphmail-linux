@@ -52,6 +52,7 @@ OfflineDialog::OfflineDialog(MailboxSet *mailboxes, DaemonClient *daemon, QWidge
     , m_daemon(daemon)
     , m_window(new QComboBox(this))
     , m_attachments(new QCheckBox(i18nc("@option:check", "Also keep attachments offline"), this))
+    , m_metered(new QCheckBox(i18nc("@option:check", "Also download on metered connections (mobile hotspot)"), this))
     , m_note(new QLabel(this))
     , m_space(new QTreeWidget(this))
 {
@@ -72,6 +73,8 @@ OfflineDialog::OfflineDialog(MailboxSet *mailboxes, DaemonClient *daemon, QWidge
     }
     m_window->setCurrentIndex(index);
     m_attachments->setChecked(group.readEntry("AttachmentsOffline", false));
+    m_metered->setChecked(group.readEntry("PrefetchOnMetered", false));
+    m_metered->setToolTip(i18nc("@info:tooltip", "Off: on a metered connection only the messages you open are downloaded; the rest follows on another connection."));
     m_note->setWordWrap(true);
     auto updateNote = [this] {
         const int value = m_window->currentData().toInt();
@@ -94,6 +97,7 @@ OfflineDialog::OfflineDialog(MailboxSet *mailboxes, DaemonClient *daemon, QWidge
     auto *form = new QFormLayout;
     form->addRow(i18nc("@label:listbox", "Keep on this computer:"), m_window);
     form->addRow(QString(), m_attachments);
+    form->addRow(QString(), m_metered);
     auto *layout = new QVBoxLayout(this);
     layout->addLayout(form);
     layout->addWidget(m_note);
@@ -143,6 +147,7 @@ void OfflineDialog::save()
     KConfigGroup group = general();
     group.writeEntry("BodyWindowDays", m_window->currentData().toInt());
     group.writeEntry("AttachmentsOffline", m_attachments->isChecked());
+    group.writeEntry("PrefetchOnMetered", m_metered->isChecked());
     group.sync();
     m_daemon->applyOfflineSettings(false);
 }

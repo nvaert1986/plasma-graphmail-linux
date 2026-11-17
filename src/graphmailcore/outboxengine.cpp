@@ -605,7 +605,7 @@ void OutboxEngine::error(const GraphResponse &response)
 {
     const bool transient = response.isNetworkError() || response.status == 408 || response.status == 429 || response.status >= 500;
     const qint64 now = m_ctx->now ? m_ctx->now() : QDateTime::currentMSecsSinceEpoch();
-    const QString text = response.describe();
+    const QString text = response.userMessage();
     if (transient) {
         const int attempts = m_run.attempts + 1;
         const qint64 next = now + std::min(maxRetryMs, firstRetryMs << std::min(attempts - 1, 10));

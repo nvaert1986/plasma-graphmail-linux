@@ -366,7 +366,7 @@ void EventQueue::finished(const OperationRow &op, const GraphResponse &response)
     if (transient) {
         const qint64 delay = std::min(maxRetryMs, firstRetryMs << std::min(op.attempts, 10));
         const qint64 now = m_ctx->now ? m_ctx->now() : QDateTime::currentMSecsSinceEpoch();
-        store->retryOperationLater(op.id, op.attempts + 1, now + delay, response.describe());
+        store->retryOperationLater(op.id, op.attempts + 1, now + delay, response.userMessage());
         if (response.isNetworkError()) {
             Q_EMIT networkError();
         }
@@ -377,7 +377,7 @@ void EventQueue::finished(const OperationRow &op, const GraphResponse &response)
         rollback(op);
         return store->removeOperation(op.id);
     });
-    Q_EMIT failed(op.target, op.kind, response.describe());
+    Q_EMIT failed(op.target, op.kind, response.userMessage());
 }
 
 bool EventQueue::isInFlight(qint64 op) const

@@ -40,6 +40,7 @@ private:
     DaemonClient *m_daemon;
     QComboBox *m_window;
     QCheckBox *m_attachments;
+    QCheckBox *m_metered;
     QLabel *m_note;
     QTreeWidget *m_space;
 };

@@ -384,7 +384,7 @@ void OperationQueue::finished(const OperationRow &op, const GraphResponse &respo
     if (transient) {
         const qint64 delay = std::min(maxRetryMs, firstRetryMs << std::min(op.attempts, 10));
         const qint64 now = m_ctx->now ? m_ctx->now() : QDateTime::currentMSecsSinceEpoch();
-        store->retryOperationLater(op.id, op.attempts + 1, now + delay, response.describe());
+        store->retryOperationLater(op.id, op.attempts + 1, now + delay, response.userMessage());
         if (response.isNetworkError()) {
             Q_EMIT networkError();
         }
@@ -396,7 +396,7 @@ void OperationQueue::finished(const OperationRow &op, const GraphResponse &respo
         return apply(op, true) && store->removeOperation(op.id);
     });
     clearPendingIfDone(op.target);
-    Q_EMIT failed(op.target, op.kind, response.describe());
+    Q_EMIT failed(op.target, op.kind, response.userMessage());
 }
 
 }

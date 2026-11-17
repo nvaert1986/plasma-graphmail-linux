@@ -95,7 +95,7 @@ MailboxAccess checkMailboxAccess(GraphCore::GraphClient &client, const QString &
         + QString::fromLatin1(QUrl::toPercentEncoding(QStringLiteral("mail eq '%1' or userPrincipalName eq '%1'").arg(quoted))));
     if (!found.ok()) {
         access.problem = accessProblem(found);
-        access.detail = found.describe();
+        access.detail = found.userMessage();
         return access;
     }
     const QJsonArray users = found.json().value(QLatin1String("value")).toArray();
@@ -130,7 +130,7 @@ MailboxAccess checkMailboxAccess(GraphCore::GraphClient &client, const QString &
             return false;
         }
         access.problem = problem;
-        access.detail = r.describe();
+        access.detail = r.userMessage();
         return false;
     };
     if (!probe(QStringLiteral("/mailFolders/inbox?$select=id"), access.mail)) {
@@ -144,7 +144,7 @@ MailboxAccess checkMailboxAccess(GraphCore::GraphClient &client, const QString &
         access.calendarEdit = cal.json().value(QLatin1String("canEdit")).toBool();
     } else if (calendarProblem != QLatin1String("noAccess") && calendarProblem != QLatin1String("denied")) {
         access.problem = calendarProblem;
-        access.detail = cal.describe();
+        access.detail = cal.userMessage();
         return access;
     }
     access.calendar = calendar;
