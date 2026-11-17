@@ -97,7 +97,7 @@ void onKeychainThread(const std::function<void()> &work)
 
 // A QtKeychain job to completion, in a local event loop on the keychain thread
 template<typename Job>
-bool runKeychainJob(Job *job, QString *error)
+bool runKeychainJob(Job *job, QString *error, bool *notFound = nullptr)
 {
     QEventLoop loop;
     QObject::connect(job, &QKeychain::Job::finished, &loop, &QEventLoop::quit);
@@ -105,6 +105,9 @@ bool runKeychainJob(Job *job, QString *error)
     job->start();
     loop.exec();
     const bool ok = job->error() == QKeychain::NoError;
+    if (notFound) {
+        *notFound = job->error() == QKeychain::EntryNotFound;
+    }
     if (!ok && error) {
         *error = job->errorString();
     }
@@ -427,6 +430,22 @@ bool Auth::hasStoredRefreshToken()
     return !m_refreshToken.isEmpty();
 }
 
+Auth::StoredToken Auth::storedRefreshToken()
+{
+    QMutexLocker locker(&m_refreshMutex);
+    if (!m_refreshToken.isEmpty()) {
+        return StoredToken::Present;
+    }
+    QString error;
+    bool notFound = false;
+    m_refreshToken = readRefreshToken(&error, &notFound);
+    if (!m_refreshToken.isEmpty()) {
+        return StoredToken::Present;
+    }
+    // No object id: never signed in with this app; an empty entry counts as none
+    return m_settings.objectId.isEmpty() || notFound || error.isEmpty() ? StoredToken::Missing : StoredToken::Unknown;
+}
+
 void Auth::logout()
 {
     QMutexLocker locker(&m_refreshMutex);
@@ -507,7 +526,7 @@ QString Auth::resolveTenant(const QString &input, bool *offline)
     return isGuid(tenantId) ? tenantId.toLower() : QString();
 }
 
-QString Auth::readRefreshToken(QString *error)
+QString Auth::readRefreshToken(QString *error, bool *notFound)
 {
     if (m_settings.objectId.isEmpty()) {
         return {};
@@ -516,7 +535,7 @@ QString Auth::readRefreshToken(QString *error)
     onKeychainThread([&] {
         QKeychain::ReadPasswordJob job(m_settings.keychainService);
         job.setKey(keychainKey());
-        if (runKeychainJob(&job, error)) {
+        if (runKeychainJob(&job, error, notFound)) {
             token = job.textData();
         }
     });

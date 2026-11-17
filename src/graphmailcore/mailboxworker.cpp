@@ -536,6 +536,12 @@ void MailboxWorker::tick()
         m_nextMaintenance = t + maintenanceIntervalMs;
         m_bodies->sweep();
         m_store->sweepReminders(t - 30LL * 24 * 3600 * 1000);
+        // Drafts deleted or moved in Outlook leave no record of Graph Mail behind
+        if (const std::optional<FolderRow> drafts = m_store->folderByWellKnown(QStringLiteral("drafts"))) {
+            if (const int dropped = m_store->dropStaleDraftRecords(drafts->id)) {
+                qCInfo(GRAPHMAIL) << "Dropped" << dropped << "records of drafts that left Drafts";
+            }
+        }
     }
     // Reminders: the own mailbox, every half minute (also while offline: they come from the cache)
     if (m_config.mailbox == QLatin1String("me") && t >= m_nextReminderCheck) {

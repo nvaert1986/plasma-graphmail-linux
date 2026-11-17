@@ -436,7 +436,16 @@ MainWindow::MainWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *par
         m_folders->expand(mailbox);
     }
     if (const QList<MailboxInfo> all = m_mailboxes->mailboxes(); !all.isEmpty()) {
-        selectFolder(all.constFirst().key());
+        // The mailbox used last (graphmailrc [MainWindow] LastMailbox), so New Message and mailto:
+        // links start there too; otherwise the first account's own mailbox
+        QString start = all.constFirst().key();
+        const QString last = windowGroup().readEntry("LastMailbox");
+        for (const MailboxInfo &box : all) {
+            if (box.key() == last && box.mail) {
+                start = last;
+            }
+        }
+        selectFolder(start);
         // The own mailbox's name on top stays visible
         m_folders->scrollToTop();
     }
@@ -3355,6 +3364,14 @@ void MainWindow::folderChanged()
     m_mailboxKey = index.data(FolderModel::MailboxKeyRole).toString();
     m_folderMailboxKey = m_mailboxKey;
     m_folder = index.data(FolderModel::FolderIdRole).toLongLong();
+    // Remembered for the next start (screenshots and tests leave it alone)
+    if (!m_testMode && !m_mailboxKey.isEmpty()) {
+        KConfigGroup group = windowGroup();
+        if (group.readEntry("LastMailbox") != m_mailboxKey) {
+            group.writeEntry("LastMailbox", m_mailboxKey);
+            group.sync();
+        }
+    }
     {
         const QSignalBlocker blocker(m_searchField);
         m_searchField->clear();

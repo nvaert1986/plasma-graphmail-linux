@@ -3,6 +3,8 @@
 
 #include "graphutil.h"
 
+#include <QHash>
+#include <QReadWriteLock>
 #include <QSet>
 #include <QStringList>
 
@@ -54,6 +56,24 @@ QString mailboxRoot(const QString &mailbox)
     return QStringLiteral("/users/") + QString::fromLatin1(QUrl::toPercentEncoding(mailbox, "@"));
 }
 
+namespace
+{
+QReadWriteLock ownAliasesLock;
+QHash<QString, QSet<QString>> ownAliases;
+}
+
+void setOwnMailboxAliases(const QString &scope, const QStringList &aliases)
+{
+    QSet<QString> folded;
+    for (const QString &alias : aliases) {
+        if (!alias.isEmpty()) {
+            folded.insert(alias.toLower());
+        }
+    }
+    QWriteLocker locker(&ownAliasesLock);
+    ownAliases.insert(scope, folded);
+}
+
 QString throttleKeyFor(const QString &scope, const QUrl &url, const QString &graphHost)
 {
     if (url.host() != graphHost) {
@@ -72,6 +92,10 @@ QString throttleKeyFor(const QString &scope, const QUrl &url, const QString &gra
     } else if (parts.value(0) == QLatin1String("users") && parts.size() > 1) {
         mailbox = parts.at(1).toLower();
         resource = 2;
+        QReadLocker locker(&ownAliasesLock);
+        if (ownAliases.value(scope).contains(mailbox)) {
+            mailbox = QStringLiteral("me");
+        }
     } else {
         return scope;
     }

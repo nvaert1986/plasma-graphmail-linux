@@ -367,6 +367,14 @@ void OperationQueue::finished(const OperationRow &op, const GraphResponse &respo
     Store *store = m_ctx->store;
     // The message is already gone on the server: a delete is done, anything else is moot
     if (response.ok() || response.status == 404) {
+        // A move of a message gone on the server: the row kept for it (a folder's removal is
+        // skipped while a move into it waits) goes too
+        if (response.status == 404 && op.kind == QLatin1String("move")) {
+            const RemovedMessage removed = store->removeMessage(op.target);
+            for (const QString &blob : removed.blobs) {
+                m_ctx->blobs->remove(blob);
+            }
+        }
         store->removeOperation(op.id);
         clearPendingIfDone(op.target);
         Q_EMIT completed(op.target, op.kind);

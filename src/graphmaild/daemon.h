@@ -11,6 +11,7 @@
 #include <QHash>
 #include <QObject>
 #include <QPointer>
+#include <QSet>
 
 #include <memory>
 
@@ -138,6 +139,9 @@ private:
         QString status;
     };
 
+    // The account's own and shared mailboxes, once the keychain holds its sign-in (checked off the
+    // main thread); without one it waits and is checked again every few minutes
+    void startAccount(const QString &account);
     void startMailbox(const QString &account, const QString &mailbox, const QString &root, bool own);
     // Display name and address of a shared mailbox, looked up once and kept in graphmailrc
     void resolveMailboxName(const QString &account, const QString &mailbox);
@@ -159,6 +163,11 @@ private:
     // Per account, only for OrgChart: Scopes::directory()
     QHash<QString, std::shared_ptr<GraphCore::Auth>> m_directoryAuth;
     QHash<QString, Mailbox> m_mailboxes;
+    // Accounts in graphaccountsrc without a Graph Mail sign-in (for instance one only another app
+    // of the suite signed in): no mailboxes until they sign in
+    QSet<QString> m_notSignedIn;
+    QSet<QString> m_checkingSignIn;
+    QTimer *m_signInCheck = nullptr;
 };
 
 }

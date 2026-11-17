@@ -358,6 +358,9 @@ MailFolderSync::PageHandler MailFolderSync::pageHandler(const std::function<void
         QStringList touched;
         QStringList unknownSparse;
         int changes = 0;
+        // A draft leaving Drafts (deleted or moved in Outlook) takes Graph Mail's record of it along
+        const std::optional<FolderRow> drafts = store->folderByWellKnown(QStringLiteral("drafts"));
+        const bool inDrafts = drafts && drafts->id == m_folder;
         const bool ok = store->inTransaction([&] {
             for (const QJsonValue &value : items) {
                 const QJsonObject item = value.toObject();
@@ -366,11 +369,20 @@ MailFolderSync::PageHandler MailFolderSync::pageHandler(const std::function<void
                     continue;
                 }
                 if (Mapper::isRemoved(item)) {
+                    // A move into this folder still waiting (an Undo right after a move out): the
+                    // removal is the earlier move's; the queued move settles where it ends up
+                    if (const std::optional<OperationRow> moving = store->pendingOperation(id, QStringLiteral("move"));
+                        moving && QJsonDocument::fromJson(moving->payload.toUtf8()).object().value(QLatin1String("value")).toInteger() == m_folder) {
+                        continue;
+                    }
                     // The move rule: only while the message is still in this folder
                     const RemovedMessage removed = store->removeMessage(id, m_folder);
                     if (removed.removed) {
                         ++changes;
                         blobs += removed.blobs;
+                        if (inDrafts) {
+                            store->dropDraftRecords(id);
+                        }
                     }
                     continue;
                 }
@@ -399,6 +411,9 @@ MailFolderSync::PageHandler MailFolderSync::pageHandler(const std::function<void
                 case Store::Upsert::Updated:
                     ++changes;
                     touched.append(id);
+                    if (drafts && !inDrafts) {
+                        store->dropDraftRecords(id);
+                    }
                     break;
                 case Store::Upsert::Unchanged:
                     break;

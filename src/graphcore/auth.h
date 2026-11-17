@@ -75,6 +75,10 @@ public:
     QString cachedAccessToken() override;
 
     bool hasStoredRefreshToken();
+    // What the keychain holds for this account: Unknown when it cannot be read (locked, no
+    // keychain service), so the caller does not mistake that for "never signed in"
+    enum class StoredToken { Present, Missing, Unknown };
+    StoredToken storedRefreshToken();
     void logout();
 
     // Microsoft's page where a tenant administrator approves every permission of the app
@@ -104,7 +108,7 @@ private:
     bool completeSignIn(const QString &accessToken, qint64 expiresInSeconds, const QString &refreshToken, const QString &idToken, QString *error);
     void setToken(const QString &token, const QDateTime &expiresAt);
 
-    QString readRefreshToken(QString *error);
+    QString readRefreshToken(QString *error, bool *notFound = nullptr);
     bool writeRefreshToken(const QString &token, QString *error);
 
     // m_refreshMutex serialises sign-ins and refreshes (network round trips); m_tokenMutex only

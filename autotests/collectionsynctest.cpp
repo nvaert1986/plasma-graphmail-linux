@@ -281,6 +281,82 @@ private Q_SLOTS:
         QCOMPARE(store->messageByGraphId(QStringLiteral("m1"))->subject, QStringLiteral("Subject m1"));
     }
 
+    void draftLeavingDraftsDropsItsRecord()
+    {
+        // A draft deleted in Outlook: moved to Deleted Items, or gone from Drafts for good. Graph
+        // Mail's saved record of it goes along; one still being sent stays
+        const qint64 drafts = store->upsertFolder({0, QStringLiteral("FD"), {}, QStringLiteral("Drafts"), QStringLiteral("drafts"), 0, 0});
+        const qint64 deleted = store->upsertFolder({0, QStringLiteral("FX"), {}, QStringLiteral("Deleted Items"), QStringLiteral("deleteditems"), 0, 0});
+        const auto record = [this](const QString &uuid, const QString &draft, bool send) {
+            Outgoing o;
+            o.uuid = uuid;
+            o.draftId = draft;
+            o.state = send ? Outgoing::State::Pending : Outgoing::State::Saved;
+            o.send = send;
+            QVERIFY(store->saveOutgoing(o));
+        };
+        record(QStringLiteral("r1"), QStringLiteral("d1"), false);
+        record(QStringLiteral("r2"), QStringLiteral("d2"), false);
+        record(QStringLiteral("r3"), QStringLiteral("d3"), true);
+        record(QStringLiteral("r4"), QStringLiteral("d4"), false);
+        server->handler = [&](const FakeRequest &r) -> FakeReply {
+            const QString target = QString::fromUtf8(r.target);
+            if (target.contains(QLatin1String("/mailFolders/FD/messages/delta"))) {
+                // d4 is still a draft (updated); d2 and d3 left Drafts
+                return page({msg(QStringLiteral("d4"), QStringLiteral("k4")), removed(QStringLiteral("d2")), removed(QStringLiteral("d3"))}, {}, url(QStringLiteral("/draftsDone")));
+            }
+            if (target.contains(QLatin1String("/mailFolders/FX/messages/delta"))) {
+                return page({msg(QStringLiteral("d1"), QStringLiteral("k1"))}, {}, url(QStringLiteral("/deletedDone")));
+            }
+            return page({}, {}, url(QStringLiteral("/done")));
+        };
+        // d2/d3 are cached in Drafts first, so the removal is theirs to report
+        QVERIFY(store->upsertMessage(Mapper::message(msg(QStringLiteral("d2"), QStringLiteral("k2")), drafts)) == Store::Upsert::Inserted);
+        QVERIFY(store->upsertMessage(Mapper::message(msg(QStringLiteral("d3"), QStringLiteral("k3")), drafts)) == Store::Upsert::Inserted);
+        MailFolderSync deletedSync(&ctx, deleted, QStringLiteral("FX"));
+        QCOMPARE(int(runSync(deletedSync).outcome) == int(SyncResult::Outcome::Failed), false);
+        MailFolderSync draftsSync(&ctx, drafts, QStringLiteral("FD"));
+        QCOMPARE(int(runSync(draftsSync).outcome) == int(SyncResult::Outcome::Failed), false);
+        QVERIFY(store->messageByGraphId(QStringLiteral("d1")).has_value());
+        QVERIFY(!store->outgoing(QStringLiteral("r1")));
+        QVERIFY(!store->outgoing(QStringLiteral("r2")));
+        QVERIFY(store->outgoing(QStringLiteral("r3")));
+        QVERIFY(store->outgoing(QStringLiteral("r4")));
+    }
+
+    void removalDuringAMoveBackIsSkipped()
+    {
+        // Clean Up (or Delete) moved m1 and m2 out of the folder, Undo moved them back at once. The
+        // folder's delta still reports both as removed (the first move); m1's move back is queued,
+        // so its row stays; m2 has no move waiting and goes
+        const qint64 folder = store->upsertFolder({0, QStringLiteral("F1"), {}, QStringLiteral("Sent Items"), QStringLiteral("sentitems"), 0, 0});
+        const qint64 deleted = store->upsertFolder({0, QStringLiteral("FX"), {}, QStringLiteral("Deleted Items"), QStringLiteral("deleteditems"), 0, 0});
+        QVERIFY(store->upsertMessage(Mapper::message(msg(QStringLiteral("m1"), QStringLiteral("k1")), folder)) == Store::Upsert::Inserted);
+        QVERIFY(store->upsertMessage(Mapper::message(msg(QStringLiteral("m2"), QStringLiteral("k2")), folder)) == Store::Upsert::Inserted);
+        const qint64 row = store->messageByGraphId(QStringLiteral("m1"))->id;
+        OperationRow back;
+        back.kind = QStringLiteral("move");
+        back.target = QStringLiteral("m1");
+        back.payload = QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("value"), folder}, {QStringLiteral("previous"), deleted},
+                                                                   {QStringLiteral("destination"), QStringLiteral("F1")}}).toJson(QJsonDocument::Compact));
+        QVERIFY(store->addOperation(back) != 0);
+        // An incremental round, as after the move out
+        SyncState state;
+        state.deltaLink = url(QStringLiteral("/sentIncremental"));
+        state.initialState = MailFolderSync::Incremental;
+        QVERIFY(store->setSyncState(folder, state));
+        server->handler = [&](const FakeRequest &) -> FakeReply {
+            return page({removed(QStringLiteral("m1")), removed(QStringLiteral("m2"))}, {}, url(QStringLiteral("/sentDone")));
+        };
+        MailFolderSync sync(&ctx, folder, QStringLiteral("F1"));
+        QCOMPARE(int(runSync(sync).outcome) == int(SyncResult::Outcome::Failed), false);
+        const std::optional<MessageRow> m1 = store->messageByGraphId(QStringLiteral("m1"));
+        QVERIFY(m1.has_value());
+        // The same row: the list keeps it, no new row after the next sync
+        QCOMPARE(m1->id, row);
+        QVERIFY(!store->messageByGraphId(QStringLiteral("m2")).has_value());
+    }
+
     void folderTree()
     {
         int listings = 0;

@@ -36,9 +36,12 @@ QString mailboxRoot(const QString &mailbox = {});
 // The key throttling is kept under. Exchange Online throttles per app and mailbox (and allows four
 // concurrent requests per mailbox), so Outlook resources (messages, events, contacts, To Do, ...)
 // get "<scope>|<mailbox>"; everything else (OneDrive, SharePoint, the directory) and other hosts
-// get "<scope>", the account. "/me" and "/users/<own address>" are not recognised as the same
-// mailbox.
+// get "<scope>", the account. "/users/<own id or address>" counts as "/me" once the scope's own
+// ids are known (setOwnMailboxAliases).
 QString throttleKeyFor(const QString &scope, const QUrl &url, const QString &graphHost);
+// The signed-in user's object id and addresses for a throttle scope (the account): requests to
+// /users/<one of them> share the "/me" mailbox's key. Process-wide and thread-safe
+void setOwnMailboxAliases(const QString &scope, const QStringList &aliases);
 bool isMailboxKey(const QString &key);
 
 }

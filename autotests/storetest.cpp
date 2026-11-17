@@ -160,6 +160,44 @@ private Q_SLOTS:
         QVERIFY(store.allOutgoing().isEmpty());
     }
 
+    void draftLeavingDraftsDropsItsRecords()
+    {
+        Store store;
+        QString error;
+        QVERIFY(store.open(freshPath(), Store::Mode::ReadWrite, &error));
+        const qint64 drafts = store.upsertFolder({0, QStringLiteral("f-drafts"), {}, QStringLiteral("Drafts"), QStringLiteral("drafts"), 0, 0});
+        const qint64 deleted = store.upsertFolder({0, QStringLiteral("f-deleted"), {}, QStringLiteral("Deleted Items"), QStringLiteral("deleteditems"), 0, 0});
+        const auto record = [&store](const QString &uuid, const QString &draft, Outgoing::State state, bool send) {
+            Outgoing o;
+            o.uuid = uuid;
+            o.draftId = draft;
+            o.state = state;
+            o.send = send;
+            QVERIFY(store.saveOutgoing(o));
+        };
+        // d1 stays in Drafts; d2 was deleted in Outlook (now in Deleted Items)
+        QVERIFY(store.upsertMessage(makeMessage(QStringLiteral("d1"), drafts, 1000)) == Store::Upsert::Inserted);
+        QVERIFY(store.upsertMessage(makeMessage(QStringLiteral("d2"), deleted, 1000)) == Store::Upsert::Inserted);
+        record(QStringLiteral("kept-in-drafts"), QStringLiteral("d1"), Outgoing::State::Saved, false);
+        record(QStringLiteral("saved"), QStringLiteral("d2"), Outgoing::State::Saved, false);
+        record(QStringLiteral("failed-save"), QStringLiteral("d2"), Outgoing::State::Failed, false);
+        // Being written or sent: kept, the engine finishes or reports them
+        record(QStringLiteral("pending"), QStringLiteral("d2"), Outgoing::State::Pending, false);
+        record(QStringLiteral("failed-send"), QStringLiteral("d2"), Outgoing::State::Failed, true);
+        QCOMPARE(store.dropStaleDraftRecords(drafts), 2);
+        QStringList left;
+        for (const Outgoing &o : store.allOutgoing()) {
+            left.append(o.uuid);
+        }
+        left.sort();
+        QCOMPARE(left, QStringList({QStringLiteral("failed-send"), QStringLiteral("kept-in-drafts"), QStringLiteral("pending")}));
+        // A draft gone for good (not in the cache at all) is dropped by its id
+        record(QStringLiteral("gone"), QStringLiteral("d3"), Outgoing::State::Saved, false);
+        QCOMPARE(store.dropDraftRecords(QStringLiteral("d3")), 1);
+        QCOMPARE(store.dropDraftRecords(QString()), 0);
+        QCOMPARE(store.allOutgoing().size(), 3);
+    }
+
     void readOnlyReaderSeesTheWriter()
     {
         QVERIFY(store.upsertMessage(makeMessage(QStringLiteral("m1"), inbox, 1000)) == Store::Upsert::Inserted);

@@ -369,6 +369,11 @@ public:
     QList<Outgoing> dueOutgoing(qint64 now) const;
     QList<Outgoing> allOutgoing() const;
     bool removeOutgoing(const QString &uuid);
+    // A draft that left Drafts (deleted or moved in Outlook): its records that only kept the draft
+    // (saved, or a failed save) are dropped; records being sent or written are kept. Returns the count
+    int dropDraftRecords(const QString &draftId);
+    // The same for every draft the cache knows to be in another folder than Drafts
+    int dropStaleDraftRecords(qint64 draftsFolder);
 
     // Addresses for completion: contacts, recent senders and the recipients of recent sent mail
     QList<OutgoingRecipient> knownAddresses(int recent) const;

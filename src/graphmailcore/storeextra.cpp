@@ -769,6 +769,60 @@ bool Store::removeOutgoing(const QString &uuid)
     return q.exec() || fail(QStringLiteral("removeOutgoing"), q.lastError().text());
 }
 
+namespace
+{
+// Only kept the draft: nothing of it is waiting to be sent or still being uploaded
+bool keepsOnlyTheDraft(const Outgoing &o)
+{
+    return !o.send && (o.state == Outgoing::State::Saved || o.state == Outgoing::State::Failed);
+}
+}
+
+int Store::dropDraftRecords(const QString &draftId)
+{
+    if (draftId.isEmpty()) {
+        return 0;
+    }
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT json FROM outgoing WHERE draft_id = ?"));
+    q.addBindValue(draftId);
+    if (!q.exec()) {
+        fail(QStringLiteral("dropDraftRecords"), q.lastError().text());
+        return 0;
+    }
+    QStringList drop;
+    while (std::optional<Outgoing> o = outgoingFrom(q)) {
+        if (keepsOnlyTheDraft(*o)) {
+            drop.append(o->uuid);
+        }
+    }
+    int dropped = 0;
+    for (const QString &uuid : std::as_const(drop)) {
+        dropped += removeOutgoing(uuid) ? 1 : 0;
+    }
+    return dropped;
+}
+
+int Store::dropStaleDraftRecords(qint64 draftsFolder)
+{
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("SELECT DISTINCT o.draft_id FROM outgoing o JOIN messages m ON m.graph_id = o.draft_id WHERE m.folder != ?"));
+    q.addBindValue(draftsFolder);
+    if (!q.exec()) {
+        fail(QStringLiteral("dropStaleDraftRecords"), q.lastError().text());
+        return 0;
+    }
+    QStringList ids;
+    while (q.next()) {
+        ids.append(q.value(0).toString());
+    }
+    int dropped = 0;
+    for (const QString &id : std::as_const(ids)) {
+        dropped += dropDraftRecords(id);
+    }
+    return dropped;
+}
+
 
 QList<OutgoingRecipient> Store::knownAddresses(int recent) const
 {

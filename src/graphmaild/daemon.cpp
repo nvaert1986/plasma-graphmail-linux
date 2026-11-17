@@ -5,6 +5,7 @@
 #include "accounts.h"
 #include "graphclient.h"
 #include "graphmail_debug.h"
+#include "graphutil.h"
 #include "mailboxaccess.h"
 #include "mailrunner.h"
 #include "scopes.h"
@@ -26,6 +27,7 @@
 #include <QLocale>
 #include <QProcess>
 #include <QThread>
+#include <QTimer>
 #include <QUrl>
 #include <QtConcurrentRun>
 
@@ -109,25 +111,70 @@ bool Daemon::start(QString *error)
     if (accounts.isEmpty()) {
         qCWarning(GRAPHMAIL) << "No accounts in" << GraphCore::Accounts::configFileName() << "- sign in first (graphmailctl login)";
     }
-    const KSharedConfig::Ptr config = settings();
     for (const GraphCore::Account &account : accounts) {
         m_auth.insert(account.id, std::make_shared<GraphCore::Auth>(GraphCore::Auth::settingsFor(account, keychainService(), GraphCore::Scopes::suite())));
-        startMailbox(account.id, QStringLiteral("me"), QStringLiteral("/me"), true);
-        const QStringList shared = accountGroup(config, account.id).readEntry("SharedMailboxes", QStringList());
-        for (const QString &objectId : shared) {
-            startMailbox(account.id, objectId, QStringLiteral("/users/") + objectId, false);
-            if (mailboxGroup(config, account.id, objectId).readEntry("Address").isEmpty()) {
-                resolveMailboxName(account.id, objectId);
-            }
-        }
+        // Own photos and lookups by id or address count against the own mailbox, as /me does
+        GraphCore::setOwnMailboxAliases(account.id, {account.objectId, account.userPrincipalName});
+        startAccount(account.id);
     }
     return true;
+}
+
+void Daemon::startAccount(const QString &account)
+{
+    const std::shared_ptr<GraphCore::Auth> auth = m_auth.value(account);
+    if (!auth || m_checkingSignIn.contains(account)) {
+        return;
+    }
+    m_checkingSignIn.insert(account);
+    auto *watcher = new QFutureWatcher<GraphCore::Auth::StoredToken>(this);
+    connect(watcher, &QFutureWatcher<GraphCore::Auth::StoredToken>::finished, this, [this, watcher, account] {
+        watcher->deleteLater();
+        m_checkingSignIn.remove(account);
+        if (watcher->result() == GraphCore::Auth::StoredToken::Missing) {
+            if (!m_notSignedIn.contains(account)) {
+                qCWarning(GRAPHMAIL) << "Account" << account << "has no Graph Mail sign-in: its mailboxes wait until it signs in";
+                m_notSignedIn.insert(account);
+            }
+            if (!m_signInCheck) {
+                m_signInCheck = new QTimer(this);
+                m_signInCheck->setInterval(5 * 60 * 1000);
+                connect(m_signInCheck, &QTimer::timeout, this, [this] {
+                    const QSet<QString> waiting = m_notSignedIn;
+                    for (const QString &id : waiting) {
+                        startAccount(id);
+                    }
+                });
+            }
+            m_signInCheck->start();
+            return;
+        }
+        // Present, or a keychain that cannot be read now (locked): start; requests wait for the token
+        if (m_notSignedIn.remove(account)) {
+            qCInfo(GRAPHMAIL) << "Account" << account << "signed in: starting its mailboxes";
+        }
+        if (m_notSignedIn.isEmpty() && m_signInCheck) {
+            m_signInCheck->stop();
+        }
+        startMailbox(account, QStringLiteral("me"), QStringLiteral("/me"), true);
+        const KSharedConfig::Ptr config = settings();
+        const QStringList shared = accountGroup(config, account).readEntry("SharedMailboxes", QStringList());
+        for (const QString &objectId : shared) {
+            startMailbox(account, objectId, QStringLiteral("/users/") + objectId, false);
+            if (mailboxGroup(config, account, objectId).readEntry("Address").isEmpty()) {
+                resolveMailboxName(account, objectId);
+            }
+        }
+    });
+    watcher->setFuture(QtConcurrent::run([auth] {
+        return auth->storedRefreshToken();
+    }));
 }
 
 void Daemon::startMailbox(const QString &account, const QString &mailbox, const QString &root, bool own)
 {
     const QString k = key(account, mailbox);
-    if (m_mailboxes.contains(k) || !m_auth.contains(account)) {
+    if (m_mailboxes.contains(k) || !m_auth.contains(account) || m_notSignedIn.contains(account)) {
         return;
     }
     GraphMail::MailboxConfig config = baseConfig();

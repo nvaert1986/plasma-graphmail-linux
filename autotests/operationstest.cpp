@@ -252,6 +252,21 @@ private Q_SLOTS:
         QCOMPARE(back->folder, deleted);
     }
 
+    void moveOfAMessageGoneOnTheServer()
+    {
+        // 404 on a move: the message is gone in Exchange, its row goes too (no row kept for ever)
+        server->handler = [](const FakeRequest &) {
+            return jsonReply(404, R"({"error":{"code":"ErrorItemNotFound"}})");
+        };
+        OperationQueue queue(&ctx);
+        QSignalSpy completed(&queue, &OperationQueue::completed);
+        QVERIFY(queue.move(message, archive));
+        queue.process(2);
+        QVERIFY(completed.wait(5000));
+        QVERIFY(!store->messageByGraphId(QStringLiteral("m1")).has_value());
+        QCOMPARE(store->pendingOperationCount(), 0);
+    }
+
     void bodiesAndInlineImages()
     {
         const QByteArray image("\x89PNG fake image bytes", 21);

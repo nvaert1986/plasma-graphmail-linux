@@ -31,9 +31,16 @@ private Q_SLOTS:
         QTest::newRow("drives") << host + QStringLiteral("/v1.0/drives/b!x/items/y") << QStringLiteral("acc");
         QTest::newRow("batch") << host + QStringLiteral("/v1.0/$batch") << QStringLiteral("acc");
         QTest::newRow("other host") << QStringLiteral("https://contoso.sharepoint.com/me/messages") << QStringLiteral("acc");
+        QTest::newRow("own photo by object id is /me") << host + QStringLiteral("/v1.0/users/00000000-1111-2222-3333-444444444444/photos/96x96/$value")
+                                                      << QStringLiteral("acc|me");
+        QTest::newRow("own address, case folded, is /me") << host + QStringLiteral("/v1.0/users/Person@Example.com/messages") << QStringLiteral("acc|me");
+        QTest::newRow("encoded @ is /me too") << host + QStringLiteral("/v1.0/users/person%40example.com/messages") << QStringLiteral("acc|me");
     }
     void throttleKey()
     {
+        setOwnMailboxAliases(QStringLiteral("acc"), {QStringLiteral("00000000-1111-2222-3333-444444444444"), QStringLiteral("person@example.com")});
+        // Another account's own ids do not fold this one's
+        setOwnMailboxAliases(QStringLiteral("other"), {QStringLiteral("shared@example.com")});
         QFETCH(QString, url);
         QFETCH(QString, key);
         QCOMPARE(throttleKeyFor(QStringLiteral("acc"), QUrl(url), QStringLiteral("graph.microsoft.com")), key);
