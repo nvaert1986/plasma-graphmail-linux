@@ -4,14 +4,20 @@
 #pragma once
 
 #include "serviceclient.h"
+
+#include <graphcore/updatecheck.h>
 #include "mailboxworker.h"
 
 #include <QDBusContext>
 #include <QDBusMessage>
 #include <QHash>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QObject>
 #include <QPointer>
 #include <QSet>
+#include <QTimer>
+#include <QUrl>
 
 #include <memory>
 
@@ -40,6 +46,11 @@ public:
 public Q_SLOTS:
     // Every mailbox's status as a JSON array
     Q_SCRIPTABLE QString Status();
+    // The tray widget (plasmoid/): one JSON command, one JSON answer, as Graph Sync's tray does.
+    // {command: status} -> {unread, reminders: [...], overdue: [...]}; snooze {account, mailbox,
+    // kind event|task, id, minutes}; dismiss {account, mailbox, kind, id}; dismissOverdue
+    // {account, mailbox}; open {kind ""|event|task|compose|calendar, account, mailbox, id}
+    Q_SCRIPTABLE QString Command(const QString &json);
     // Every synced mailbox as a JSON array: account, mailbox, displayName, address, own, cache
     Q_SCRIPTABLE QString Mailboxes();
     Q_SCRIPTABLE QString CachePath(const QString &account, const QString &mailbox);
@@ -173,6 +184,19 @@ private:
     QTimer *m_signInCheck = nullptr;
     // The account service's signals: accounts signed in or out
     GraphCore::AccountsClient *m_accountsClient = nullptr;
+    // A new Graph Mail release on GitHub (Updates::settings): asked once a day, told at login and
+    // once a day until skipped
+    GraphCore::UpdateChecker *m_updates = nullptr;
+    QTimer *m_updateTimer = nullptr;
+    bool m_updateAnnounced = false;
+    void checkForUpdates();
+    void refreshUpdate();
+    void notifyUpdate(const QString &version, const QUrl &page);
+    // The app, started or (it is unique) brought up, with these arguments
+    void launchApp(const QStringList &arguments);
+    // For the tray: each own mailbox's active reminders, and its overdue ones (from Exchange)
+    QHash<QString, QJsonArray> m_reminders;
+    QHash<QString, QJsonObject> m_overdueInfo;
 };
 
 }

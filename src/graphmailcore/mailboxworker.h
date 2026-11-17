@@ -156,6 +156,9 @@ Q_SIGNALS:
     // Reminders of events that are over and were never dismissed: how many (at least; Exchange
     // lists 200 at most), the oldest event's start, a few subjects (newest first)
     void overdueReminders(const QString &account, const QString &mailbox, int count, bool more, qint64 oldest, const QStringList &subjects);
+    // The reminders shown now and not snoozed or dismissed (the tray lists them): JSON array of
+    // {kind event|task, id, title, start, end, location, due}; sent when the list changes
+    void remindersChanged(const QString &account, const QString &mailbox, const QString &json);
     // Emitted once start() is done or failed
     void started(bool ok, const QString &error);
 
@@ -188,6 +191,11 @@ private:
     void calendarChanged(bool syncSoon);
     void checkReminders();
     void checkTaskReminders();
+    // The user's own calendars: the default one and those of the same owner it can edit
+    QList<qint64> ownCalendars() const;
+    // remindersChanged() when the active reminders differ from the last ones sent
+    void publishReminders();
+    QString m_lastReminders;
     // After a contact or To Do change: the app redraws, that collection syncs soon
     void itemsChanged(const QString &collection);
     void checkOverdueReminders(bool dismiss);

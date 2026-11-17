@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors
+     SPDX-License-Identifier: GPL-3.0-or-later -->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0 http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+  <group name="General">
+    <!-- What the icon does while reminders are due: bell (a bell instead of the envelope),
+         badge (the envelope with a small bell) or envelope (the envelope only) -->
+    <entry name="reminderIcon" type="String">
+      <default>bell</default>
+    </entry>
+    <!-- The number of unread messages on the icon -->
+    <entry name="showUnreadCount" type="Bool">
+      <default>true</default>
+    </entry>
+  </group>
+</kcfg>

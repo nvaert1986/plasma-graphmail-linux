@@ -19,6 +19,7 @@
 #include "mailview.h"
 #include "mailboxesdialog.h"
 #include "mainwindow.h"
+#include "updatesdialog.h"
 #include "signaturedialog.h"
 #include "shell.h"
 #include "profilephotos.h"
@@ -263,6 +264,7 @@ int main(int argc, char **argv)
         {QStringLiteral("search-scope"), i18n("With --search: folder, mailbox or all (tests)"), QStringLiteral("scope")},
         {QStringLiteral("search-filter"), i18n("With --screenshot: tick search filters, comma separated (tests)"), QStringLiteral("filters")},
         {QStringLiteral("offline"), i18n("With --screenshot: open Settings > Offline; days|attachments|free to also save (tests)"), QStringLiteral("spec")},
+        {QStringLiteral("updates"), i18n("With --screenshot: open Settings > Updates; \"check\" also presses Check Now; the status is logged (tests)"), QStringLiteral("action")},
         {QStringLiteral("auto-replies"),
          i18n("With --screenshot: open Automatic Replies; show, bar, turnoff, off|text, on|text or scheduled|start|end|text to also save (tests)"),
          QStringLiteral("spec")},
@@ -573,6 +575,19 @@ int main(int argc, char **argv)
                 dialog->applyForTests(spec.section(QLatin1Char('|'), 0, 0).toInt(), spec.section(QLatin1Char('|'), 1, 1) == QLatin1String("yes"),
                                       spec.section(QLatin1Char('|'), 2, 2) == QLatin1String("free"));
             }
+        }
+        if (parser.isSet(QStringLiteral("updates"))) {
+            GraphMail::UpdatesDialog *dialog = window->openUpdates();
+            shown = dialog;
+            if (parser.value(QStringLiteral("updates")) == QLatin1String("check")) {
+                dialog->checkNowForTests();
+                QElapsedTimer waited;
+                waited.start();
+                while (waited.elapsed() < 5000) {
+                    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+                }
+            }
+            qWarning().noquote() << "updates test:" << dialog->statusForTests().replace(QLatin1Char('\n'), QLatin1String(" | "));
         }
         if (parser.isSet(QStringLiteral("auto-replies"))) {
             const QString spec = parser.value(QStringLiteral("auto-replies"));

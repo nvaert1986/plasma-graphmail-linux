@@ -6,3 +6,5 @@
 sed -n 's|.*<text>\(.*\)</text>.*|i18n("\1");|p' src/app/*.rc | sed 's/&amp;/\&/g' > rc.cpp
 $XGETTEXT rc.cpp $(find src -name '*.cpp' -o -name '*.h') -o $podir/plasma-graphmail-linux.pot
 rm -f rc.cpp
+# The tray widget has its own catalogue (Plasma loads plasma_applet_<id> for it)
+$XGETTEXT -L JavaScript $(find plasmoid -name '*.qml') -o $podir/plasma_applet_io.github.nvaert1986.graphmail.tray.pot

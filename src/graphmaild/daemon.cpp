@@ -9,6 +9,7 @@
 #include "mailboxaccess.h"
 #include "mailrunner.h"
 #include "store.h"
+#include "updates.h"
 
 #include <KConfigGroup>
 #include <KLocalizedString>
@@ -17,7 +18,10 @@
 
 #include <QDBusConnection>
 #include <QDBusMessage>
+#include <QCoreApplication>
 #include <QDateTime>
+#include <QFileInfo>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFutureWatcher>
 #include <QJsonArray>
@@ -29,6 +33,8 @@
 #include <QTimer>
 #include <QUrl>
 #include <QtConcurrentRun>
+
+#include <algorithm>
 
 namespace GraphMail
 {
@@ -116,7 +122,135 @@ bool Daemon::start(QString *error)
         }
     });
     addNewAccounts();
+
+    // New versions: a few minutes after the start, then hourly (GitHub is asked once a day)
+    m_updates = new GraphCore::UpdateChecker(Updates::settings(), this);
+    connect(m_updates, &GraphCore::UpdateChecker::checked, this, &Daemon::refreshUpdate);
+    m_updateTimer = new QTimer(this);
+    m_updateTimer->setInterval(60 * 60 * 1000);
+    connect(m_updateTimer, &QTimer::timeout, this, &Daemon::checkForUpdates);
+    QTimer::singleShot(5 * 60 * 1000, this, [this] {
+        checkForUpdates();
+        m_updateTimer->start();
+    });
     return true;
+}
+
+void Daemon::launchApp(const QStringList &arguments)
+{
+    // Next to this daemon (a build tree, ~/.local), else where it is installed
+    QString app = QCoreApplication::applicationDirPath() + QStringLiteral("/plasma-graphmail-linux");
+    if (!QFileInfo::exists(app)) {
+        app = QStringLiteral(GRAPHMAIL_BINDIR "/plasma-graphmail-linux");
+    }
+    QProcess::startDetached(app, arguments);
+}
+
+QString Daemon::Command(const QString &json)
+{
+    const QJsonObject request = QJsonDocument::fromJson(json.toUtf8()).object();
+    const QString command = request.value(QLatin1String("command")).toString();
+    const QString account = request.value(QLatin1String("account")).toString();
+    const QString mailbox = request.value(QLatin1String("mailbox")).toString();
+    const QString kind = request.value(QLatin1String("kind")).toString();
+    const qint64 id = request.value(QLatin1String("id")).toInteger();
+    if (command == QLatin1String("status")) {
+        int unread = 0;
+        for (auto it = m_mailboxes.cbegin(); it != m_mailboxes.cend(); ++it) {
+            // The own mailboxes' Inboxes, as the mail icon of other clients counts
+            if (it.key().section(QLatin1Char('/'), 1) == QLatin1String("me")) {
+                unread += QJsonDocument::fromJson(it->status.toUtf8()).object().value(QLatin1String("inboxUnread")).toInt();
+            }
+        }
+        QJsonArray reminders;
+        for (const QJsonArray &list : std::as_const(m_reminders)) {
+            for (const QJsonValue &r : list) {
+                reminders.append(r);
+            }
+        }
+        QJsonArray overdue;
+        for (const QJsonObject &o : std::as_const(m_overdueInfo)) {
+            overdue.append(o);
+        }
+        return QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("unread"), unread},
+                                                           {QStringLiteral("reminders"), reminders},
+                                                           {QStringLiteral("overdue"), overdue},
+                                                           {QStringLiteral("now"), QDateTime::currentMSecsSinceEpoch()}})
+                                     .toJson(QJsonDocument::Compact));
+    }
+    if (command == QLatin1String("snooze") || command == QLatin1String("dismiss")) {
+        const bool dismiss = command == QLatin1String("dismiss");
+        const int minutes = std::clamp(request.value(QLatin1String("minutes")).toInt(5), 1, 24 * 60);
+        if (kind == QLatin1String("task")) {
+            TaskReminderAction(account, mailbox, id, dismiss, minutes);
+        } else {
+            ReminderAction(account, mailbox, id, dismiss, minutes);
+        }
+        return QStringLiteral("{}");
+    }
+    if (command == QLatin1String("dismissOverdue")) {
+        DismissOverdueReminders(account, mailbox);
+        m_overdueInfo.remove(key(account, mailbox));
+        return QStringLiteral("{}");
+    }
+    if (command == QLatin1String("open")) {
+        const QString target = account + QLatin1Char('/') + mailbox + QLatin1Char('/') + QString::number(id);
+        if (kind == QLatin1String("event")) {
+            launchApp({QStringLiteral("--event"), target});
+        } else if (kind == QLatin1String("task")) {
+            launchApp({QStringLiteral("--task"), target});
+        } else if (kind == QLatin1String("compose")) {
+            launchApp({QStringLiteral("mailto:")});
+        } else if (kind == QLatin1String("calendar")) {
+            launchApp({QStringLiteral("--calendar")});
+        } else {
+            launchApp({});
+        }
+        return QStringLiteral("{}");
+    }
+    return QStringLiteral("{\"error\":\"unknown command\"}");
+}
+
+void Daemon::checkForUpdates()
+{
+    if (Updates::enabled()) {
+        // checked() follows, also when GitHub was asked less than a day ago
+        m_updates->check();
+    }
+}
+
+void Daemon::refreshUpdate()
+{
+    if (!Updates::enabled()) {
+        return;
+    }
+    // The first one after the start counts as "at login"; then once a day, until skipped
+    if (m_updates->announce(!m_updateAnnounced)) {
+        notifyUpdate(m_updates->available(), m_updates->page());
+        m_updates->markAnnounced();
+        m_updateAnnounced = true;
+    }
+}
+
+void Daemon::notifyUpdate(const QString &version, const QUrl &page)
+{
+    // Stays until closed here, so it is on screen long enough to read, whatever Plasma's own timeout
+    auto *notification = new KNotification(QStringLiteral("updateAvailable"), KNotification::Persistent);
+    notification->setComponentName(QStringLiteral("plasma-graphmail-linux"));
+    notification->setTitle(i18nc("@title notification, %1 a version", "Graph Mail %1 is available", version));
+    notification->setText(i18nc("@info %1 a version", "This computer has version %1. The release page has the packages and what changed.", Updates::currentVersion())
+                              .toHtmlEscaped());
+    KNotificationAction *notes = notification->addAction(i18nc("@action:button", "Release Notes..."));
+    connect(notes, &KNotificationAction::activated, this, [page] {
+        QDesktopServices::openUrl(page);
+    });
+    KNotificationAction *skip = notification->addAction(i18nc("@action:button", "Skip This Version"));
+    connect(skip, &KNotificationAction::activated, this, [this, version] {
+        m_updates->skip(version);
+    });
+    notification->sendEvent();
+    // Closed or answered before: the notification is gone and so is the timer
+    QTimer::singleShot(15 * 1000, notification, &KNotification::close);
 }
 
 void Daemon::addNewAccounts()
@@ -242,6 +376,31 @@ void Daemon::startMailbox(const QString &account, const QString &mailbox, const 
     connect(worker, &GraphMail::MailboxWorker::outgoingChanged, this, &Daemon::outgoingChanged);
     connect(worker, &GraphMail::MailboxWorker::reminderDue, this, &Daemon::notifyReminder);
     connect(worker, &GraphMail::MailboxWorker::overdueReminders, this, &Daemon::notifyOverdue);
+    connect(worker, &GraphMail::MailboxWorker::overdueReminders, this,
+            [this](const QString &account, const QString &mailbox, int count, bool more, qint64 oldest, const QStringList &subjects) {
+                Q_UNUSED(oldest)
+                const QString k = key(account, mailbox);
+                if (count == 0) {
+                    m_overdueInfo.remove(k);
+                    return;
+                }
+                m_overdueInfo.insert(k, QJsonObject{{QStringLiteral("account"), account},
+                                                    {QStringLiteral("mailbox"), mailbox},
+                                                    {QStringLiteral("count"), count},
+                                                    {QStringLiteral("more"), more},
+                                                    {QStringLiteral("subjects"), QJsonArray::fromStringList(subjects)}});
+            });
+    connect(worker, &GraphMail::MailboxWorker::remindersChanged, this, [this](const QString &account, const QString &mailbox, const QString &json) {
+        QJsonArray reminders = QJsonDocument::fromJson(json.toUtf8()).array();
+        // Each one says where it belongs, for the tray's Snooze and Dismiss
+        for (qsizetype i = 0; i < reminders.size(); ++i) {
+            QJsonObject r = reminders.at(i).toObject();
+            r.insert(QStringLiteral("account"), account);
+            r.insert(QStringLiteral("mailbox"), mailbox);
+            reminders.replace(i, r);
+        }
+        m_reminders.insert(key(account, mailbox), reminders);
+    });
     connect(worker, &GraphMail::MailboxWorker::taskReminderDue, this, &Daemon::notifyTaskReminder);
     connect(worker, &GraphMail::MailboxWorker::conflictFound, this, &Daemon::notifyConflict);
     connect(worker, &GraphMail::MailboxWorker::queryAnswered, this, [this](quint64 request, const QString &json) {
@@ -273,6 +432,8 @@ void Daemon::stopMailbox(const QString &k)
     if (it == m_mailboxes.end()) {
         return;
     }
+    m_reminders.remove(k);
+    m_overdueInfo.remove(k);
     // stop() closes the cache in the worker's own thread, then the thread ends and deletes it
     QMetaObject::invokeMethod(it->worker, &GraphMail::MailboxWorker::stop, Qt::BlockingQueuedConnection);
     it->thread->quit();

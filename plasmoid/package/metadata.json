@@ -1,0 +1,23 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "plasma-graphmail-linux contributors"
+            }
+        ],
+        "Category": "Online Services",
+        "Description": "Unread mail and reminders of Graph Mail in the system tray",
+        "Description[nl]": "Ongelezen e-mail en herinneringen van Graph Mail in het systeemvak",
+        "EnabledByDefault": true,
+        "Icon": "io.github.nvaert1986.graphmail",
+        "Id": "io.github.nvaert1986.graphmail.tray",
+        "License": "GPL-3.0-or-later",
+        "Name": "Graph Mail",
+        "Version": "0.12.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-DBusActivationService": "io.github.nvaert1986.GraphMail",
+    "X-Plasma-NotificationArea": "true",
+    "X-Plasma-NotificationAreaCategory": "Communications"
+}

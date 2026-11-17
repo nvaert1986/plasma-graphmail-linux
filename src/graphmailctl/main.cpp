@@ -9,7 +9,10 @@
 #include "graphutil.h"
 #include "mailboxworker.h"
 #include "serviceclient.h"
+#include "updates.h"
 #include "signin.h"
+
+#include <graphcore/updatecheck.h>
 
 #include <QCommandLineParser>
 #include <QDBusInterface>
@@ -273,6 +276,49 @@ int list(const QString &mailbox, qint64 folder, int limit)
     }
     return 0;
 }
+
+// check-update [on|off]: asks GitHub now (or switches the daily check), never waits for the daemon
+int checkUpdate(const QString &switchTo)
+{
+    if (!GraphMail::Updates::compiledIn()) {
+        return fail(QStringLiteral("this build has no update check (distributions that ship updates themselves leave it out)"));
+    }
+    if (switchTo == QLatin1String("on") || switchTo == QLatin1String("off")) {
+        GraphMail::Updates::setEnabled(switchTo == QLatin1String("on"));
+        out() << "The daily check for new versions is " << switchTo << Qt::endl;
+        return 0;
+    }
+    if (!switchTo.isEmpty()) {
+        return fail(QStringLiteral("check-update [on|off]"));
+    }
+    GraphCore::UpdateChecker checker(GraphMail::Updates::settings());
+    QEventLoop loop;
+    QString error;
+    QObject::connect(&checker, &GraphCore::UpdateChecker::checked, &loop, [&](bool ok, const QString &why) {
+        error = ok ? QString() : why;
+        loop.quit();
+    });
+    checker.check(true);
+    if (checker.busy()) {
+        loop.exec();
+    }
+    if (!error.isEmpty()) {
+        return fail(QStringLiteral("could not ask GitHub: ") + error);
+    }
+    const QString current = GraphMail::Updates::currentVersion();
+    const QString available = checker.available();
+    if (available.isEmpty() && GraphCore::UpdateCheck::isNewer(checker.latest(), current)) {
+        out() << checker.latest() << " is available (this is " << current << "), but skipped" << Qt::endl;
+    } else if (available.isEmpty()) {
+        out() << "no newer version than " << current << " (newest release: " << checker.latest() << ")" << Qt::endl;
+    } else {
+        out() << available << " is available (this is " << current << "): " << checker.page().toString() << Qt::endl;
+    }
+    if (!GraphMail::Updates::enabled()) {
+        out() << "(the daily check is off: check-update on)" << Qt::endl;
+    }
+    return 0;
+}
 }
 
 int main(int argc, char **argv)
@@ -288,7 +334,8 @@ int main(int argc, char **argv)
     parser.addVersionOption();
     parser.addPositionalArgument(QStringLiteral("command"),
                                  QStringLiteral("login | accounts | logout | get <path> | patch|post <path> <json> | delete <path> | status | sync | folders <mailbox> | list <mailbox> <folder> | "
-                                                "mark-read <mailbox> <message> [--unread] | resync <mailbox> <folder> | add-shared <address> | check-mailbox <address>"));
+                                                "mark-read <mailbox> <message> [--unread] | resync <mailbox> <folder> | add-shared <address> | check-mailbox <address> | "
+                                                "check-update [on|off]"));
     parser.addOptions({
         {QStringLiteral("client"), QStringLiteral("App registration (client) ID; remembered as the default"), QStringLiteral("id")},
         {QStringLiteral("tenant"), QStringLiteral("Tenant ID, domain or work e-mail address (login; default: any work account)"), QStringLiteral("tenant")},
@@ -322,6 +369,9 @@ int main(int argc, char **argv)
     }
     if (command == QLatin1String("delete") && args.size() == 2) {
         return get(parser, args.at(1), {}, QByteArrayLiteral("DELETE"));
+    }
+    if (command == QLatin1String("check-update")) {
+        return checkUpdate(args.value(1));
     }
     if (command == QLatin1String("status")) {
         return status();

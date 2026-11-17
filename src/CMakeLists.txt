@@ -7,6 +7,7 @@ set_target_properties(graphmailcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_sources(graphmailcore PRIVATE
     graphmailcore/blobstore.cpp
+    graphmailcore/updates.cpp
     graphmailcore/bodyfetcher.cpp
     graphmailcore/collectionsync.cpp
     graphmailcore/conflict.cpp
@@ -50,6 +51,13 @@ ecm_qt_declare_logging_category(graphmailcore
 )
 
 target_include_directories(graphmailcore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/graphmailcore ${CMAKE_CURRENT_BINARY_DIR})
+
+# Test hooks (GRAPHMAIL_TEST_* variables) exist in this project's Debug builds only; packages use
+# other build types
+target_compile_definitions(graphmailcore PRIVATE $<$<CONFIG:Debug>:GRAPHMAIL_TESTING>)
+if(GRAPHMAIL_UPDATE_CHECK)
+    target_compile_definitions(graphmailcore PRIVATE GRAPHMAIL_UPDATE_CHECK)
+endif()
 
 target_link_libraries(graphmailcore PUBLIC
     GraphCore::GraphCore
@@ -119,6 +127,7 @@ add_executable(plasma-graphmail-linux
     app/movedialog.cpp
     app/quote.cpp
     app/offlinedialog.cpp
+    app/updatesdialog.cpp
     app/readingpane.cpp
     app/readreceipts.cpp
     app/recurrence.cpp

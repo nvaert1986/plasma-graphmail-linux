@@ -548,6 +548,7 @@ void MailboxWorker::tick()
         m_nextReminderCheck = t + 30 * 1000;
         checkReminders();
         checkTaskReminders();
+        publishReminders();
     }
     // Overdue reminders (events that are over): from Exchange's list, once a day and after a start
     if (m_config.mailbox == QLatin1String("me") && treeKnown && t >= m_nextOverdueCheck && m_pausedUntil == 0) {
@@ -698,6 +699,12 @@ void MailboxWorker::publishStatus(bool force)
     } else if (!m_running.isEmpty()) {
         state = QStringLiteral("syncing");
     }
+    int inboxUnread = 0;
+    if (m_config.mail) {
+        if (const std::optional<FolderRow> inbox = m_store->folderByWellKnown(QStringLiteral("inbox"))) {
+            inboxUnread = inbox->unread;
+        }
+    }
     int outgoingWaiting = 0;
     int outgoingFailed = 0;
     const QList<Outgoing> outgoing = m_store->allOutgoing();
@@ -720,7 +727,9 @@ void MailboxWorker::publishStatus(bool force)
                              {QStringLiteral("running"), int(m_running.size())},
                              {QStringLiteral("lastSync"), m_lastSync},
                              {QStringLiteral("lastError"), m_lastError},
-                             {QStringLiteral("cache"), cachePath()}};
+                             {QStringLiteral("cache"), cachePath()},
+                             // The tray's badge
+                             {QStringLiteral("inboxUnread"), inboxUnread}};
     Q_EMIT statusChanged(m_config.account, m_config.mailbox, QString::fromUtf8(QJsonDocument(status).toJson(QJsonDocument::Compact)));
 }
 
@@ -1122,14 +1131,12 @@ void MailboxWorker::reminderAction(qint64 event, bool dismiss, qint64 until)
         m_store->setReminderState(key, e->start, 1, until);
         m_events->snoozeReminder(event, until);
     }
+    publishReminders();
     tick();
 }
 
-void MailboxWorker::checkReminders()
+QList<qint64> MailboxWorker::ownCalendars() const
 {
-    if (!m_store) {
-        return;
-    }
     // The user's own calendars: those owned by the default calendar's owner
     QString own;
     QList<qint64> calendars;
@@ -1144,6 +1151,66 @@ void MailboxWorker::checkReminders()
             calendars.append(c.id);
         }
     }
+    return calendars;
+}
+
+void MailboxWorker::publishReminders()
+{
+    if (!m_store || m_config.mailbox != QLatin1String("me")) {
+        return;
+    }
+    // What checkReminders() and checkTaskReminders() showed and nobody snoozed or dismissed since
+    QJsonArray active;
+    const qint64 t = now();
+    const QList<qint64> calendars = ownCalendars();
+    if (!calendars.isEmpty()) {
+        const QList<EventRow> events = m_store->eventsBetween(calendars, t, t + 15LL * 24 * 3600 * 1000);
+        for (const EventRow &e : events) {
+            const QJsonObject json = QJsonDocument::fromJson(e.json.toUtf8()).object();
+            if (!json.value(QLatin1String("isReminderOn")).toBool() || json.value(QLatin1String("isCancelled")).toBool() || e.response == 4 || e.end <= t) {
+                continue;
+            }
+            qint64 snoozeUntil = 0;
+            const int state = m_store->reminderState(e.graphId + QLatin1Char(':') + QString::number(e.start), &snoozeUntil);
+            if (state != 1 || (snoozeUntil != 0 && snoozeUntil > t)) {
+                continue;
+            }
+            active.append(QJsonObject{{QStringLiteral("kind"), QStringLiteral("event")},
+                                      {QStringLiteral("id"), e.id},
+                                      {QStringLiteral("title"), e.subject},
+                                      {QStringLiteral("start"), e.start},
+                                      {QStringLiteral("end"), e.end},
+                                      {QStringLiteral("location"), e.location}});
+        }
+    }
+    const QList<StoredItem> tasks = m_store->dueTaskReminders(t);
+    for (const StoredItem &task : tasks) {
+        const QJsonObject json = QJsonDocument::fromJson(task.json.toUtf8()).object();
+        if (!json.value(QLatin1String("isReminderOn")).toBool()) {
+            continue;
+        }
+        const QString key = QStringLiteral("task:") + task.graphId + QLatin1Char(':') + json.value(QLatin1String("reminderDateTime")).toObject().value(QLatin1String("dateTime")).toString();
+        if (m_store->reminderState(key) != 1) {
+            continue;
+        }
+        active.append(QJsonObject{{QStringLiteral("kind"), QStringLiteral("task")},
+                                  {QStringLiteral("id"), task.id},
+                                  {QStringLiteral("title"), json.value(QLatin1String("title")).toString()},
+                                  {QStringLiteral("due"), localMidnight(Mapper::dueDate(json.value(QLatin1String("dueDateTime")).toObject()))}});
+    }
+    const QString text = QString::fromUtf8(QJsonDocument(active).toJson(QJsonDocument::Compact));
+    if (text != m_lastReminders) {
+        m_lastReminders = text;
+        Q_EMIT remindersChanged(m_config.account, m_config.mailbox, text);
+    }
+}
+
+void MailboxWorker::checkReminders()
+{
+    if (!m_store) {
+        return;
+    }
+    const QList<qint64> calendars = ownCalendars();
     if (calendars.isEmpty()) {
         return;
     }
@@ -2118,6 +2185,7 @@ void MailboxWorker::taskReminderAction(qint64 task, bool dismiss, qint64 until)
                                       {QStringLiteral("timeZone"), QStringLiteral("UTC")}}}});
     }
     Q_EMIT collectionChanged(m_config.account, m_config.mailbox, QStringLiteral("todo"), 1);
+    publishReminders();
     tick();
 }
 

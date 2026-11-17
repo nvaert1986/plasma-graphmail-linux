@@ -60,3 +60,11 @@ Comment=A scheduled cleanup of old mail moved, saved or deleted messages, or fou
 Comment[nl]=Een geplande opruiming van oude e-mail heeft berichten verplaatst, bewaard of verwijderd, of er gevonden om op te ruimen
 IconName=edit-clear-history
 Action=Popup
+
+[Event/updateAvailable]
+Name=New version
+Name[nl]=Nieuwe versie
+Comment=A newer version of Graph Mail is available
+Comment[nl]=Er is een nieuwere versie van Graph Mail
+IconName=system-software-update
+Action=Popup

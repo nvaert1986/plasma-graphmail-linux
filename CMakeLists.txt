@@ -4,7 +4,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 # The version follows the last finished phase (0.1.0 = phase 1), patch numbers for fixes
-project(plasma-graphmail-linux VERSION 0.11.0 LANGUAGES CXX)
+project(plasma-graphmail-linux VERSION 0.12.0 LANGUAGES CXX)
 
 # Same floor as plasma-onedrive-linux: the shared Graph library is built by both
 set(QT_MIN_VERSION "6.8.0")
@@ -28,7 +28,9 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui Widgets Network 
 find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS Config ConfigWidgets CoreAddons DBusAddons I18n IconThemes KIO Notifications NotifyConfig Parts WidgetsAddons XmlGui)
 # The suite's shared Microsoft Graph core and its account service (plasma-graphcore-linux, phase 10):
 # accounts, the Graph client, sign-in through graphaccountsd
-find_package(GraphCore 0.11 REQUIRED)
+find_package(GraphCore 0.12 REQUIRED)
+# The tray widget (plasmoid/): installed as a Plasma applet
+find_package(Plasma REQUIRED)
 # KDE PIM: attached mails (.eml) in KDE's mail viewer, Outlook's winmail.dat
 # MimeTreeParserCore links libkleo without finding it itself
 find_package(KPim6Libkleo REQUIRED)
@@ -47,12 +49,20 @@ pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
 
 # The daemon starts the app by absolute path (notification actions): a systemd user service does not
 # necessarily have the install prefix (for example ~/.local/bin) in PATH
+# The daily check for a new release on GitHub (packages from GitHub come from no repository).
+# Distributions that ship updates themselves turn it off
+option(GRAPHMAIL_UPDATE_CHECK "Check GitHub once a day for a new release and tell the user" ON)
+add_feature_info(UpdateCheck GRAPHMAIL_UPDATE_CHECK "daily check for a new Graph Mail release on GitHub")
+
 add_compile_definitions(GRAPHMAIL_VERSION="${PROJECT_VERSION}" GRAPHMAIL_BINDIR="${KDE_INSTALL_FULL_BINDIR}")
 
 add_subdirectory(src)
 add_subdirectory(data)
 add_subdirectory(icons)
 ki18n_install(po)
+
+# Graph Mail in the system tray: unread mail and the reminders that are due
+plasma_install_package(plasmoid/package io.github.nvaert1986.graphmail.tray)
 
 if(BUILD_TESTING)
     add_subdirectory(autotests)

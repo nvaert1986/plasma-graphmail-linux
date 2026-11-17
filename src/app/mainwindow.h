@@ -46,6 +46,7 @@ class CalendarWindow;
 class ContactsWindow;
 class MailboxesDialog;
 class OfflineDialog;
+class UpdatesDialog;
 class AutoRepliesDialog;
 class RulesDialog;
 class Shell;
@@ -103,6 +104,8 @@ public:
     void categoryForTests(const QString &action, const QString &name, const QString &preset);
     // Settings > Offline (docs/PHASE8.md)
     OfflineDialog *openOfflineSettings();
+    // Settings > Updates (only in builds with the update check)
+    UpdatesDialog *openUpdates();
     // Automatic Replies (docs/PHASE9.md), for this own mailbox or the current one
     AutoRepliesDialog *openAutoReplies(const QString &mailboxKey = {});
     // Tests: the bar as it looks when replies are being sent, without turning them on

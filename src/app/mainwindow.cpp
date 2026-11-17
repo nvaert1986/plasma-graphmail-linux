@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "mainwindow.h"
+#include "updates.h"
+#include "updatesdialog.h"
 #include "graphmail_debug.h"
 #include "accesstext.h"
 #include "attachmentpreview.h"
@@ -1076,6 +1078,13 @@ void MainWindow::setupActions()
     offline->setIcon(QIcon::fromTheme(QStringLiteral("folder-sync")));
     connect(offline, &QAction::triggered, this, &MainWindow::openOfflineSettings);
 
+    QAction *updates = actions->addAction(QStringLiteral("updates"));
+    updates->setText(i18nc("@action", "Updates..."));
+    updates->setIcon(QIcon::fromTheme(QStringLiteral("system-software-update")));
+    // Builds without the check (distributions that ship updates themselves) do not offer it
+    updates->setVisible(Updates::compiledIn());
+    connect(updates, &QAction::triggered, this, &MainWindow::openUpdates);
+
     QAction *importPstAction = actions->addAction(QStringLiteral("import_pst"));
     importPstAction->setText(i18nc("@action", "Import Outlook Data File..."));
     importPstAction->setIcon(QIcon::fromTheme(QStringLiteral("document-import")));
@@ -1213,6 +1222,14 @@ WaitingWindow *MainWindow::openWaiting()
     });
     window->show();
     return window;
+}
+
+UpdatesDialog *MainWindow::openUpdates()
+{
+    auto *dialog = new UpdatesDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->show();
+    return dialog;
 }
 
 OfflineDialog *MainWindow::openOfflineSettings()

@@ -1,0 +1,161 @@
+# Dutch translation of the Graph Mail tray widget (plasma-graphmail-linux)
+# SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+msgid ""
+msgstr ""
+"Project-Id-Version: plasma-graphmail-linux\n"
+"PO-Revision-Date: 2026-11-17 11:29+0100\n"
+"Last-Translator: plasma-graphmail-linux contributors\n"
+"Language-Team: Dutch\n"
+"Language: nl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:26
+msgid "Task, due %1"
+msgstr "Taak, vervalt %1"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:26
+msgid "Task"
+msgstr "Taak"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:32
+msgid "In 1 minute (%2)"
+msgid_plural "In %1 minutes (%2)"
+msgstr[0] "Over 1 minuut (%2)"
+msgstr[1] "Over %1 minuten (%2)"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:35
+msgid "Now (started %1)"
+msgstr "Nu (begonnen om %1)"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:52
+#: plasmoid/package/contents/ui/main.qml:120
+#: plasmoid/package/contents/ui/main.qml:121
+msgid "Graph Mail"
+msgstr "Graph Mail"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:59
+#: plasmoid/package/contents/ui/FullRepresentation.qml:186
+#: plasmoid/package/contents/ui/main.qml:29
+msgid "Graph Mail is not running"
+msgstr "Graph Mail draait niet"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:60
+#: plasmoid/package/contents/ui/main.qml:32
+msgid "1 unread message"
+msgid_plural "%1 unread messages"
+msgstr[0] "1 ongelezen bericht"
+msgstr[1] "%1 ongelezen berichten"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:60
+#: plasmoid/package/contents/ui/main.qml:32
+msgid "No unread mail"
+msgstr "Geen ongelezen e-mail"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:65
+#: plasmoid/package/contents/ui/main.qml:173
+msgid "New Message"
+msgstr "Nieuw bericht"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:74
+#: plasmoid/package/contents/ui/main.qml:168
+msgid "Open Graph Mail"
+msgstr "Graph Mail openen"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:97
+#: plasmoid/package/contents/ui/main.qml:37
+msgid "1 overdue reminder"
+msgid_plural "%1 overdue reminders"
+msgstr[0] "1 verlopen herinnering"
+msgstr[1] "%1 verlopen herinneringen"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:100
+#: plasmoid/package/contents/ui/FullRepresentation.qml:172
+msgid "Dismiss"
+msgstr "Negeren"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:139
+msgid "(no subject)"
+msgstr "(geen onderwerp)"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:145
+msgctxt "time, place"
+msgid "%1, %2"
+msgstr "%1, %2"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:152
+msgid "Snooze"
+msgstr "Uitstellen"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:164
+msgid "1 minute"
+msgid_plural "%1 minutes"
+msgstr[0] "1 minuut"
+msgstr[1] "%1 minuten"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:164
+msgid "1 hour"
+msgstr "1 uur"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:186
+msgid "No reminders"
+msgstr "Geen herinneringen"
+
+#: plasmoid/package/contents/ui/FullRepresentation.qml:200
+msgid "Dismiss All"
+msgstr "Alles negeren"
+
+#: plasmoid/package/contents/ui/main.qml:34
+msgid "1 reminder"
+msgid_plural "%1 reminders"
+msgstr[0] "1 herinnering"
+msgstr[1] "%1 herinneringen"
+
+#: plasmoid/package/contents/ui/main.qml:178
+msgid "Calendar"
+msgstr "Agenda"
+
+#: plasmoid/package/contents/ui/ConfigGeneral.qml:21
+msgid "When reminders are due:"
+msgstr "Als er herinneringen zijn:"
+
+#: plasmoid/package/contents/ui/ConfigGeneral.qml:22
+msgid "Show a bell instead of the envelope"
+msgstr "Een bel tonen in plaats van de envelop"
+
+#: plasmoid/package/contents/ui/ConfigGeneral.qml:28
+msgid "Show the envelope with a small bell"
+msgstr "De envelop met een kleine bel tonen"
+
+#: plasmoid/package/contents/ui/ConfigGeneral.qml:34
+msgid "Show the envelope only"
+msgstr "Alleen de envelop tonen"
+
+#: plasmoid/package/contents/ui/ConfigGeneral.qml:44
+msgid "Unread mail:"
+msgstr "Ongelezen e-mail:"
+
+#: plasmoid/package/contents/ui/ConfigGeneral.qml:45
+msgid "Show the number of unread messages on the icon"
+msgstr "Het aantal ongelezen berichten op het pictogram tonen"
+
+#: plasmoid/package/contents/ui/ConfigGeneral.qml:54
+msgid "Pop-ups and sounds:"
+msgstr "Pop-ups en geluiden:"
+
+#: plasmoid/package/contents/ui/ConfigGeneral.qml:55
+msgid "Configure Notifications…"
+msgstr "Meldingen instellen…"
+
+#: plasmoid/package/contents/ui/ConfigGeneral.qml:64
+msgid ""
+"For each kind (new mail, reminders, tasks, new versions) whether Graph Mail "
+"shows a pop-up or plays a sound."
+msgstr "Per soort (nieuwe e-mail, herinneringen, taken, nieuwe versies) of Graph Mail een pop-up toont of een geluid afspeelt."
+
+#: plasmoid/package/contents/config/config.qml:8
+msgid "General"
+msgstr "Algemeen"
