@@ -170,7 +170,7 @@ target_link_libraries(plasma-graphmail-linux PRIVATE
     KF6::Parts
     KF6::Notifications
     KPim6::MimeTreeParserWidgets
-    KPim6::Mime
+    graphmail_kmime
     KPim6::Tnef
     KPim6::PimTextEdit
     KF6::TextEmoticonsWidgets

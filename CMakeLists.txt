@@ -35,7 +35,28 @@ find_package(Plasma REQUIRED)
 # MimeTreeParserCore links libkleo without finding it itself
 find_package(KPim6Libkleo REQUIRED)
 find_package(KPim6MimeTreeParserWidgets REQUIRED)
-find_package(KPim6Mime REQUIRED)
+# kmime moved to KDE Frameworks (CMake package KF6Mime, target KF6::Mime) in 2026; older releases still
+# ship KPim6Mime (KPim6::Mime). The headers are <KMime/...> in both. graphmail_kmime stands for whichever exists
+find_package(KF6Mime QUIET)
+add_library(graphmail_kmime INTERFACE)
+if(KF6Mime_FOUND)
+    set(GRAPHMAIL_KMIME_TARGET KF6::Mime)
+else()
+    find_package(KPim6Mime REQUIRED)
+    set(GRAPHMAIL_KMIME_TARGET KPim6::Mime)
+endif()
+target_link_libraries(graphmail_kmime INTERFACE ${GRAPHMAIL_KMIME_TARGET})
+# kmime 25.x changed its API (CreatePolicy, owning pointers, NewlineType); Debian 13 still has 24.12
+include(CheckCXXSourceCompiles)
+set(CMAKE_REQUIRED_LIBRARIES ${GRAPHMAIL_KMIME_TARGET})
+check_cxx_source_compiles("
+#include <KMime/Message>
+int main() { KMime::Message m; return m.subject(KMime::CreatePolicy::DontCreate) ? 1 : 0; }
+" GRAPHMAIL_KMIME_CREATE_POLICY)
+unset(CMAKE_REQUIRED_LIBRARIES)
+if(GRAPHMAIL_KMIME_CREATE_POLICY)
+    add_compile_definitions(GRAPHMAIL_KMIME_CREATE_POLICY)
+endif()
 find_package(KPim6Tnef REQUIRED)
 find_package(KPim6TextEdit REQUIRED)
 # The composer's emoji picker (KTextAddons, already there for KPim6TextEdit)

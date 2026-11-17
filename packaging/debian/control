@@ -1,0 +1,63 @@
+Source: plasma-graphmail-linux
+Section: mail
+Priority: optional
+Maintainer: nvaert1986 <25772781+nvaert1986@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13),
+               cmake,
+               extra-cmake-modules,
+               gettext,
+               libgraphcore-dev (>= 0.14.0),
+               libkf6config-dev,
+               libkf6configwidgets-dev,
+               libkf6coreaddons-dev,
+               libkf6dbusaddons-dev,
+               libkf6i18n-dev,
+               libkf6iconthemes-dev,
+               libkf6kio-dev,
+               libkf6notifications-dev,
+               libkf6notifyconfig-dev,
+               libkf6parts-dev,
+               libkf6widgetsaddons-dev,
+               libkf6xmlgui-dev,
+               libkf6holidays-dev,
+               libkf6calendarcore-dev,
+               libkleo-dev,
+               libkmime-dev,
+               libktextaddons-dev,
+               libktnef-dev,
+               libkpimtextedit-dev,
+               libmimetreeparser-dev,
+               libplasma-dev,
+               libzstd-dev,
+               pkgconf,
+               qt6-base-dev,
+               qt6-webengine-dev
+Standards-Version: 4.7.0
+Homepage: https://github.com/nvaert1986/plasma-graphmail-linux
+Rules-Requires-Root: no
+
+Package: plasma-graphmail-linux
+Architecture: any
+# plasma-graphcore-linux: the account service (graphaccountsd) the sign-in goes through. The library
+# (libgraphcore0.14) comes from ${shlibs:Depends}. The rest is loaded at run time, so no tool finds it:
+# the Qt SQL driver of the local cache, and the QML modules of the tray applet (plasma-workspace has
+# org.kde.plasma.* and org.kde.plasma.workspace.dbus)
+Depends: ${misc:Depends},
+         ${shlibs:Depends},
+         libqt6sql6-sqlite,
+         plasma-graphcore-linux (>= 0.14.0),
+         plasma-workspace,
+         qml6-module-org-kde-kcmutils,
+         qml6-module-org-kde-kirigami,
+         qml6-module-qtquick-controls,
+         qml6-module-qtquick-layouts
+# Previews of PDF and Office attachments: Okular's part, and LibreOffice for the conversion
+Suggests: libreoffice-writer | libreoffice,
+          okular
+Description: Mail, calendar, contacts and tasks of Microsoft 365 for KDE Plasma
+ A native client for Exchange Online mailboxes through Microsoft Graph:
+ mail, calendar, contacts and Microsoft To Do tasks, shared mailboxes and
+ calendars, a local cache with full-text search, a system tray applet with
+ the unread count and the reminders that are due, and a KRunner search of
+ your mail. The sign-in comes from the account service of
+ plasma-graphcore-linux. Not affiliated with Microsoft.

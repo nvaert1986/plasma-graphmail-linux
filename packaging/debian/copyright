@@ -1,0 +1,13 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: plasma-graphmail-linux
+Source: https://github.com/nvaert1986/plasma-graphmail-linux
+Comment: The AppStream file of the tray applet (usr/share/metainfo, generated at build time from
+ plasmoid/package/metadata.json by libplasma's plasma_install_package) declares CC0-1.0 as its
+ metadata license, as KDE's tooling writes it. All the source files are GPL-3.0-or-later.
+
+Files: *
+Copyright: 2026 plasma-graphmail-linux contributors
+License: GPL-3.0-or-later
+
+License: GPL-3.0-or-later
+ On Debian systems the full text is in /usr/share/common-licenses/GPL-3.

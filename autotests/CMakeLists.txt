@@ -60,7 +60,7 @@ ecm_add_test(appmodelstest.cpp
     ../src/app/accesstext.cpp
     ../src/app/maileditor.cpp
     TEST_NAME appmodelstest
-    LINK_LIBRARIES graphmailcore KF6::I18n KF6::ConfigCore KF6::WidgetsAddons KF6::Holidays KF6::CalendarCore KPim6::Mime KPim6::PimTextEdit Qt6::Widgets Qt6::DBus Qt6::Test
+    LINK_LIBRARIES graphmailcore KF6::I18n KF6::ConfigCore KF6::WidgetsAddons KF6::Holidays KF6::CalendarCore graphmail_kmime KPim6::PimTextEdit Qt6::Widgets Qt6::DBus Qt6::Test
 )
 target_include_directories(appmodelstest PRIVATE ${CMAKE_SOURCE_DIR}/src/app)
 
@@ -77,7 +77,7 @@ target_include_directories(quotetest PRIVATE ${CMAKE_SOURCE_DIR}/src/app)
 # PST and .msg export: MIME to MAPI properties, and back through a PST to Graph
 ecm_add_test(mimemapitest.cpp ../src/app/mimemapi.cpp
     TEST_NAME mimemapitest
-    LINK_LIBRARIES graphmailcore KPim6::Mime Qt6::Gui Qt6::Test
+    LINK_LIBRARIES graphmailcore graphmail_kmime Qt6::Gui Qt6::Test
 )
 target_include_directories(mimemapitest PRIVATE ${CMAKE_SOURCE_DIR}/src/app ${CMAKE_SOURCE_DIR}/src/graphmailcore)
 

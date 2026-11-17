@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Maintainer: nvaert1986 <25772781+nvaert1986@users.noreply.github.com>
+
+pkgname=plasma-graphmail-linux
+pkgver=0.14.0
+pkgrel=1
+pkgdesc='Mail, calendar, contacts and tasks of Microsoft 365 for KDE Plasma'
+arch=(x86_64)
+url='https://github.com/nvaert1986/plasma-graphmail-linux'
+license=(GPL-3.0-or-later)
+# plasma-graphcore-linux: the library and the account service (graphaccountsd) the sign-in goes through.
+# plasma-workspace, libplasma, kirigami, kcmutils and qt6-declarative: the tray applet loads their QML
+# modules at run time, so namcap does not see them
+depends=(glibc libstdc++ hicolor-icon-theme
+         plasma-graphcore-linux
+         qt6-base qt6-declarative qt6-webengine
+         kcalendarcore kconfig kconfigwidgets kcoreaddons kdbusaddons kholidays ki18n kio
+         kirigami kcmutils knotifications knotifyconfig kparts kwidgetsaddons kxmlgui
+         kmime ktextaddons ktnef kpimtextedit libplasma mimetreeparser zstd
+         plasma-workspace)
+# kiconthemes and libkleo: CMake finds them at build time, they are no direct link dependency
+makedepends=(cmake extra-cmake-modules kiconthemes libkleo)
+optdepends=('okular: preview of PDF attachments'
+            'libreoffice-fresh: preview of Word, Excel and PowerPoint attachments (or libreoffice-still)')
+options=(!debug)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')  # set from the tag tarball at release
+
+build() {
+  cmake -B build -S "$pkgname-$pkgver" \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_BUILD_TYPE=None \
+    -DBUILD_TESTING=OFF
+  cmake --build build
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+}

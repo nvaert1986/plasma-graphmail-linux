@@ -1,0 +1,7 @@
+plasma-graphmail-linux (0.14.0-1) unstable; urgency=medium
+
+  * First packaged release: mail, calendar, contacts and tasks of Exchange
+    Online, the tray applet, KRunner search, the sign-in through the account
+    service of plasma-graphcore-linux.
+
+ -- nvaert1986 <25772781+nvaert1986@users.noreply.github.com>  Tue, 17 Nov 2026 16:00:00 +0100

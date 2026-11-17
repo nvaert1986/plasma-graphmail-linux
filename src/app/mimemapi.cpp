@@ -19,6 +19,78 @@ namespace GraphMail::MimeMapi
 
 namespace
 {
+// KMime changed its API in 2025 (header creation policy, owning smart pointers, newline type).
+// GRAPHMAIL_KMIME_CREATE_POLICY says the new API is there; the helpers below give the older kmime
+// of Debian 13 (24.12) the same calls
+#ifdef GRAPHMAIL_KMIME_CREATE_POLICY
+constexpr auto dontCreate = KMime::CreatePolicy::DontCreate;
+
+KMime::Types::Mailbox senderMailbox(const KMime::Headers::Sender *header)
+{
+    return header->mailbox();
+}
+
+QByteArray decodedBodyOf(const KMime::Content *c)
+{
+    return c->decodedBody();
+}
+
+void appendChild(KMime::Content &parent, std::unique_ptr<KMime::Content> child)
+{
+    parent.appendContent(std::move(child));
+}
+
+std::unique_ptr<KMime::Content> takeChild(KMime::Content &parent, KMime::Content *child)
+{
+    return parent.takeContent(child);
+}
+
+void setHeaderOf(KMime::Content &c, std::unique_ptr<KMime::Headers::Base> header)
+{
+    c.setHeader(std::move(header));
+}
+
+QByteArray encodedContentOf(KMime::Content &c, bool crlf)
+{
+    return c.encodedContent(crlf ? KMime::NewlineType::CRLF : KMime::NewlineType::LF);
+}
+#else
+constexpr bool dontCreate = false;
+
+KMime::Types::Mailbox senderMailbox(const KMime::Headers::Sender *header)
+{
+    return header->mailboxes().value(0);
+}
+
+QByteArray decodedBodyOf(const KMime::Content *c)
+{
+    return c->decodedContent();
+}
+
+void appendChild(KMime::Content &parent, std::unique_ptr<KMime::Content> child)
+{
+    parent.appendContent(child.release());
+}
+
+std::unique_ptr<KMime::Content> takeChild(KMime::Content &parent, KMime::Content *child)
+{
+    return std::unique_ptr<KMime::Content>(parent.takeContent(child));
+}
+
+void setHeaderOf(KMime::Content &c, std::unique_ptr<KMime::Headers::Base> header)
+{
+    c.setHeader(header.release());
+}
+
+QByteArray encodedContentOf(KMime::Content &c, bool crlf)
+{
+    return c.encodedContent(crlf);
+}
+#endif
+}
+
+namespace
+{
 // [MS-OXPROPS]
 constexpr quint16 propImportance = 0x0017;
 constexpr quint16 propMessageClass = 0x001A;
@@ -166,7 +238,7 @@ Pst::Message convert(KMime::Message &msg, const Extras &extras, quint16 keywords
 {
     Pst::Message m;
     Pst::PropertyMap &p = m.properties;
-    const QString subject = msg.subject(KMime::CreatePolicy::DontCreate) ? msg.subject(KMime::CreatePolicy::DontCreate)->asUnicodeString() : QString();
+    const QString subject = msg.subject(dontCreate) ? msg.subject(dontCreate)->asUnicodeString() : QString();
     p.insert(propSubject, string(subject));
     p.insert(propConversationTopic, string(subject));
     p.insert(propMessageClass, string(QStringLiteral("IPM.Note")));
@@ -174,7 +246,7 @@ Pst::Message convert(KMime::Message &msg, const Extras &extras, quint16 keywords
     p.insert(propTransportMessageHeaders, string(QString::fromUtf8(KMime::LFtoCRLF(msg.head()))));
 
     // Sender: From as the represented sender, Sender (else From) as the one who sent it
-    const KMime::Headers::From *fromHeader = msg.from(KMime::CreatePolicy::DontCreate);
+    const KMime::Headers::From *fromHeader = msg.from(dontCreate);
     const QList<KMime::Types::Mailbox> from = fromHeader ? fromHeader->mailboxes() : QList<KMime::Types::Mailbox>();
     if (!from.isEmpty()) {
         const QString address = QString::fromUtf8(from.first().address());
@@ -183,8 +255,8 @@ Pst::Message convert(KMime::Message &msg, const Extras &extras, quint16 keywords
         p.insert(propSentRepresentingEmailAddress, string(address));
         p.insert(propSentRepresentingSmtpAddress, string(address));
     }
-    const KMime::Headers::Sender *senderHeader = msg.sender(KMime::CreatePolicy::DontCreate);
-    const QList<KMime::Types::Mailbox> sender = senderHeader && !senderHeader->mailbox().address().isEmpty() ? QList<KMime::Types::Mailbox>{senderHeader->mailbox()} : from;
+    const KMime::Headers::Sender *senderHeader = msg.sender(dontCreate);
+    const QList<KMime::Types::Mailbox> sender = senderHeader && !senderMailbox(senderHeader).address().isEmpty() ? QList<KMime::Types::Mailbox>{senderMailbox(senderHeader)} : from;
     if (!sender.isEmpty()) {
         const QString address = QString::fromUtf8(sender.first().address());
         p.insert(propSenderName, string(sender.first().name().isEmpty() ? address : sender.first().name()));
@@ -194,9 +266,9 @@ Pst::Message convert(KMime::Message &msg, const Extras &extras, quint16 keywords
     }
 
     // Recipients (1 To, 2 Cc, 3 Bcc) and the display lists Outlook's columns show
-    const QList<KMime::Types::Mailbox> to = msg.to(KMime::CreatePolicy::DontCreate) ? msg.to(KMime::CreatePolicy::DontCreate)->mailboxes() : QList<KMime::Types::Mailbox>();
-    const QList<KMime::Types::Mailbox> cc = msg.cc(KMime::CreatePolicy::DontCreate) ? msg.cc(KMime::CreatePolicy::DontCreate)->mailboxes() : QList<KMime::Types::Mailbox>();
-    const QList<KMime::Types::Mailbox> bcc = msg.bcc(KMime::CreatePolicy::DontCreate) ? msg.bcc(KMime::CreatePolicy::DontCreate)->mailboxes() : QList<KMime::Types::Mailbox>();
+    const QList<KMime::Types::Mailbox> to = msg.to(dontCreate) ? msg.to(dontCreate)->mailboxes() : QList<KMime::Types::Mailbox>();
+    const QList<KMime::Types::Mailbox> cc = msg.cc(dontCreate) ? msg.cc(dontCreate)->mailboxes() : QList<KMime::Types::Mailbox>();
+    const QList<KMime::Types::Mailbox> bcc = msg.bcc(dontCreate) ? msg.bcc(dontCreate)->mailboxes() : QList<KMime::Types::Mailbox>();
     addRecipients(m, to, 1);
     addRecipients(m, cc, 2);
     addRecipients(m, bcc, 3);
@@ -205,7 +277,7 @@ Pst::Message convert(KMime::Message &msg, const Extras &extras, quint16 keywords
     p.insert(propDisplayBcc, string(displayList(bcc)));
 
     // Dates: sent from the Date header, delivered as the mailbox has it
-    const QDateTime sent = msg.date(KMime::CreatePolicy::DontCreate) ? msg.date(KMime::CreatePolicy::DontCreate)->dateTime() : QDateTime();
+    const QDateTime sent = msg.date(dontCreate) ? msg.date(dontCreate)->dateTime() : QDateTime();
     const QDateTime delivered = extras.received > 0 ? QDateTime::fromMSecsSinceEpoch(extras.received, QTimeZone::UTC) : sent;
     if (sent.isValid()) {
         p.insert(propClientSubmitTime, time(sent));
@@ -215,13 +287,13 @@ Pst::Message convert(KMime::Message &msg, const Extras &extras, quint16 keywords
         p.insert(propCreationTime, time(delivered));
         p.insert(propLastModificationTime, time(delivered));
     }
-    if (const KMime::Headers::MessageID *id = msg.messageID(KMime::CreatePolicy::DontCreate)) {
+    if (const KMime::Headers::MessageID *id = msg.messageID(dontCreate)) {
         p.insert(propInternetMessageId, string(id->asUnicodeString()));
     }
-    if (const KMime::Headers::InReplyTo *h = msg.inReplyTo(KMime::CreatePolicy::DontCreate)) {
+    if (const KMime::Headers::InReplyTo *h = msg.inReplyTo(dontCreate)) {
         p.insert(propInReplyToId, string(h->asUnicodeString()));
     }
-    if (const KMime::Headers::References *h = msg.references(KMime::CreatePolicy::DontCreate)) {
+    if (const KMime::Headers::References *h = msg.references(dontCreate)) {
         p.insert(propInternetReferences, string(h->asUnicodeString()));
     }
 
@@ -251,7 +323,7 @@ Pst::Message convert(KMime::Message &msg, const Extras &extras, quint16 keywords
     if (msg.contents().isEmpty() && !html && !text) {
         // The whole message is one non-text part (S/MIME encrypted, a lone file)
         parts.append(&msg);
-        if (msg.contentType(KMime::CreatePolicy::DontCreate) && msg.contentType(KMime::CreatePolicy::DontCreate)->mimeType() == "application/pkcs7-mime") {
+        if (msg.contentType(dontCreate) && msg.contentType(dontCreate)->mimeType() == "application/pkcs7-mime") {
             p.insert(propMessageClass, string(QStringLiteral("IPM.Note.SMIME")));
         }
     } else {
@@ -260,17 +332,17 @@ Pst::Message convert(KMime::Message &msg, const Extras &extras, quint16 keywords
     for (KMime::Content *c : std::as_const(parts)) {
         Pst::Attachment a;
         Pst::PropertyMap &ap = a.properties;
-        const KMime::Headers::ContentType *type = c->contentType(KMime::CreatePolicy::DontCreate);
-        const KMime::Headers::ContentDisposition *disposition = c->contentDisposition(KMime::CreatePolicy::DontCreate);
+        const KMime::Headers::ContentType *type = c->contentType(dontCreate);
+        const KMime::Headers::ContentDisposition *disposition = c->contentDisposition(dontCreate);
         QString name = disposition ? disposition->filename() : QString();
         if (name.isEmpty() && type) {
             name = type->name();
         }
         if (c->bodyIsMessage() && depth < maxDepth) {
-            const std::shared_ptr<KMime::Message> inner = c->bodyAsMessage();
+            const auto inner = c->bodyAsMessage();
             Extras innerExtras;
             a.embedded = std::make_shared<Pst::Message>(convert(*inner, innerExtras, keywords, depth + 1));
-            const QString innerSubject = inner->subject(KMime::CreatePolicy::DontCreate) ? inner->subject(KMime::CreatePolicy::DontCreate)->asUnicodeString() : QString();
+            const QString innerSubject = inner->subject(dontCreate) ? inner->subject(dontCreate)->asUnicodeString() : QString();
             ap.insert(propAttachMethod, int32(afEmbeddedMessage));
             ap.insert(propDisplayName, string(name.isEmpty() ? innerSubject : name));
             ap.insert(propAttachMimeTag, string(QStringLiteral("message/rfc822")));
@@ -278,7 +350,7 @@ Pst::Message convert(KMime::Message &msg, const Extras &extras, quint16 keywords
             m.attachments.append(a);
             continue;
         }
-        const QByteArray data = c->decodedBody();
+        const QByteArray data = decodedBodyOf(c);
         const QString mimeType = type ? QString::fromLatin1(type->mimeType()) : QStringLiteral("application/octet-stream");
         if (name.isEmpty()) {
             name = QStringLiteral("attachment");
@@ -292,7 +364,7 @@ Pst::Message convert(KMime::Message &msg, const Extras &extras, quint16 keywords
         ap.insert(propAttachSize, int32(data.size()));
         ap.insert(propRenderingPosition, int32(-1));
         // An inline image the HTML refers to by its Content-ID
-        const KMime::Headers::ContentID *cid = c->contentID(KMime::CreatePolicy::DontCreate);
+        const KMime::Headers::ContentID *cid = c->contentID(dontCreate);
         const bool attachment = disposition && disposition->disposition() == KMime::Headers::CDattachment;
         if (cid && !cid->identifier().isEmpty()) {
             ap.insert(propAttachContentId, string(QString::fromUtf8(cid->identifier())));
@@ -324,7 +396,7 @@ std::unique_ptr<KMime::Content> multipart(const QByteArray &type, std::vector<st
     c->contentType()->setMimeType(type);
     c->contentType()->setBoundary(KMime::multiPartBoundary());
     for (auto &p : parts) {
-        c->appendContent(std::move(p));
+        appendChild(*c, std::move(p));
     }
     return c;
 }
@@ -424,7 +496,7 @@ QByteArray buildMime(const Pst::Message &m, int depth)
             if (!name.isEmpty()) {
                 d->setFilename(name + QStringLiteral(".eml"));
             }
-            part->setHeader(std::move(d));
+            setHeaderOf(*part, std::move(d));
             attached.push_back(std::move(part));
             continue;
         }
@@ -439,7 +511,7 @@ QByteArray buildMime(const Pst::Message &m, int depth)
         auto d = std::make_unique<KMime::Headers::ContentDisposition>();
         d->setDisposition(inlined ? KMime::Headers::CDinline : KMime::Headers::CDattachment);
         d->setFilename(name);
-        part->setHeader(std::move(d));
+        setHeaderOf(*part, std::move(d));
         if (!cid.isEmpty()) {
             part->contentID()->setIdentifier(cid.toUtf8());
         }
@@ -452,27 +524,27 @@ QByteArray buildMime(const Pst::Message &m, int depth)
     if (attached.empty()) {
         // The body alone is the message: move its headers up
         msg.contentType()->from7BitString(body->contentType()->as7BitString());
-        if (const auto *cte = body->contentTransferEncoding(KMime::CreatePolicy::DontCreate)) {
+        if (const auto *cte = body->contentTransferEncoding(dontCreate)) {
             msg.contentTransferEncoding()->setEncoding(cte->encoding());
         }
         if (body->contents().isEmpty()) {
-            msg.setBody(body->decodedBody());
+            msg.setBody(decodedBodyOf(body.get()));
         } else {
             const QList<KMime::Content *> parts = body->contents();
             for (KMime::Content *c : parts) {
-                msg.appendContent(body->takeContent(c));
+                appendChild(msg, takeChild(*body, c));
             }
         }
     } else {
         msg.contentType()->setBoundary(KMime::multiPartBoundary());
-        msg.appendContent(std::move(body));
+        appendChild(msg, std::move(body));
         for (auto &part : attached) {
-            msg.appendContent(std::move(part));
+            appendChild(msg, std::move(part));
         }
     }
     msg.assemble();
     // CRLF once, for the whole message: an attached message goes in with LF like the rest
-    return msg.encodedContent(depth == 0 ? KMime::NewlineType::CRLF : KMime::NewlineType::LF);
+    return encodedContentOf(msg, depth == 0);
 }
 }
 
