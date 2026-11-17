@@ -82,6 +82,9 @@ public:
     void selectRow(int row);
     // A composer: new (message 0), reply, replyAll, forward or draft, in the current mailbox
     QWidget *openComposer(const QString &kind, qint64 message, const QString &outgoing = {});
+    // A new message with these synced OneDrive/SharePoint files as links (Graph Sync's Dolphin
+    // action "Send Link by E-mail"), from the account whose location holds them
+    QWidget *composeWithCloudLinks(const QStringList &paths);
     // A message that could not be sent (the notification's Open Draft)
     QWidget *openOutgoing(const QString &mailboxKey, const QString &uuid);
     // The calendar window (created once, raised afterwards)

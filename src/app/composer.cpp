@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "composer.h"
+#include "graphsynclink.h"
 #include "maileditor.h"
 #include "pastedimages.h"
 #include "coloraction.h"
@@ -379,6 +380,11 @@ void ComposerWindow::setupActions()
             });
             return;
         }
+        // OneDrive/SharePoint links: uploads finished and the recipients given access first; this
+        // runs again by itself when that is done
+        if (validate() && !cloudReadyToSend()) {
+            return;
+        }
         if (validate()) {
             save(true);
             m_closing = true;
@@ -419,6 +425,13 @@ void ComposerWindow::setupActions()
     connect(attach, &QAction::triggered, this, [this] {
         addFiles(QFileDialog::getOpenFileNames(this, i18nc("@title:window", "Attach Files")));
     });
+    // Synced OneDrive/SharePoint files as links (composercloud.cpp): only with Graph Sync installed
+    // and syncing locations of this account
+    QAction *attachCloud = actions->addAction(QStringLiteral("attach_cloud"));
+    attachCloud->setText(i18nc("@action", "Attach from OneDrive or SharePoint..."));
+    attachCloud->setIcon(QIcon::fromTheme(QStringLiteral("folder-cloud")));
+    attachCloud->setVisible(GraphSyncLink::available() && !GraphSyncLink::locations(m_mailboxKey.section(QLatin1Char('/'), 0, 0)).isEmpty());
+    connect(attachCloud, &QAction::triggered, this, &ComposerWindow::attachFromCloud);
 
     QAction *discardAction = actions->addAction(QStringLiteral("discard"));
     discardAction->setText(i18nc("@action", "Discard"));
@@ -957,6 +970,8 @@ void ComposerWindow::restore(const Outgoing &record)
             m_given.insert(a.key);
         }
     }
+    // OneDrive/SharePoint links of the draft (uploads still running are followed again)
+    restoreCloud(ui.value(QLatin1String("cloudFiles")).toArray());
     refreshAttachmentList();
     showQuote();
     const QString other = ui.value(QLatin1String("otherFrom")).toString();
@@ -1217,6 +1232,11 @@ void ComposerWindow::addFiles(const QStringList &paths)
         if (!info.isFile() || !info.isReadable()) {
             continue;
         }
+        // Over 25 MB: into OneDrive's Attachments folder and sent as a link, as Outlook does (only
+        // with Graph Sync and a OneDrive of this account; otherwise attached as it is)
+        if (info.size() > largeAttachmentBytes && putInOneDrive(info.absoluteFilePath())) {
+            continue;
+        }
         Item item;
         item.attachment.key = QUuid::createUuid().toString(QUuid::WithoutBraces);
         item.attachment.name = info.fileName();
@@ -1236,6 +1256,10 @@ void ComposerWindow::removeSelectedAttachments()
     for (QListWidgetItem *item : selected) {
         keys.append(item->data(Qt::UserRole).toString());
     }
+    // OneDrive links: off the list (a link already in the text stays; the user removes it there)
+    m_cloud.removeIf([&keys](const CloudFile &file) {
+        return keys.contains(QStringLiteral("cloud:") + file.path);
+    });
     m_items.removeIf([this, &keys](const Item &item) {
         if (!keys.contains(item.attachment.key)) {
             return false;
@@ -1261,6 +1285,16 @@ void ComposerWindow::refreshAttachmentList()
         auto *row = new QListWidgetItem(QIcon::fromTheme(type.iconName(), QIcon::fromTheme(QStringLiteral("unknown"))),
                                         i18nc("@item attachment name, size", "%1 (%2)", item.attachment.name, QLocale().formattedDataSize(item.attachment.size)));
         row->setData(Qt::UserRole, item.attachment.key);
+        m_attachmentList->addItem(row);
+    }
+    for (const CloudFile &file : std::as_const(m_cloud)) {
+        const QString state = !file.error.isEmpty() ? i18nc("@item a OneDrive link that failed", "no link: %1", file.error)
+            : file.uploading                        ? i18nc("@item", "uploading to OneDrive...")
+                                                    : i18nc("@item", "OneDrive link");
+        auto *row = new QListWidgetItem(QIcon::fromTheme(file.error.isEmpty() ? QStringLiteral("folder-cloud") : QStringLiteral("dialog-warning")),
+                                        i18nc("@item attachment name, state", "%1 (%2)", file.name, state));
+        row->setToolTip(file.url.isEmpty() ? file.path : file.url);
+        row->setData(Qt::UserRole, QString(QStringLiteral("cloud:") + file.path));
         m_attachmentList->addItem(row);
     }
     m_attachmentList->setVisible(m_attachmentList->count() > 0);
@@ -1375,6 +1409,7 @@ Outgoing ComposerWindow::record(bool send)
         ui.insert(QStringLiteral("editor"), text);
         o.body = m_quoteText.isEmpty() ? text : text + QStringLiteral("\n\n") + m_quoteText;
     }
+    ui.insert(QStringLiteral("cloudFiles"), cloudJson());
     o.ui = ui;
     return o;
 }

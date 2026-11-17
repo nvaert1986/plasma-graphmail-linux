@@ -88,6 +88,12 @@ public:
     void addTo(const QString &addresses);
     // Tests: "mailbox key|uuid|subject" of the message as last handed to the daemon
     QString lastRecord() const;
+    // Synced OneDrive/SharePoint files as links (Graph Sync, phase 10 step 7): attach these
+    // (--compose-cloud, Dolphin's "Send Link by E-mail" through --compose-link); paths outside the
+    // account's synced folders are refused
+    void attachCloudFiles(const QStringList &paths);
+    // Tests: "name link|uploading|error" per OneDrive file
+    QStringList cloudStateForTests() const;
     void applyTemplate(const QJsonObject &templateJson);
     // Tests: the Options menu without dialogs: "read", "delivery", "sensitivity=N", "defer=ISO"
     void setOptionsForTests(const QStringList &options);
@@ -258,6 +264,41 @@ private:
         bool fromOriginal = false;
     };
     QList<Item> m_items;
+
+    // OneDrive/SharePoint files sent as links (Graph Sync, phase 10 step 7; composercloud.cpp).
+    // Only offered when Graph Sync is installed and syncs locations of this account
+    struct CloudFile {
+        QString path;
+        QString name;
+        // The online address; empty until Graph Sync knows the file online
+        QString url;
+        // Put into OneDrive's Attachments folder (over 25 MB): Graph Sync is uploading it
+        bool uploading = false;
+        QString error;
+        // Where its link goes in the text
+        QTextCursor cursor;
+    };
+    QList<CloudFile> m_cloud;
+    // Outlook's limit: a larger attachment goes to OneDrive and is sent as a link
+    static constexpr qint64 largeAttachmentBytes = 25LL * 1024 * 1024;
+    QTimer *m_cloudPoll = nullptr;
+    // The recipients given access to the files already (Send again after a refusal)
+    QStringList m_sharedWith;
+    bool m_sharing = false;
+    // Send pressed while files were uploading: sends itself once they are online
+    bool m_sendWhenReady = false;
+    QString accountId() const;
+    void attachFromCloud();
+    void addCloudFile(const QString &path, bool uploading);
+    void requestCloudLink(int index);
+    // False: not yet (uploads, giving access); Send runs again by itself when it is done
+    bool cloudReadyToSend();
+    QStringList recipientAddresses() const;
+    // Over 25 MB (Outlook's limit for a link instead): into OneDrive's Attachments folder as a
+    // link; false when that is not possible (no Graph Sync, no OneDrive of this account)
+    bool putInOneDrive(const QString &path);
+    QJsonArray cloudJson() const;
+    void restoreCloud(const QJsonArray &files);
     QStringList m_dropped;
     // Files and pictures already handed to the daemon (by key): later saves send the key only
     QSet<QString> m_given;

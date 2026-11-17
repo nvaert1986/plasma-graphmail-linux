@@ -3,7 +3,7 @@
 A native KDE Plasma client for Microsoft 365 mailboxes: mail, calendar, contacts and tasks from
 Exchange Online, through Microsoft Graph. Written in C++ with Qt 6 and KDE Frameworks 6.
 
-Status: version 0.12.0, in development; not packaged yet.
+Status: version 0.13.0, in development; not packaged yet.
 
 ## Scope
 
@@ -12,6 +12,9 @@ Status: version 0.12.0, in development; not packaged yet.
 - Shared mailboxes, shared and delegated calendars and contact folders
 - A local cache (all message headers, recent bodies) with full-text search
 - A system tray icon with the unread count and the reminders that are due (Snooze, Dismiss)
+- With Graph Sync installed: SharePoint/OneDrive links open their synced copy, attachments can be
+  saved to OneDrive or SharePoint, synced files attached as links (the recipients get access on
+  Send), attachments over 25 MB go to OneDrive as a link
 - A daily check for a new release on GitHub (Settings > Updates; off with `-DGRAPHMAIL_UPDATE_CHECK=OFF`)
 
 Not planned: IMAP/POP3, on-premises Exchange, Outlook add-ins, public folders.
@@ -30,7 +33,7 @@ Gentoo package that provides it):
 | Tray icon | Plasma (the widget is a Plasma applet) | kde-plasma/libplasma |
 | Composer | KPim6TextEdit, KF6TextEmoticonsWidgets | kde-apps/kpimtextedit, dev-libs/ktextaddons |
 | Attached mails, winmail.dat | KPim6MimeTreeParserWidgets, KPim6Mime, KPim6Tnef, KPim6Libkleo | kde-apps/mimetreeparser, kde-apps/kmime, kde-apps/libktnef, kde-apps/libkleo |
-| Accounts and sign-in | GraphCore: the suite's shared Microsoft Graph library and its account service `graphaccountsd`, which owns the sign-in for every app of the suite | [plasma-graphcore-linux](https://github.com/nvaert1986/plasma-graphcore-linux) 0.12 (not packaged yet: build and install it first) |
+| Accounts and sign-in | GraphCore: the suite's shared Microsoft Graph library and its account service `graphaccountsd`, which owns the sign-in for every app of the suite | [plasma-graphcore-linux](https://github.com/nvaert1986/plasma-graphcore-linux) 0.13 (not packaged yet: build and install it first) |
 | Cache | libzstd | app-arch/zstd |
 
 ```

@@ -4,7 +4,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 # The version follows the last finished phase (0.1.0 = phase 1), patch numbers for fixes
-project(plasma-graphmail-linux VERSION 0.12.0 LANGUAGES CXX)
+project(plasma-graphmail-linux VERSION 0.13.0 LANGUAGES CXX)
 
 # Same floor as plasma-onedrive-linux: the shared Graph library is built by both
 set(QT_MIN_VERSION "6.8.0")
@@ -28,7 +28,7 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui Widgets Network 
 find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS Config ConfigWidgets CoreAddons DBusAddons I18n IconThemes KIO Notifications NotifyConfig Parts WidgetsAddons XmlGui)
 # The suite's shared Microsoft Graph core and its account service (plasma-graphcore-linux, phase 10):
 # accounts, the Graph client, sign-in through graphaccountsd
-find_package(GraphCore 0.12 REQUIRED)
+find_package(GraphCore 0.13 REQUIRED)
 # The tray widget (plasmoid/): installed as a Plasma applet
 find_package(Plasma REQUIRED)
 # KDE PIM: attached mails (.eml) in KDE's mail viewer, Outlook's winmail.dat

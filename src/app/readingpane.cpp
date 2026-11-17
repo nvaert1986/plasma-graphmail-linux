@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "readingpane.h"
+#include "graphsynclink.h"
 #include "attachmentpreview.h"
 #include "attachmentstrip.h"
 #include "avatar.h"
@@ -130,6 +131,30 @@ ReadingPane::ReadingPane(QWidget *parent)
         if (!path.isEmpty()) {
             saveAttachment(attachment, path);
         }
+    });
+    connect(m_attachments, &AttachmentStrip::saveToCloudRequested, this, [this](qint64 attachment) {
+        AttachmentRow row;
+        contentOf(attachment, &row);
+        // The folder used last when it is still synced, else the own OneDrive; Graph Sync's
+        // locations are in the dialog's Places
+        KConfigGroup group = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("Reading"));
+        QString folder = group.readEntry("CloudSaveFolder");
+        if (folder.isEmpty() || !QDir(folder).exists() || GraphSyncLink::locationOf(folder).id.isEmpty()) {
+            const QList<GraphSyncLink::Location> all = GraphSyncLink::locations();
+            folder = all.isEmpty() ? QString() : all.constFirst().localPath;
+            for (const GraphSyncLink::Location &l : all) {
+                if (l.kind == QLatin1String("personal")) {
+                    folder = l.localPath;
+                    break;
+                }
+            }
+        }
+        const QString path = QFileDialog::getSaveFileName(this, i18nc("@title:window", "Save to OneDrive or SharePoint"), QDir(folder).filePath(row.name));
+        if (path.isEmpty()) {
+            return;
+        }
+        group.writeEntry("CloudSaveFolder", QFileInfo(path).absolutePath());
+        saveAttachment(attachment, path);
     });
     connect(m_attachments, &AttachmentStrip::saveAllRequested, this, [this] {
         saveAllAttachments();

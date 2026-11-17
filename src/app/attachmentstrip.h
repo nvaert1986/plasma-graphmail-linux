@@ -33,6 +33,8 @@ Q_SIGNALS:
     void openRequested(qint64 attachment);
     void previewRequested(qint64 attachment);
     void saveRequested(qint64 attachment);
+    // Save into a folder Graph Sync syncs (OneDrive, SharePoint); only offered when it is installed
+    void saveToCloudRequested(qint64 attachment);
     void saveAllRequested();
 
 protected:

@@ -128,6 +128,8 @@ add_executable(plasma-graphmail-linux
     app/quote.cpp
     app/offlinedialog.cpp
     app/updatesdialog.cpp
+    app/graphsynclink.cpp
+    app/composercloud.cpp
     app/readingpane.cpp
     app/readreceipts.cpp
     app/recurrence.cpp

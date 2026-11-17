@@ -218,6 +218,8 @@ int main(int argc, char **argv)
         {QStringLiteral("outgoing"), i18n("Open a message that was not sent (account/mailbox/id)"), QStringLiteral("spec")},
         {QStringLiteral("calendar"), i18n("Open the calendar")},
         {QStringLiteral("event"), i18n("Open this event (account/mailbox/id)"), QStringLiteral("spec")},
+        {QStringLiteral("compose-link"), i18n("Write a new message with this synced OneDrive or SharePoint file as a link (repeatable; Graph Sync)"), QStringLiteral("path")},
+        {QStringLiteral("compose-cloud"), i18n("With --compose: attach these synced files as OneDrive links, comma-separated; their state is logged (tests)"), QStringLiteral("paths")},
         {QStringLiteral("calendar-view"), i18n("With --calendar: day, workweek, week, month or agenda"), QStringLiteral("view")},
         {QStringLiteral("calendar-date"), i18n("With --calendar: the date to show (yyyy-MM-dd)"), QStringLiteral("date")},
         {QStringLiteral("new-event"), i18n("With --calendar and --screenshot: a new event with this title, saved (tests)"), QStringLiteral("title")},
@@ -302,6 +304,7 @@ int main(int argc, char **argv)
         {QStringLiteral("compose-text"), i18n("With --compose: text to type (tests)"), QStringLiteral("text")},
         {QStringLiteral("compose-attach"), i18n("With --compose: a file to attach; may be repeated (tests)"), QStringLiteral("file")},
         {QStringLiteral("compose-send"), i18n("With --compose: send it, then quit (tests)")},
+        {QStringLiteral("compose-press-send"), i18n("With --compose: press Send as the user does (OneDrive links shared first); only a [TEST Graph Mail] subject (tests)")},
         {QStringLiteral("compose-options"), i18n("With --compose: read, delivery, sensitivity=N, defer=ISO time, comma separated (tests)"), QStringLiteral("options")},
         {QStringLiteral("compose-template-save"), i18n("With --compose: save it as a template with this name (tests)"), QStringLiteral("name")},
         {QStringLiteral("compose-template"), i18n("With --compose: fill it from the template with this name (tests)"), QStringLiteral("name")},
@@ -414,6 +417,9 @@ int main(int argc, char **argv)
     if (parser.isSet(QStringLiteral("task"))) {
         openTask(parser.value(QStringLiteral("task")));
     }
+    if (parser.isSet(QStringLiteral("compose-link")) && !parser.isSet(QStringLiteral("screenshot"))) {
+        window->composeWithCloudLinks(parser.values(QStringLiteral("compose-link")));
+    }
     if (unique) {
         QObject::connect(unique.get(), &KDBusService::activateRequested, window, [window, shell, openOutgoing, openEvent, openTask](const QStringList &arguments, const QString &workingDirectory) {
             QCommandLineParser again;
@@ -424,7 +430,11 @@ int main(int argc, char **argv)
             again.addOption({QStringLiteral("task"), QString(), QStringLiteral("spec")});
             again.addOption({QStringLiteral("contacts"), QString()});
             again.addOption({QStringLiteral("tasks"), QString()});
+            again.addOption({QStringLiteral("compose-link"), QString(), QStringLiteral("path")});
             again.parse(arguments);
+            if (again.isSet(QStringLiteral("compose-link"))) {
+                window->composeWithCloudLinks(again.values(QStringLiteral("compose-link")));
+            }
             if (again.isSet(QStringLiteral("message"))) {
                 openMessage(window, again.value(QStringLiteral("message")));
             }
@@ -1138,6 +1148,9 @@ int main(int argc, char **argv)
             auto *composer = static_cast<GraphMail::ComposerWindow *>(window->openComposer(kind, message));
             composer->setTestMode();
             composer->resize(parser.isSet(QStringLiteral("compose-narrow")) ? QSize(620, 500) : QSize(900, 760));
+            if (parser.isSet(QStringLiteral("compose-cloud"))) {
+                composer->attachCloudFiles(parser.value(QStringLiteral("compose-cloud")).split(QLatin1Char(','), Qt::SkipEmptyParts));
+            }
             if (parser.isSet(QStringLiteral("compose-from-other"))) {
                 const QString other = parser.value(QStringLiteral("compose-from-other"));
                 composer->setOtherFromForTests(other.section(QLatin1Char('|'), 0, 0), other.section(QLatin1Char('|'), 1));
@@ -1188,6 +1201,22 @@ int main(int argc, char **argv)
                     qWarning() << "drop test:" << composer->dropFilesForTests(files.split(QLatin1Char(',')));
                 });
             }
+            if (parser.isSet(QStringLiteral("compose-cloud"))) {
+                // Links come from Graph Sync (an upload may take a while): wait, then log
+                QElapsedTimer waited;
+                waited.start();
+                while (waited.elapsed() < 60000) {
+                    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+                    const QStringList states = composer->cloudStateForTests();
+                    // --compose-drop hands its files over after 1.5 s: judge only after that
+                    if (waited.elapsed() > 3000 && !states.isEmpty() && std::none_of(states.cbegin(), states.cend(), [](const QString &s) {
+                            return s.endsWith(QLatin1String(" uploading"));
+                        })) {
+                        break;
+                    }
+                }
+                qWarning().noquote() << "cloud test: state" << composer->cloudStateForTests().join(QStringLiteral("; "));
+            }
             if (parser.isSet(QStringLiteral("compose-check-names"))) {
                 composer->typeRecipientsForTests(parser.value(QStringLiteral("compose-to")));
                 QTimer::singleShot(1500, composer, [composer] {
@@ -1200,6 +1229,17 @@ int main(int argc, char **argv)
                 QTimer::singleShot(1500, composer, [composer] {
                     if (composer->windowTitle().contains(QLatin1String("[TEST Graph Mail]"))) {
                         qInfo().noquote() << "Saved as a draft:" << composer->saveNow();
+                    }
+                });
+            }
+            if (parser.isSet(QStringLiteral("compose-press-send"))) {
+                // The whole Send path (uploads, giving the recipients access, then sending)
+                QTimer::singleShot(2000, composer, [composer] {
+                    if (!composer->windowTitle().contains(QLatin1String("[TEST Graph Mail]"))) {
+                        qWarning() << "Not sent: the subject has no [TEST Graph Mail] mark";
+                    } else if (QAction *send = composer->actionCollection()->action(QStringLiteral("send"))) {
+                        qWarning() << "press send test: pressed";
+                        send->trigger();
                     }
                 });
             }

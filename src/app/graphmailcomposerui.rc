@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<gui name="plasma-graphmail-linux-composer" version="9"
+<gui name="plasma-graphmail-linux-composer" version="10"
      xmlns="http://www.kde.org/standards/kxmlgui/1.0"
      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
      xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0 http://www.kde.org/standards/kxmlgui/1.0/kxmlgui.xsd">
@@ -25,6 +25,7 @@
     <Menu name="insert">
       <text>&amp;Insert</text>
       <Action name="attach"/>
+      <Action name="attach_cloud"/>
       <Action name="manage_link"/>
       <Action name="signature"/>
       <Separator/>

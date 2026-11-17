@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "attachmentstrip.h"
+#include "graphsynclink.h"
 
 #include <KLocalizedString>
 
@@ -103,6 +104,12 @@ void AttachmentStrip::contextMenuEvent(QContextMenuEvent *event)
         menu.addAction(QIcon::fromTheme(QStringLiteral("document-save-as")), i18nc("@action:inmenu", "Save As..."), this, [this, id] {
             Q_EMIT saveRequested(id);
         });
+        // Graph Sync (the suite's OneDrive/SharePoint client) syncs what lands in its folders
+        if (!GraphSyncLink::locations().isEmpty()) {
+            menu.addAction(QIcon::fromTheme(QStringLiteral("folder-cloud")), i18nc("@action:inmenu", "Save to OneDrive or SharePoint..."), this, [this, id] {
+                Q_EMIT saveToCloudRequested(id);
+            });
+        }
     }
     menu.addAction(QIcon::fromTheme(QStringLiteral("document-save-all")), i18nc("@action:inmenu", "Save All Attachments..."), this, [this] {
         Q_EMIT saveAllRequested();

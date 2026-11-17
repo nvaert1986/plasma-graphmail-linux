@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "mailview.h"
+#include "graphsynclink.h"
 #include "blobstore.h"
 #include "graphmail_debug.h"
 #include "store.h"
@@ -21,6 +22,7 @@
 #include <QFontDatabase>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QMenu>
 #include <QMetaMethod>
 #include <QMimeDatabase>
@@ -367,11 +369,27 @@ void MailView::setZoom(double factor)
 
 void MailView::openLink(const QUrl &url, bool newWindow)
 {
-    if (linkTestMode) {
-        qCWarning(GRAPHMAIL).noquote() << "link test: opened" << url.scheme() << url.toString().size() << "blank=" << newWindow;
+    const auto open = [newWindow](const QUrl &target, bool local) {
+        if (linkTestMode) {
+            qCWarning(GRAPHMAIL).noquote() << "link test: opened" << (local ? QStringLiteral("local") : target.scheme()) << target.toString().size() << "blank=" << newWindow;
+            return;
+        }
+        QDesktopServices::openUrl(target);
+    };
+    // A SharePoint/OneDrive file that Graph Sync has synced opens in its local copy (the desktop's
+    // program for it, no browser); otherwise, or without an answer soon, the browser
+    if (GraphSyncLink::isCloudUrl(url.toString()) && GraphSyncLink::available()) {
+        GraphSyncLink::localPathForUrl(url.toString(), qApp, [url, open](const QJsonObject &answer) {
+            const QString path = answer.value(QLatin1String("path")).toString();
+            if (path.isEmpty()) {
+                open(url, false);
+            } else {
+                open(QUrl::fromLocalFile(path), true);
+            }
+        });
         return;
     }
-    QDesktopServices::openUrl(url);
+    open(url, false);
 }
 
 void MailView::setLinkTestMode(bool on)

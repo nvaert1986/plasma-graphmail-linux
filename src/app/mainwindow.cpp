@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "mainwindow.h"
+#include "graphsynclink.h"
 #include "updates.h"
 #include "updatesdialog.h"
 #include "graphmail_debug.h"
@@ -1861,6 +1862,29 @@ QWidget *MainWindow::openComposer(const QString &kind, qint64 message, const QSt
     request.outgoing = outgoing;
     auto *composer = new ComposerWindow(m_mailboxes, m_daemon, request);
     composer->show();
+    return composer;
+}
+
+QWidget *MainWindow::composeWithCloudLinks(const QStringList &paths)
+{
+    QString key = m_mailboxKey;
+    for (const QString &path : paths) {
+        const GraphSyncLink::Location location = GraphSyncLink::locationOf(path);
+        if (!location.id.isEmpty()) {
+            // That account's own mailbox, when Graph Mail has it
+            const QString own = location.accountId + QStringLiteral("/me");
+            if (m_mailboxes->mailbox(own)) {
+                key = own;
+            }
+            break;
+        }
+    }
+    ComposeRequest request;
+    request.mailboxKey = key;
+    request.kind = QStringLiteral("new");
+    auto *composer = new ComposerWindow(m_mailboxes, m_daemon, request);
+    composer->show();
+    composer->attachCloudFiles(paths);
     return composer;
 }
 
