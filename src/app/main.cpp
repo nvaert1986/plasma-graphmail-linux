@@ -324,6 +324,7 @@ int main(int argc, char **argv)
         {QStringLiteral("flag-when"), i18n("With --select: flag the message today, tomorrow, thisweek, nextweek, none, complete or clear (tests)"), QStringLiteral("when")},
         {QStringLiteral("compose-save"), i18n("With --compose: save it as a draft, then quit (tests)")},
         {QStringLiteral("load-images"), i18n("With --screenshot: load internet content as if \"Load Images\" was clicked (tests)")},
+        {QStringLiteral("click-link"), i18n("With --screenshot: click the shown message's first link with this text; links are only logged (tests)"), QStringLiteral("text")},
     });
     parser.process(app);
     if (parser.isSet(QStringLiteral("dark-palette"))) {
@@ -457,6 +458,15 @@ int main(int argc, char **argv)
         }
         if (parser.isSet(QStringLiteral("load-images"))) {
             window->loadImages();
+        }
+        if (parser.isSet(QStringLiteral("click-link"))) {
+            GraphMail::MailView::setLinkTestMode(true);
+            window->readingPane()->clickLinkForTests(parser.value(QStringLiteral("click-link")));
+            QElapsedTimer waited;
+            waited.start();
+            while (waited.elapsed() < 8000) {
+                QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+            }
         }
         const QString file = parser.value(QStringLiteral("screenshot"));
         const QString pdf = parser.value(QStringLiteral("body-pdf"));

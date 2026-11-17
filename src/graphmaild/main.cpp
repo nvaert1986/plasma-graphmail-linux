@@ -16,7 +16,6 @@ int main(int argc, char **argv)
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("graphmaild"));
     // Accounts are shared by the suite; the app registration per account is this app's own
-    GraphCore::Accounts::setApplication(QStringLiteral("plasma-graphmail-linux"));
     QCoreApplication::setApplicationVersion(QStringLiteral(GRAPHMAIL_VERSION));
     KLocalizedString::setApplicationDomain("plasma-graphmail-linux");
 

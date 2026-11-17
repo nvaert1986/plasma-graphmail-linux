@@ -8,7 +8,6 @@
 #include "graphutil.h"
 #include "mailboxaccess.h"
 #include "mailrunner.h"
-#include "scopes.h"
 #include "store.h"
 
 #include <KConfigGroup>
@@ -36,11 +35,6 @@ namespace GraphMail
 
 namespace
 {
-QString keychainService()
-{
-    return QStringLiteral("plasma-graphmail-linux");
-}
-
 KSharedConfig::Ptr settings()
 {
     KSharedConfig::Ptr config = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals);
@@ -111,29 +105,49 @@ bool Daemon::start(QString *error)
     if (accounts.isEmpty()) {
         qCWarning(GRAPHMAIL) << "No accounts in" << GraphCore::Accounts::configFileName() << "- sign in first (graphmailctl login)";
     }
+    // Sign-ins and sign-outs happen in the account service: new accounts start at once, waiting
+    // ones are checked again
+    m_accountsClient = new GraphCore::AccountsClient(this);
+    connect(m_accountsClient, &GraphCore::AccountsClient::accountsChanged, this, [this] {
+        addNewAccounts();
+        const QSet<QString> waiting = m_notSignedIn;
+        for (const QString &id : waiting) {
+            startAccount(id);
+        }
+    });
+    addNewAccounts();
+    return true;
+}
+
+void Daemon::addNewAccounts()
+{
+    const QList<GraphCore::Account> accounts = GraphCore::Accounts::all();
     for (const GraphCore::Account &account : accounts) {
-        m_auth.insert(account.id, std::make_shared<GraphCore::Auth>(GraphCore::Auth::settingsFor(account, keychainService(), GraphCore::Scopes::suite())));
+        if (m_auth.contains(account.id)) {
+            continue;
+        }
+        m_auth.insert(account.id, std::make_shared<GraphCore::ServiceTokenProvider>(account.id));
         // Own photos and lookups by id or address count against the own mailbox, as /me does
         GraphCore::setOwnMailboxAliases(account.id, {account.objectId, account.userPrincipalName});
         startAccount(account.id);
     }
-    return true;
 }
 
 void Daemon::startAccount(const QString &account)
 {
-    const std::shared_ptr<GraphCore::Auth> auth = m_auth.value(account);
+    const std::shared_ptr<GraphCore::ServiceTokenProvider> auth = m_auth.value(account);
     if (!auth || m_checkingSignIn.contains(account)) {
         return;
     }
     m_checkingSignIn.insert(account);
-    auto *watcher = new QFutureWatcher<GraphCore::Auth::StoredToken>(this);
-    connect(watcher, &QFutureWatcher<GraphCore::Auth::StoredToken>::finished, this, [this, watcher, account] {
+    auto *watcher = new QFutureWatcher<QString>(this);
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher, account] {
         watcher->deleteLater();
         m_checkingSignIn.remove(account);
-        if (watcher->result() == GraphCore::Auth::StoredToken::Missing) {
+        const QString problem = watcher->result();
+        if (problem == QLatin1String("NotSignedIn")) {
             if (!m_notSignedIn.contains(account)) {
-                qCWarning(GRAPHMAIL) << "Account" << account << "has no Graph Mail sign-in: its mailboxes wait until it signs in";
+                qCWarning(GRAPHMAIL) << "Account" << account << "is not signed in to the account service: its mailboxes wait until it signs in";
                 m_notSignedIn.insert(account);
             }
             if (!m_signInCheck) {
@@ -149,7 +163,8 @@ void Daemon::startAccount(const QString &account)
             m_signInCheck->start();
             return;
         }
-        // Present, or a keychain that cannot be read now (locked): start; requests wait for the token
+        // Signed in, or trouble that passes (offline, the wallet still locked, the service not
+        // reachable yet): start; requests ask for the token again
         if (m_notSignedIn.remove(account)) {
             qCInfo(GRAPHMAIL) << "Account" << account << "signed in: starting its mailboxes";
         }
@@ -167,7 +182,14 @@ void Daemon::startAccount(const QString &account)
         }
     });
     watcher->setFuture(QtConcurrent::run([auth] {
-        return auth->storedRefreshToken();
+        QString error;
+        if (!auth->accessToken(&error).isEmpty()) {
+            return QString();
+        }
+        if (auth->lastProblem().isEmpty()) {
+            qCWarning(GRAPHMAIL).noquote() << "The account service did not answer:" << error;
+        }
+        return auth->lastProblem();
     }));
 }
 
@@ -320,7 +342,7 @@ QString Daemon::Mailboxes()
 
 void Daemon::resolveMailboxName(const QString &account, const QString &mailbox)
 {
-    std::shared_ptr<GraphCore::Auth> auth = m_auth.value(account);
+    std::shared_ptr<GraphCore::ServiceTokenProvider> auth = m_auth.value(account);
     if (!auth) {
         return;
     }
@@ -878,7 +900,7 @@ QString Daemon::runAccessCheck(const QString &accountId, const QString &address,
     // Answered later: the check is several network round trips, and D-Bus must not wait on them here
     setDelayedReply(true);
     const QDBusMessage request = message();
-    std::shared_ptr<GraphCore::Auth> auth = m_auth.value(account);
+    std::shared_ptr<GraphCore::ServiceTokenProvider> auth = m_auth.value(account);
     auto *watcher = new QFutureWatcher<GraphMail::MailboxAccess>(this);
     connect(watcher, &QFutureWatcher<GraphMail::MailboxAccess>::finished, this, [this, watcher, request, account, add] {
         watcher->deleteLater();
@@ -920,11 +942,11 @@ QString Daemon::OrgChart(const QString &accountId, const QString &user)
         return QStringLiteral("{\"ok\":false,\"problem\":\"unknownAccount\"}");
     }
     if (!m_directoryAuth.contains(account)) {
-        m_directoryAuth.insert(account, std::make_shared<GraphCore::Auth>(GraphCore::Auth::settingsFor(a, keychainService(), GraphCore::Scopes::directory())));
+        m_directoryAuth.insert(account, std::make_shared<GraphCore::ServiceTokenProvider>(account, GraphCore::AccountService::directory()));
     }
     setDelayedReply(true);
     const QDBusMessage request = message();
-    std::shared_ptr<GraphCore::Auth> auth = m_directoryAuth.value(account);
+    std::shared_ptr<GraphCore::ServiceTokenProvider> auth = m_directoryAuth.value(account);
     auto *watcher = new QFutureWatcher<QJsonObject>(this);
     connect(watcher, &QFutureWatcher<QJsonObject>::finished, this, [this, watcher, request, account] {
         watcher->deleteLater();
@@ -939,7 +961,7 @@ QString Daemon::OrgChart(const QString &accountId, const QString &user)
         QString error;
         if (auth->accessToken(&error).isEmpty()) {
             // No consent for User.Read.All in this tenant (AADSTS65001), or offline
-            const bool consent = error.contains(QLatin1String("AADSTS65001")) || error.contains(QLatin1String("consent"), Qt::CaseInsensitive);
+            const bool consent = auth->lastProblem() == QLatin1String("ConsentRequired");
             return QJsonObject{{QStringLiteral("ok"), false}, {QStringLiteral("problem"), consent ? QStringLiteral("notGranted") : QStringLiteral("offline")}};
         }
         GraphCore::GraphClient client(auth.get());

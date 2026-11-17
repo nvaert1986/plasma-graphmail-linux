@@ -19,15 +19,20 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFontDatabase>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QMenu>
 #include <QMetaMethod>
 #include <QMimeDatabase>
+#include <QMouseEvent>
 #include <QOpenGLWidget>
 #include <QRegularExpression>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QWebEngineContextMenuRequest>
 #include <QWebEngineDownloadRequest>
 #include <QWebEngineProfile>
+#include <QWebEngineScript>
 #include <QWebEngineSettings>
 #include <QWebEngineUrlRequestInfo>
 #include <QWebEngineUrlRequestInterceptor>
@@ -61,16 +66,49 @@ protected:
         // A link the user clicked (or a form): never inside the reading pane
         if (type == NavigationTypeLinkClicked && isMainFrame
             && (url.scheme() == QLatin1String("http") || url.scheme() == QLatin1String("https") || url.scheme() == QLatin1String("mailto"))) {
-            QDesktopServices::openUrl(url);
+            MailView::openLink(url, false);
         }
         return false;
     }
-    QWebEnginePage *createWindow(WebWindowType) override
-    {
-        // target="_blank" links come here: refuse the window (the click itself does nothing)
-        return nullptr;
-    }
+    QWebEnginePage *createWindow(WebWindowType) override;
 };
+
+// A target="_blank" link (most newsletters and notifications, e.g. a "Confirm" button) asks for a
+// new window. It gets this hidden page instead: its first navigation is the link, which goes to
+// the desktop's browser like any other link; then the page goes. JavaScript is off in the view,
+// so only a click gets here.
+class LinkCatcherPage : public QWebEnginePage
+{
+public:
+    explicit LinkCatcherPage(QWebEngineProfile *profile, QObject *parent)
+        : QWebEnginePage(profile, parent)
+    {
+        // Never navigated (should not happen): gone anyway
+        QTimer::singleShot(10000, this, &QObject::deleteLater);
+    }
+
+protected:
+    bool acceptNavigationRequest(const QUrl &url, NavigationType type, bool isMainFrame) override
+    {
+        if (!m_done && isMainFrame && type == NavigationTypeLinkClicked
+            && (url.scheme() == QLatin1String("http") || url.scheme() == QLatin1String("https") || url.scheme() == QLatin1String("mailto"))) {
+            m_done = true;
+            MailView::openLink(url, true);
+        }
+        deleteLater();
+        return false;
+    }
+
+private:
+    bool m_done = false;
+};
+
+std::atomic_bool linkTestMode = false;
+
+QWebEnginePage *MailPage::createWindow(WebWindowType)
+{
+    return new LinkCatcherPage(profile(), this);
+}
 }
 
 // Serves graphmail:body/<message id> (the cached body) and cid:<content id> (inline images)
@@ -325,6 +363,51 @@ void MailView::setZoom(double factor)
     KConfigGroup group = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("Reading"));
     group.writeEntry("Zoom", std::clamp(factor, 0.5, 3.0));
     group.sync();
+}
+
+void MailView::openLink(const QUrl &url, bool newWindow)
+{
+    if (linkTestMode) {
+        qCWarning(GRAPHMAIL).noquote() << "link test: opened" << url.scheme() << url.toString().size() << "blank=" << newWindow;
+        return;
+    }
+    QDesktopServices::openUrl(url);
+}
+
+void MailView::setLinkTestMode(bool on)
+{
+    linkTestMode = on;
+}
+
+void MailView::clickLinkForTests(const QString &text, int attempts)
+{
+    // The middle of the link's first line box (a wrapped link's whole box has a gap) in CSS pixels,
+    // scrolled into view first; then a real click there
+    const QString script = QStringLiteral(
+                               "(function(t){for(const a of document.querySelectorAll('a')){if(a.textContent.includes(t)){"
+                               "a.scrollIntoView({block:'center'});const r=a.getClientRects()[0]||a.getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2];}}return null;})(%1)")
+                               .arg(QString::fromUtf8(QJsonDocument(QJsonArray{text}).toJson(QJsonDocument::Compact)).mid(1).chopped(1));
+    page()->runJavaScript(script, QWebEngineScript::ApplicationWorld, [this, text, attempts](const QVariant &result) {
+        const QVariantList point = result.toList();
+        QWidget *target = focusProxy();
+        if (point.size() != 2 || !target) {
+            // The body may still be loading: try again a little later
+            if (attempts > 1) {
+                QTimer::singleShot(250, this, [this, text, attempts] {
+                    clickLinkForTests(text, attempts - 1);
+                });
+            } else {
+                qCWarning(GRAPHMAIL) << "link test: no such link";
+            }
+            return;
+        }
+        const QPointF at(point.at(0).toDouble() * zoomFactor(), point.at(1).toDouble() * zoomFactor());
+        qCWarning(GRAPHMAIL) << "link test: clicking";
+        QMouseEvent press(QEvent::MouseButtonPress, at, mapToGlobal(at), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QMouseEvent release(QEvent::MouseButtonRelease, at, mapToGlobal(at), Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(target, &press);
+        QApplication::sendEvent(target, &release);
+    });
 }
 
 bool MailView::darkTheme()

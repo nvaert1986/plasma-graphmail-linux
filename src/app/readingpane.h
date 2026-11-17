@@ -60,6 +60,8 @@ public:
     QWidget *lastPreview() const;
     // "Load Images" for the message on screen
     void loadImages();
+    // Tests: clicks the body's first link whose text contains this (MailView::clickLinkForTests)
+    void clickLinkForTests(const QString &text);
     // The daemon stored (or failed to fetch) an attachment's content
     void attachmentReady(qint64 message, qint64 attachment, bool ok);
     // Tests: Save All into this folder without a dialog; how many are still waiting for content

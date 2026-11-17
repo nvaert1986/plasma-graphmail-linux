@@ -22,12 +22,12 @@ Gentoo package that provides it):
 | Needed for | CMake packages | Gentoo |
 |---|---|---|
 | Build | ECM, PkgConfig | kde-frameworks/extra-cmake-modules, virtual/pkgconfig |
-| Qt | Qt6 Core, Gui, Widgets, Network, NetworkAuth, Concurrent, Sql (SQLite), DBus, OpenGLWidgets, WebEngineWidgets, PrintSupport, Test | dev-qt/qtbase, dev-qt/qtnetworkauth, dev-qt/qtwebengine |
+| Qt | Qt6 Core, Gui, Widgets, Network, Concurrent, Sql (SQLite), DBus, OpenGLWidgets, WebEngineWidgets, PrintSupport, Test | dev-qt/qtbase, dev-qt/qtwebengine |
 | KDE Frameworks | KF6 Config, ConfigWidgets, CoreAddons, DBusAddons, I18n, IconThemes, KIO, Notifications, NotifyConfig, Parts, WidgetsAddons, XmlGui | the kde-frameworks/ package of each |
 | Calendar | KF6CalendarCore, KF6Holidays | kde-frameworks/kcalendarcore, kde-frameworks/kholidays |
 | Composer | KPim6TextEdit, KF6TextEmoticonsWidgets | kde-apps/kpimtextedit, dev-libs/ktextaddons |
 | Attached mails, winmail.dat | KPim6MimeTreeParserWidgets, KPim6Mime, KPim6Tnef, KPim6Libkleo | kde-apps/mimetreeparser, kde-apps/kmime, kde-apps/libktnef, kde-apps/libkleo |
-| Passwords | Qt6Keychain | dev-libs/qtkeychain |
+| Accounts and sign-in | GraphCore: the suite's shared Microsoft Graph library and its account service `graphaccountsd`, which owns the sign-in for every app of the suite | plasma-graphcore-linux (not packaged yet: build and install it first) |
 | Cache | libzstd | app-arch/zstd |
 
 ```

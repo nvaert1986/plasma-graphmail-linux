@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "auth.h"
+#include "serviceclient.h"
 #include "mailboxworker.h"
 
 #include <QDBusContext>
@@ -142,6 +142,8 @@ private:
     // The account's own and shared mailboxes, once the keychain holds its sign-in (checked off the
     // main thread); without one it waits and is checked again every few minutes
     void startAccount(const QString &account);
+    // Accounts in graphaccountsrc this daemon does not know yet (signed in through the service)
+    void addNewAccounts();
     void startMailbox(const QString &account, const QString &mailbox, const QString &root, bool own);
     // Display name and address of a shared mailbox, looked up once and kept in graphmailrc
     void resolveMailboxName(const QString &account, const QString &mailbox);
@@ -159,15 +161,18 @@ private:
     GraphMail::MailboxConfig baseConfig() const;
     static QString key(const QString &account, const QString &mailbox);
 
-    QHash<QString, std::shared_ptr<GraphCore::Auth>> m_auth;
-    // Per account, only for OrgChart: Scopes::directory()
-    QHash<QString, std::shared_ptr<GraphCore::Auth>> m_directoryAuth;
+    // Access tokens of each account, from the suite's account service (graphaccountsd)
+    QHash<QString, std::shared_ptr<GraphCore::ServiceTokenProvider>> m_auth;
+    // Per account, only for OrgChart: the "directory" permission set (needs admin consent)
+    QHash<QString, std::shared_ptr<GraphCore::ServiceTokenProvider>> m_directoryAuth;
     QHash<QString, Mailbox> m_mailboxes;
     // Accounts in graphaccountsrc without a Graph Mail sign-in (for instance one only another app
     // of the suite signed in): no mailboxes until they sign in
     QSet<QString> m_notSignedIn;
     QSet<QString> m_checkingSignIn;
     QTimer *m_signInCheck = nullptr;
+    // The account service's signals: accounts signed in or out
+    GraphCore::AccountsClient *m_accountsClient = nullptr;
 };
 
 }

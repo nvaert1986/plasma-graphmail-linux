@@ -58,6 +58,13 @@ public:
     static bool darkMessages();
     static void setDarkMessages(bool on);
 
+    // A clicked link (http, https, mailto) to the desktop; in link test mode only logged
+    // ("link test: opened <scheme> <length> blank=<bool>" in the journal), so tests open nothing
+    static void openLink(const QUrl &url, bool newWindow);
+    static void setLinkTestMode(bool on);
+    // Tests: clicks (real mouse events) the first link whose text contains this
+    void clickLinkForTests(const QString &text, int attempts = 20);
+
 Q_SIGNALS:
     // From the right-click menu: Print..., and New Message To... on an e-mail link
     void printRequested();

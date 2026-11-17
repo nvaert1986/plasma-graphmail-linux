@@ -5,16 +5,17 @@
 // Used to test the library against a real tenant until the daemon and the app exist.
 
 #include "accounts.h"
-#include "auth.h"
 #include "graphclient.h"
 #include "graphutil.h"
 #include "mailboxworker.h"
-#include "scopes.h"
+#include "serviceclient.h"
+#include "signin.h"
 
 #include <QCommandLineParser>
 #include <QDBusInterface>
 #include <QDBusReply>
 #include <QDateTime>
+#include <QEventLoop>
 #include <QCoreApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -27,11 +28,6 @@ using namespace GraphCore;
 
 namespace
 {
-QString keychainService()
-{
-    return QStringLiteral("plasma-graphmail-linux");
-}
-
 QTextStream &out()
 {
     static QTextStream stream(stdout);
@@ -70,55 +66,44 @@ Account pickAccount(const QString &id, QString *error)
 
 int login(const QCommandLineParser &parser)
 {
+    // The suite's account service signs in (graphaccountsd, phase 10): one sign-in for every app
     QString clientId = parser.value(QStringLiteral("client"));
-    if (clientId.isEmpty()) {
-        clientId = Accounts::defaultClientId();
-    } else if (Accounts::defaultClientId().isEmpty()) {
+    if (!clientId.isEmpty() && Accounts::defaultClientId().isEmpty()) {
         Accounts::setDefaultClientId(clientId);
     }
-    if (clientId.isEmpty()) {
-        return fail(QStringLiteral("no app registration known yet: pass --client <application id> once"));
-    }
-    QString tenant = QStringLiteral("organizations");
-    if (const QString given = parser.value(QStringLiteral("tenant")); !given.isEmpty()) {
-        bool offline = false;
-        tenant = Auth::resolveTenant(given, &offline);
-        if (tenant.isEmpty()) {
-            return fail(offline ? QStringLiteral("no connection") : QStringLiteral("no Microsoft 365 tenant found for %1").arg(given));
+    const bool code = parser.isSet(QStringLiteral("code")) || !SignIn::browserLoginAvailable();
+    AccountsClient accounts;
+    QEventLoop loop;
+    QString request;
+    int result = 1;
+    QObject::connect(&accounts, &AccountsClient::signInProgress, &loop, [&](const QString &id, const QString &userCode, const QString &address) {
+        if (id == request) {
+            out() << "Open " << address << " and enter the code " << userCode << Qt::endl;
         }
-    }
-
-    Auth auth({keychainService(), clientId, tenant, {}, Scopes::suite()});
+    });
+    QObject::connect(&accounts, &AccountsClient::signInFinished, &loop, [&](const QString &id, const QString &accountId, const QString &error) {
+        if (id != request) {
+            return;
+        }
+        if (accountId.isEmpty()) {
+            result = fail(error);
+        } else {
+            const Account account = Accounts::find(accountId);
+            out() << "Signed in as " << account.userPrincipalName << " (" << account.organization << "), account id " << account.id << Qt::endl;
+            result = 0;
+        }
+        loop.quit();
+    });
     QString error;
-    bool ok = false;
-    if (parser.isSet(QStringLiteral("code")) || !Auth::browserLoginAvailable()) {
-        ok = auth.deviceCodeLogin(
-            [](const QString &code, const QString &address) {
-                out() << "Open " << address << " and enter the code " << code << Qt::endl;
-            },
-            nullptr,
-            &error);
-    } else {
-        out() << "Opening the browser for sign-in..." << Qt::endl;
-        ok = auth.interactiveLogin(&error, parser.value(QStringLiteral("hint")));
-    }
-    if (!ok) {
+    request = accounts.signIn(clientId, parser.value(QStringLiteral("tenant")), parser.value(QStringLiteral("hint")), code, &error);
+    if (request.isEmpty()) {
         return fail(error);
     }
-
-    const SignedInUser user = auth.signedInUser();
-    Account account = Auth::accountFor(user, clientId);
-    if (const Account previous = Accounts::findUser(user.tenantId, user.objectId); previous.isValid()) {
-        account.organization = previous.organization;
+    if (!code) {
+        out() << "Opening the browser for sign-in..." << Qt::endl;
     }
-    GraphClient client(&auth);
-    const GraphResponse organization = client.get(QStringLiteral("/organization?$select=displayName"));
-    if (organization.ok()) {
-        account.organization = organization.json().value(QLatin1String("value")).toArray().first().toObject().value(QLatin1String("displayName")).toString();
-    }
-    account = Accounts::add(account);
-    out() << "Signed in as " << account.userPrincipalName << " (" << account.organization << "), account id " << account.id << Qt::endl;
-    return 0;
+    loop.exec();
+    return result;
 }
 
 int listAccounts()
@@ -141,14 +126,15 @@ int logout(const QCommandLineParser &parser)
     if (!account.isValid()) {
         return fail(error);
     }
-    Auth(Auth::settingsFor(account, keychainService(), Scopes::suite())).logout();
-    // The account entry is shared by the apps of the suite (Graph Sync syncs with it too): only
-    // Graph Mail's own sign-in goes, unless asked to remove the account for all of them
+    // One sign-in for the whole suite: signing out here signs out Graph Sync too
+    if (!AccountsClient().signOut(account.id, &error)) {
+        return fail(error);
+    }
     if (parser.isSet(QStringLiteral("remove"))) {
         Accounts::remove(account.id);
         out() << "Signed out and removed " << account.userPrincipalName << " (for all apps of the suite)" << Qt::endl;
     } else {
-        out() << "Signed out " << account.userPrincipalName << "; the account stays for the other apps (--remove removes it)" << Qt::endl;
+        out() << "Signed out " << account.userPrincipalName << " (for all apps of the suite; --remove also removes the account)" << Qt::endl;
     }
     return 0;
 }
@@ -160,8 +146,8 @@ int get(const QCommandLineParser &parser, const QString &path, const QByteArray 
     if (!account.isValid()) {
         return fail(error);
     }
-    Auth auth(Auth::settingsFor(account, keychainService(), Scopes::suite()));
-    GraphClient client(&auth);
+    ServiceTokenProvider tokens(account.id);
+    GraphClient client(&tokens);
     client.setThrottleScope(account.id);
     if (parser.isSet(QStringLiteral("beta"))) {
         client.setBaseUrl(QStringLiteral("https://graph.microsoft.com/beta"));
@@ -294,7 +280,6 @@ int main(int argc, char **argv)
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("graphmailctl"));
     // Accounts are shared by the suite; the app registration per account is this app's own
-    Accounts::setApplication(keychainService());
     QCoreApplication::setApplicationVersion(QStringLiteral(GRAPHMAIL_VERSION));
 
     QCommandLineParser parser;

@@ -1,13 +1,7 @@
 # SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-ecm_add_tests(
-    authtest.cpp
-    accountstest.cpp
-    graphutiltest.cpp
-    graphclienttest.cpp
-    LINK_LIBRARIES graphcore Qt6::Test
-)
+# The Graph core's own tests (accounts, sign-in, the Graph client) live in plasma-graphcore-linux
 
 ecm_add_tests(
     blobstoretest.cpp
@@ -71,7 +65,7 @@ ecm_add_test(appmodelstest.cpp
 target_include_directories(appmodelstest PRIVATE ${CMAKE_SOURCE_DIR}/src/app)
 
 # These share QStandardPaths' test-mode directories (~/.qttest), so they must not run at the same time
-set_tests_properties(accountstest authtest appmodelstest PROPERTIES RESOURCE_LOCK qttest-paths)
+set_tests_properties(appmodelstest PROPERTIES RESOURCE_LOCK qttest-paths)
 
 # Replies and forwards: recipients, subjects, the quote header
 ecm_add_test(quotetest.cpp ../src/app/quote.cpp

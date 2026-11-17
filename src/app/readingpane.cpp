@@ -465,6 +465,11 @@ void ReadingPane::clear()
     m_stack->setCurrentIndex(0);
 }
 
+void ReadingPane::clickLinkForTests(const QString &text)
+{
+    m_body->clickLinkForTests(text);
+}
+
 void ReadingPane::loadImages()
 {
     m_allowRemote = true;

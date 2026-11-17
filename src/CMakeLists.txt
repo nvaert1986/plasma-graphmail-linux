@@ -1,43 +1,6 @@
 # SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Microsoft Graph core shared with plasma-onedrive-linux (phase 10): sign-in, accounts, the Graph
-# client, throttling. No mail code in here.
-add_library(graphcore STATIC)
-set_target_properties(graphcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
-
-target_sources(graphcore PRIVATE
-    graphcore/accounts.cpp
-    graphcore/auth.cpp
-    graphcore/connectivity.cpp
-    graphcore/graphclient.cpp
-    graphcore/graphrequest.cpp
-    graphcore/graphresponse.cpp
-    graphcore/graphutil.cpp
-    graphcore/ratelimiter.cpp
-    graphcore/throttle.cpp
-)
-
-ecm_qt_declare_logging_category(graphcore
-    HEADER graphcore_debug.h
-    IDENTIFIER GRAPHCORE
-    CATEGORY_NAME graphcore
-    DEFAULT_SEVERITY Info
-    DESCRIPTION "Microsoft Graph core (plasma-graphmail-linux)"
-    EXPORT GRAPHMAIL
-)
-
-target_include_directories(graphcore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/graphcore ${CMAKE_CURRENT_BINARY_DIR})
-
-target_link_libraries(graphcore PUBLIC
-    Qt6::Core
-    Qt6::Network
-    Qt6::NetworkAuth
-    Qt6::Concurrent
-    KF6::ConfigCore
-    Qt6Keychain::Qt6Keychain
-)
-
 # The mail cache and sync engine (phase 2): shared by the daemon and, read-only, by the UI
 add_library(graphmailcore STATIC)
 set_target_properties(graphmailcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -89,13 +52,15 @@ ecm_qt_declare_logging_category(graphmailcore
 target_include_directories(graphmailcore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/graphmailcore ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(graphmailcore PUBLIC
-    graphcore
+    GraphCore::GraphCore
+    # Came through the old in-tree graphcore before phase 10
+    Qt6::Concurrent
     Qt6::Sql
     PkgConfig::ZSTD
 )
 
 add_executable(graphmailctl graphmailctl/main.cpp)
-target_link_libraries(graphmailctl PRIVATE graphcore graphmailcore Qt6::DBus)
+target_link_libraries(graphmailctl PRIVATE GraphCore::GraphCore graphmailcore Qt6::DBus)
 
 add_executable(graphmaild graphmaild/main.cpp graphmaild/daemon.cpp graphmaild/mailrunner.cpp)
 target_link_libraries(graphmaild PRIVATE graphmailcore Qt6::DBus KF6::CoreAddons KF6::I18n KF6::Notifications)
