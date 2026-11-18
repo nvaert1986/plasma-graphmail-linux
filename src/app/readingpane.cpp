@@ -175,6 +175,9 @@ ReadingPane::ReadingPane(QWidget *parent)
         label->setTextInteractionFlags(Qt::TextSelectableByMouse);
     }
     m_recipients->setWordWrap(true);
+    // Sender and date wrap instead of setting a minimum width for the whole reading pane: a long
+    // sender with the long date squeezed the folders and the list in a narrow window (0.14.1)
+    m_from->setWordWrap(true);
     m_recipients->setForegroundRole(QPalette::PlaceholderText);
     m_date->setForegroundRole(QPalette::PlaceholderText);
     // Outlook's bar: "Click here to download pictures..."
@@ -777,7 +780,10 @@ void ReadingPane::showMessage(Store *store, BlobStore *blobs, qint64 message)
         recipients += QLatin1Char('\n') + i18nc("@info message copy recipients", "Cc: %1", m->ccList);
     }
     m_recipients->setText(recipients);
-    m_date->setText(QLocale().toString(QDateTime::fromMSecsSinceEpoch(m->received), QLocale::LongFormat));
+    // Short, as Outlook ("wo 18-11-2026 15:23"); the full date and time zone in the tooltip
+    const QDateTime received = QDateTime::fromMSecsSinceEpoch(m->received);
+    m_date->setText(QLocale().toString(received, QStringLiteral("ddd ") + QLocale().dateFormat(QLocale::ShortFormat) + QLatin1Char(' ') + QLocale().timeFormat(QLocale::ShortFormat)));
+    m_date->setToolTip(QLocale().toString(received, QLocale::LongFormat));
 
     showBody();
     // Always ask: the daemon answers at once when everything is cached, and fetches inline images

@@ -4,8 +4,8 @@
 # (with plasma-graphmail-linux-<version>.tar.gz next to it)
 
 Name:           plasma-graphmail-linux
-Version:        0.14.0
-Release:        2%{?dist}
+Version:        0.14.1
+Release:        1%{?dist}
 Summary:        Mail, calendar, contacts and tasks of Microsoft 365 for KDE Plasma
 License:        GPL-3.0-or-later
 URL:            https://github.com/nvaert1986/plasma-graphmail-linux
@@ -116,6 +116,10 @@ affiliated with Microsoft.
 %{_userunitdir}/plasma-graphmail-linux.service
 
 %changelog
+* Wed Nov 18 2026 nvaert1986 <25772781+nvaert1986@users.noreply.github.com> - 0.14.1-1
+- Mails drawn without the graphics card by default (a driver crash on hybrid laptops); the
+  layout stays usable in narrow windows; a clear update-check message while releases are private
+
 * Wed Nov 18 2026 nvaert1986 <25772781+nvaert1986@users.noreply.github.com> - 0.14.0-2
 - Require at least the Qt and KDE library versions the package was built against: on a
   system that was not updated first it failed with "undefined symbol"

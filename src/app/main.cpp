@@ -36,6 +36,8 @@
 #include <KAboutData>
 #include <KActionCollection>
 #include <KDBusService>
+#include <KConfig>
+#include <KConfigGroup>
 #include <KLocalizedString>
 #include <KNotifyConfigWidget>
 
@@ -91,6 +93,20 @@ QPointer<QWidget> &lateShown()
 // The language chosen under Help > Switch Application Language (plasma-label-creator's fix). KXmlGui
 // applies it once the application exists, but Plasma's platform theme already loads the frameworks'
 // translations while the application is made: apply it before.
+// Mails are drawn without the graphics card unless the user turns it on (Settings > Hardware Acceleration
+// for Mail, [General] MailViewGpu): mail needs no GPU, and QtWebEngine's GPU path crashed in the graphics
+// driver on a laptop with Intel and NVIDIA graphics (0.14.1). QTWEBENGINE_CHROMIUM_FLAGS given by the user win
+void applyMailViewGpu()
+{
+    if (!qEnvironmentVariableIsEmpty("QTWEBENGINE_CHROMIUM_FLAGS")) {
+        return;
+    }
+    const KConfig config(QStringLiteral("graphmailrc"), KConfig::SimpleConfig);
+    if (!config.group(QStringLiteral("General")).readEntry("MailViewGpu", false)) {
+        qputenv("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu");
+    }
+}
+
 void applyChosenLanguage()
 {
     const QSettings overrides(QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + QStringLiteral("/klanguageoverridesrc"), QSettings::IniFormat);
@@ -158,6 +174,7 @@ int main(int argc, char **argv)
         previousHandler = qInstallMessageHandler(traceWarnings);
     }
     applyChosenLanguage();
+    applyMailViewGpu();
     QApplication app(argc, argv);
     KLocalizedString::setApplicationDomain("plasma-graphmail-linux");
     // Started from the build folder, before installing: its translations are in build/locale,

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<gui name="plasma-graphmail-linux" version="38"
+<gui name="plasma-graphmail-linux" version="39"
      xmlns="http://www.kde.org/standards/kxmlgui/1.0"
      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
      xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0 http://www.kde.org/standards/kxmlgui/1.0/kxmlgui.xsd">
@@ -74,6 +74,7 @@
       <Action name="signatures" append="configure_merge"/>
       <Action name="reply_options" append="configure_merge"/>
       <Action name="office_preview" append="configure_merge"/>
+      <Action name="mail_gpu" append="configure_merge"/>
       <Action name="conditional_formatting" append="configure_merge"/>
       <Action name="read_receipts" append="configure_merge"/>
       <Action name="cleanup" append="configure_merge"/>

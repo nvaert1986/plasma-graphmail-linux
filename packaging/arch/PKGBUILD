@@ -3,8 +3,8 @@
 # Maintainer: nvaert1986 <25772781+nvaert1986@users.noreply.github.com>
 
 pkgname=plasma-graphmail-linux
-pkgver=0.14.0
-pkgrel=2
+pkgver=0.14.1
+pkgrel=1
 pkgdesc='Mail, calendar, contacts and tasks of Microsoft 365 for KDE Plasma'
 arch=(x86_64)
 url='https://github.com/nvaert1986/plasma-graphmail-linux'

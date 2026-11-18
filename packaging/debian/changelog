@@ -1,3 +1,14 @@
+plasma-graphmail-linux (0.14.1-1) unstable; urgency=medium
+
+  * Mails are drawn without the graphics card by default (Settings >
+    Hardware Acceleration for Mail): QtWebEngine's GPU path crashed in the
+    graphics driver on a laptop with Intel and NVIDIA graphics. The layout
+    stays usable in narrow windows (short date, wrapping sender, minimum
+    widths for folders and messages). A clear update-check message while
+    the releases are not public.
+
+ -- nvaert1986 <25772781+nvaert1986@users.noreply.github.com>  Wed, 18 Nov 2026 16:30:00 +0100
+
 plasma-graphmail-linux (0.14.0-1) unstable; urgency=medium
 
   * First packaged release: mail, calendar, contacts and tasks of Exchange

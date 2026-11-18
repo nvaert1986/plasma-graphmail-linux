@@ -97,7 +97,12 @@ void UpdatesDialog::refresh(const QString &error)
     if (m_checker->busy()) {
         lines.append(i18nc("@info", "Asking GitHub..."));
     } else if (!error.isEmpty()) {
-        lines.append(i18nc("@info %1 the reason", "Could not ask GitHub: %1", error));
+        // A private repository answers 404 to anyone without access (0.14.1)
+        if (error.contains(QLatin1String("404"))) {
+            lines.append(i18nc("@info", "Graph Mail's releases are not public yet, so it cannot look for new versions itself. You hear about new versions from whoever gave you Graph Mail."));
+        } else {
+            lines.append(i18nc("@info %1 the reason", "Could not ask GitHub: %1", error));
+        }
     } else if (!available.isEmpty()) {
         lines.append(i18nc("@info %1 a version", "Version %1 is available.", available));
     } else if (const QString latest = m_checker->latest(); !latest.isEmpty()) {

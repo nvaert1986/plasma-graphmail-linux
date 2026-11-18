@@ -278,6 +278,10 @@ MainWindow::MainWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *par
     m_splitter->setStretchFactor(1, 0);
     m_splitter->setStretchFactor(2, 1);
     m_splitter->setChildrenCollapsible(false);
+    // A narrow window: the folders and the message list keep a usable width, the reading pane gives way
+    // (its header wraps) instead of squeezing them to a sliver (0.14.1)
+    m_splitter->widget(0)->setMinimumWidth(150);
+    listPane->setMinimumWidth(220);
     const QByteArray state = windowGroup().readEntry("Splitter", QByteArray());
     if (state.isEmpty() || !m_splitter->restoreState(state)) {
         m_splitter->setSizes({240, 420, 640});
@@ -1024,6 +1028,17 @@ void MainWindow::setupActions()
     }
     connect(officePreview, &KToggleAction::toggled, this, [](bool on) {
         AttachmentPreview::setOfficePreview(on);
+    });
+    // Off by default (0.14.1): QtWebEngine's GPU path crashed in the graphics driver on hybrid laptops
+    auto *mailGpu = new KToggleAction(QIcon::fromTheme(QStringLiteral("video-display")), i18nc("@action", "Hardware Acceleration for Mail"), this);
+    actions->addAction(QStringLiteral("mail_gpu"), mailGpu);
+    mailGpu->setChecked(KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("General")).readEntry("MailViewGpu", false));
+    mailGpu->setToolTip(i18nc("@info:tooltip", "Draw mails with the graphics card. Off by default: mail does not need it, and some graphics drivers crash with it. Takes effect after a restart of Graph Mail."));
+    connect(mailGpu, &KToggleAction::toggled, this, [this](bool on) {
+        KConfigGroup group = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("General"));
+        group.writeEntry("MailViewGpu", on);
+        group.sync();
+        m_status->setText(i18nc("@info:status", "Takes effect after a restart of Graph Mail."));
     });
     QAction *sweepAction = actions->addAction(QStringLiteral("sweep"));
     sweepAction->setText(i18nc("@action Outlook's Sweep", "Sweep..."));
