@@ -5,7 +5,7 @@
 
 Name:           plasma-graphmail-linux
 Version:        0.14.0
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Mail, calendar, contacts and tasks of Microsoft 365 for KDE Plasma
 License:        GPL-3.0-or-later
 URL:            https://github.com/nvaert1986/plasma-graphmail-linux
@@ -67,6 +67,19 @@ Requires:       qt6-qtbase
 Recommends:     okular
 Recommends:     libreoffice-writer
 
+
+# Built against the versions installed now, so they become the minimum: a system that was not
+# updated first (dnf install ./file.rpm keeps what is "good enough") otherwise fails at run time with
+# "undefined symbol" (0.14.0-1)
+%{lua:
+for name in ("qt6-qtbase qt6-qtdeclarative qt6-qtwebengine kf6-kconfig kf6-kconfigwidgets kf6-kcoreaddons kf6-kdbusaddons kf6-ki18n kf6-kiconthemes kf6-kio-core kf6-knotifications kf6-knotifyconfig kf6-kparts kf6-kwidgetsaddons kf6-kxmlgui kf6-kcalendarcore kf6-kholidays kf6-kmime ktextaddons-qt6 mimetreeparser kpimtextedit ktnef libkleo libplasma"):gmatch("%S+") do
+  local v = rpm.expand("%(rpm -q --qf '%%{version}' " .. name .. " 2>/dev/null)")
+  if v ~= "" and not v:find("not installed") then
+    print("Requires: " .. name .. rpm.expand("%{?_isa}") .. " >= " .. v .. "\n")
+  end
+end
+}
+
 %description
 A native client for Exchange Online mailboxes through Microsoft Graph: mail,
 calendar, contacts and Microsoft To Do tasks, shared mailboxes and calendars,
@@ -103,6 +116,10 @@ affiliated with Microsoft.
 %{_userunitdir}/plasma-graphmail-linux.service
 
 %changelog
+* Wed Nov 18 2026 nvaert1986 <25772781+nvaert1986@users.noreply.github.com> - 0.14.0-2
+- Require at least the Qt and KDE library versions the package was built against: on a
+  system that was not updated first it failed with "undefined symbol"
+
 * Tue Nov 17 2026 nvaert1986 <25772781+nvaert1986@users.noreply.github.com> - 0.14.0-1
 - First packaged release: mail, calendar, contacts and tasks of Exchange Online, the tray
   applet, KRunner search, the sign-in through the account service of plasma-graphcore-linux
