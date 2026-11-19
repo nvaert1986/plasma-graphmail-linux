@@ -4,6 +4,22 @@ All notable changes to Graph Mail (plasma-graphmail-linux). The suite's apps sha
 (0.14 with plasma-graphcore-linux 0.14); the third number counts fixes. Fixes for a series go on its
 branch (`0.14`).
 
+## 0.14.3 (2026-11-19)
+
+**Added**
+- Reply, Reply All and Forward buttons at the top of the reading pane, as in Outlook, with a "…"
+  button for the rest of the message menu. In a narrow reading pane they show only their icons.
+- Quick buttons on the mail under the mouse in the message list: Mark as Read or Unread, Delete and
+  Flag by default; the gear button chooses which ones (Archive too).
+
+**Fixed**
+- A sent message, and a reply or forward quoting it, could show an older version of its text: the
+  body of the draft as it was at an autosave (for example cut off right after a path such as `C:\`
+  that was still being typed). The body of a draft is now fetched again after every change and after
+  sending, and so is the body of any message whose preview changed. A message cached with an old
+  body before 0.14.3 keeps that copy; the version on the server and in the recipients' mailboxes
+  was always complete.
+
 ## 0.14.2 (2026-11-19)
 
 **Fixed**

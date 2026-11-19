@@ -562,7 +562,9 @@ QStringList Store::removeFolder(qint64 id)
 Store::Upsert Store::upsertMessage(const MessageRow &m, int generation)
 {
     QSqlQuery find(m_db);
-    find.prepare(QStringLiteral("SELECT id, change_key, folder, focused FROM messages WHERE graph_id = ?"));
+    find.prepare(QStringLiteral("SELECT id, change_key, folder, focused, preview, (SELECT well_known FROM folders WHERE id = messages.folder), "
+                                "(SELECT well_known FROM folders WHERE id = ?) FROM messages WHERE graph_id = ?"));
+    find.addBindValue(m.folder);
     find.addBindValue(m.graphId);
     if (!find.exec()) {
         fail(QStringLiteral("upsertMessage"), find.lastError().text());
@@ -582,11 +584,24 @@ Store::Upsert Store::upsertMessage(const MessageRow &m, int generation)
         return seen.exec() ? Upsert::Unchanged : (fail(QStringLiteral("upsertMessage"), seen.lastError().text()), Upsert::Failed);
     }
 
+    // The cached body may be out of date (0.14.3): a draft is edited after its body was cached, and with
+    // immutable ids it keeps its id when it is sent, so the sent message showed (and a forward quoted)
+    // the draft as it was at an autosave. A draft's update, or a changed preview, drops the body; it
+    // is fetched again when needed, and the orphan sweep removes the old blob file
+    bool bodyStale = false;
+    if (exists) {
+        const QLatin1String drafts("drafts");
+        const bool draft = find.value(5).toString() == drafts || find.value(6).toString() == drafts;
+        const bool previewChanged = !m.preview.isEmpty() && find.value(4).toString() != m.preview;
+        bodyStale = draft || previewChanged;
+    }
+
     QSqlQuery q(m_db);
     if (exists) {
         q.prepare(QStringLiteral("UPDATE messages SET folder = ?, conversation = ?, received = ?, sent = ?, sender_name = ?, sender_address = ?, "
                                  "subject = ?, preview = ?, to_list = ?, cc_list = ?, is_read = ?, flag = ?, importance = ?, has_attachments = ?, "
-                                 "categories = ?, internet_message_id = ?, change_key = ?, seen_generation = ?, item_type = ?, focused = ? WHERE id = ?"));
+                                 "categories = ?, internet_message_id = ?, change_key = ?, seen_generation = ?, item_type = ?, focused = ?%1 WHERE id = ?")
+                      .arg(bodyStale ? QStringLiteral(", body_blob = NULL, body_type = 0, body_size = 0, body_text = NULL") : QString()));
     } else {
         q.prepare(QStringLiteral("INSERT INTO messages(folder, conversation, received, sent, sender_name, sender_address, subject, preview, "
                                  "to_list, cc_list, is_read, flag, importance, has_attachments, categories, internet_message_id, change_key, "

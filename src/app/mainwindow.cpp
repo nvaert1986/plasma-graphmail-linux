@@ -190,6 +190,10 @@ MainWindow::MainWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *par
     });
     m_messages->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_messages, &QWidget::customContextMenuRequested, this, &MainWindow::messageMenu);
+    // Outlook's buttons on the row under the mouse (0.14.3): the list repaints the row being hovered
+    m_messages->setMouseTracking(true);
+    m_messages->viewport()->setAttribute(Qt::WA_Hover);
+    connect(m_delegate, &MessageDelegate::hoverActionTriggered, this, &MainWindow::hoverAction);
     m_messages->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_messages->setUniformRowHeights(true);
     m_messages->setHeaderHidden(true);
@@ -976,6 +980,11 @@ void MainWindow::setupActions()
     actions->action(QStringLiteral("reply"))->setText(i18nc("@action", "Reply"));
     actions->action(QStringLiteral("reply_all"))->setText(i18nc("@action", "Reply All"));
     actions->action(QStringLiteral("forward"))->setText(i18nc("@action", "Forward"));
+    // The reading pane's buttons, as Outlook's: the same actions, "..." the message menu (0.14.3)
+    m_reading->setMessageActions({actions->action(QStringLiteral("reply")), actions->action(QStringLiteral("reply_all")), actions->action(QStringLiteral("forward"))},
+                                 [this](QMenu *menu) {
+                                     fillMessageMenu(menu);
+                                 });
     actions->action(QStringLiteral("forward_as_attachment"))->setText(i18nc("@action", "Forward as Attachment"));
     actions->action(QStringLiteral("edit_as_new"))->setText(i18nc("@action Outlook's Resend", "Edit as New Message"));
     QAction *meeting = actions->addAction(QStringLiteral("reply_with_meeting"));
@@ -2784,8 +2793,15 @@ void MainWindow::messageMenu(const QPoint &pos)
     if (!m_messages->indexAt(pos).isValid()) {
         return;
     }
-    // In the order of Outlook on the web's menu
     QMenu menu(this);
+    fillMessageMenu(&menu);
+    menu.exec(m_messages->viewport()->mapToGlobal(pos));
+}
+
+void MainWindow::fillMessageMenu(QMenu *target)
+{
+    // In the order of Outlook on the web's menu
+    QMenu &menu = *target;
     const auto add = [this](QMenu *to, const char *name) {
         if (QAction *a = actionCollection()->action(QLatin1String(name)); a && a->isVisible()) {
             to->addAction(a);
@@ -2831,7 +2847,6 @@ void MainWindow::messageMenu(const QPoint &pos)
     for (const char *name : {"forward_as_attachment", "edit_as_new", "reply_with_meeting", "focus_move", "focus_always", "file_save_as", "save_pdf"}) {
         add(more, name);
     }
-    menu.exec(m_messages->viewport()->mapToGlobal(pos));
 }
 
 void MainWindow::fillFolderMenu(QMenu *menu, bool copy)
@@ -3735,10 +3750,62 @@ void MainWindow::updateStatus()
     m_connection->setToolTip(tip + QLatin1Char('\n') + i18nc("@info:tooltip", "Click for what is waiting to be sent"));
 }
 
+QModelIndexList MainWindow::actionRows() const
+{
+    // A hover button acts on its own row, whatever is selected
+    if (m_hoverRow.isValid()) {
+        return {QModelIndex(m_hoverRow)};
+    }
+    return m_messages->selectionModel()->selectedRows();
+}
+
+void MainWindow::hoverAction(const QModelIndex &index, const QString &action)
+{
+    if (action == QLatin1String("settings")) {
+        // The gear: which buttons are shown, as Outlook's "Hover actions" setting
+        QMenu menu(this);
+        KConfigGroup group = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("MessageList"));
+        const QStringList shown = group.readEntry("HoverActions", QStringList{QStringLiteral("read"), QStringLiteral("delete"), QStringLiteral("flag")});
+        const QStringList all = MessageDelegate::hoverActionNames();
+        for (const QString &name : all) {
+            QAction *item = menu.addAction(MessageDelegate::hoverActionText(name));
+            item->setCheckable(true);
+            item->setChecked(shown.contains(name));
+            item->setData(name);
+        }
+        if (QAction *chosen = menu.exec(QCursor::pos())) {
+            QStringList now = shown;
+            const QString name = chosen->data().toString();
+            if (chosen->isChecked()) {
+                now.append(name);
+            } else {
+                now.removeAll(name);
+            }
+            group.writeEntry("HoverActions", now);
+            group.sync();
+            m_delegate->reloadHoverActions();
+            m_messages->viewport()->update();
+        }
+        return;
+    }
+    m_hoverRow = index;
+    if (action == QLatin1String("read")) {
+        markSelected(!index.data(MessageListModel::IsReadRole).toBool());
+    } else if (action == QLatin1String("delete")) {
+        deleteSelected();
+    } else if (action == QLatin1String("archive")) {
+        archiveSelected();
+    } else if (action == QLatin1String("flag")) {
+        toggleFlag();
+    }
+    m_hoverRow = QPersistentModelIndex();
+    m_messages->viewport()->update();
+}
+
 QList<qint64> MainWindow::selectedMessages() const
 {
     QList<qint64> ids;
-    const QModelIndexList rows = m_messages->selectionModel()->selectedRows();
+    const QModelIndexList rows = actionRows();
     for (const QModelIndex &index : rows) {
         // Search results from other mailboxes than the current one stay out of an action
         if (const QString key = index.data(MessageListModel::MailboxKeyRole).toString(); !key.isEmpty() && key != m_mailboxKey) {
@@ -4145,7 +4212,7 @@ void MainWindow::toggleFlag()
 {
     const QString account = m_mailboxKey.section(QLatin1Char('/'), 0, 0);
     const QString mailbox = m_mailboxKey.section(QLatin1Char('/'), 1);
-    const QModelIndexList rows = m_messages->selectionModel()->selectedRows();
+    const QModelIndexList rows = actionRows();
     // Like Outlook: flag them all, unless all are flagged already
     const bool allFlagged = std::all_of(rows.cbegin(), rows.cend(), [](const QModelIndex &index) {
         return index.data(MessageListModel::FlagRole).toInt() == 1;

@@ -4,7 +4,7 @@
 # (with plasma-graphmail-linux-<version>.tar.gz next to it)
 
 Name:           plasma-graphmail-linux
-Version:        0.14.2
+Version:        0.14.3
 Release:        1%{?dist}
 Summary:        Mail, calendar, contacts and tasks of Microsoft 365 for KDE Plasma
 License:        GPL-3.0-or-later
@@ -116,6 +116,10 @@ affiliated with Microsoft.
 %{_userunitdir}/plasma-graphmail-linux.service
 
 %changelog
+* Thu Nov 19 2026 nvaert1986 <25772781+nvaert1986@users.noreply.github.com> - 0.14.3-1
+- Reply, Reply All, Forward and More buttons in the reading pane; quick buttons on a hovered mail
+  (read/unread, delete, archive, flag; the gear chooses); a sent draft no longer shows its old body
+
 * Thu Nov 19 2026 nvaert1986 <25772781+nvaert1986@users.noreply.github.com> - 0.14.2-1
 - Read and unread clearly apart in dark schemes, flagged mails in yellow, links in calendar
   items open, signatures keep their font size, side-bar labels never cut

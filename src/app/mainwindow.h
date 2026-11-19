@@ -7,6 +7,8 @@
 
 #include <KXmlGuiWindow>
 
+#include <QModelIndex>
+#include <QPersistentModelIndex>
 #include <QPointer>
 
 #include <QDate>
@@ -233,6 +235,10 @@ private:
     void updateStatus();
     void updateActions();
     QList<qint64> selectedMessages() const;
+    // The rows an action works on: the selection, or the row of a hover button (0.14.3)
+    QModelIndexList actionRows() const;
+    QPersistentModelIndex m_hoverRow;
+    void hoverAction(const QModelIndex &index, const QString &action);
     // The message in the reading pane, else the first selected; 0 when none
     qint64 shownMessage() const;
     void markSelected(bool read);
@@ -267,6 +273,8 @@ private:
     void loadAutoReplies();
     void showAutoRepliesBar();
     void messageMenu(const QPoint &pos);
+    // The message menu (right-click on a mail, the reading pane's "...")
+    void fillMessageMenu(QMenu *menu);
     // Focused Inbox (docs/PHASE9.md): the tabs over the Inbox and the filter they give the list
     int focusFilter() const;
     void updateFocusTabs();

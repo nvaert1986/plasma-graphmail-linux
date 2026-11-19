@@ -235,6 +235,41 @@ private Q_SLOTS:
         QCOMPARE(stored.bodySize, 4321);
     }
 
+    // 0.14.3: a draft cached at an autosave and sent later keeps its immutable id; its body (and that
+    // of a message whose preview changed) is dropped so the final one is fetched
+    void staleBodyIsDropped()
+    {
+        const qint64 drafts = store.upsertFolder({0, QStringLiteral("f-drafts"), {}, QStringLiteral("Drafts"), QStringLiteral("drafts"), 0, 0});
+        const qint64 sent = store.upsertFolder({0, QStringLiteral("f-sent"), {}, QStringLiteral("Sent Items"), QStringLiteral("sentitems"), 0, 0});
+        const QString blob = QStringLiteral("0123456789abcdef0123456789abcdef");
+
+        MessageRow m = makeMessage(QStringLiteral("d1"), drafts, 1000);
+        m.preview = QStringLiteral("The files are in C:\\");
+        QCOMPARE(store.upsertMessage(m), Store::Upsert::Inserted);
+        const qint64 id = store.messageByGraphId(QStringLiteral("d1"))->id;
+        QVERIFY(store.setBody(id, blob, 1, 100));
+
+        // Sent: same id, now in Sent Items (the preview alone would not show it past 255 characters)
+        m.folder = sent;
+        m.changeKey = QStringLiteral("ck-sent");
+        QCOMPARE(store.upsertMessage(m), Store::Upsert::Updated);
+        QVERIFY(store.message(id)->bodyBlob.isEmpty());
+
+        // Outside Drafts: a changed preview means a changed body
+        QVERIFY(store.setBody(id, blob, 1, 100));
+        m.changeKey = QStringLiteral("ck-edited");
+        m.preview = QStringLiteral("The files are in C:\\Scripts");
+        QCOMPARE(store.upsertMessage(m), Store::Upsert::Updated);
+        QVERIFY(store.message(id)->bodyBlob.isEmpty());
+
+        // Only flags changed: the body stays
+        QVERIFY(store.setBody(id, blob, 1, 100));
+        m.changeKey = QStringLiteral("ck-read");
+        m.isRead = true;
+        QCOMPARE(store.upsertMessage(m), Store::Upsert::Updated);
+        QCOMPARE(store.message(id)->bodyBlob, blob);
+    }
+
     void moveRule()
     {
         QCOMPARE(store.upsertMessage(makeMessage(QStringLiteral("m1"), inbox, 1000)), Store::Upsert::Inserted);

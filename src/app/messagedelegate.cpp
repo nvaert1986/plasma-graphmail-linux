@@ -9,6 +9,12 @@
 
 #include <KLocalizedString>
 
+#include <KConfigGroup>
+#include <KSharedConfig>
+#include <QHelpEvent>
+#include <QMouseEvent>
+#include <QToolTip>
+#include <QAbstractItemView>
 #include <QApplication>
 #include <QDateTime>
 #include <QIcon>
@@ -108,6 +114,90 @@ QSize MessageDelegate::sizeHint(const QStyleOptionViewItem &option, const QModel
     return {0, padding * 2 + fm.height() * 3 + lineGap * 2};
 }
 
+QStringList MessageDelegate::hoverActionNames()
+{
+    return {QStringLiteral("read"), QStringLiteral("delete"), QStringLiteral("archive"), QStringLiteral("flag")};
+}
+
+QString MessageDelegate::hoverActionText(const QString &name)
+{
+    if (name == QLatin1String("read")) {
+        return i18nc("@info:tooltip hover button", "Mark as Read or Unread");
+    }
+    if (name == QLatin1String("delete")) {
+        return i18nc("@info:tooltip hover button", "Delete");
+    }
+    if (name == QLatin1String("archive")) {
+        return i18nc("@info:tooltip hover button", "Archive");
+    }
+    if (name == QLatin1String("flag")) {
+        return i18nc("@info:tooltip hover button", "Flag or Unflag");
+    }
+    return i18nc("@info:tooltip hover button", "Choose the buttons shown here");
+}
+
+void MessageDelegate::reloadHoverActions()
+{
+    // Outlook's default: mark read/unread, delete, flag
+    const KConfigGroup group = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("MessageList"));
+    m_hoverActions = group.readEntry("HoverActions", QStringList{QStringLiteral("read"), QStringLiteral("delete"), QStringLiteral("flag")});
+    m_hoverLoaded = true;
+}
+
+QList<std::pair<QString, QRect>> MessageDelegate::hoverRects(const QStyleOptionViewItem &option) const
+{
+    if (!m_hoverLoaded) {
+        const_cast<MessageDelegate *>(this)->reloadHoverActions();
+    }
+    const QFontMetrics fm(option.font);
+    const int box = iconSize + 4;
+    const int top = option.rect.top() + padding + (fm.height() - box) / 2;
+    int right = option.rect.right() - padding;
+    QList<std::pair<QString, QRect>> rects;
+    // Right to left in the fixed order, then the gear
+    const QStringList all = hoverActionNames();
+    for (auto it = all.crbegin(); it != all.crend(); ++it) {
+        if (m_hoverActions.contains(*it)) {
+            rects.append({*it, QRect(right - box, top, box, box)});
+            right -= box + 2;
+        }
+    }
+    rects.append({QStringLiteral("settings"), QRect(right - box, top, box, box)});
+    return rects;
+}
+
+bool MessageDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option, const QModelIndex &index)
+{
+    if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease || event->type() == QEvent::MouseButtonDblClick) {
+        const auto *mouse = static_cast<QMouseEvent *>(event);
+        if (mouse->button() == Qt::LeftButton) {
+            const QList<std::pair<QString, QRect>> rects = hoverRects(option);
+            for (const auto &[action, rect] : rects) {
+                if (rect.contains(mouse->position().toPoint())) {
+                    // A button, not a click on the row: the selection stays as it is
+                    if (event->type() == QEvent::MouseButtonRelease) {
+                        Q_EMIT hoverActionTriggered(index, action);
+                    }
+                    return true;
+                }
+            }
+        }
+    }
+    return QStyledItemDelegate::editorEvent(event, model, option, index);
+}
+
+bool MessageDelegate::helpEvent(QHelpEvent *event, QAbstractItemView *view, const QStyleOptionViewItem &option, const QModelIndex &index)
+{
+    const QList<std::pair<QString, QRect>> rects = hoverRects(option);
+    for (const auto &[action, rect] : rects) {
+        if (rect.contains(event->pos())) {
+            QToolTip::showText(event->globalPos(), hoverActionText(action), view);
+            return true;
+        }
+    }
+    return QStyledItemDelegate::helpEvent(event, view, option, index);
+}
+
 void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     QStyleOptionViewItem opt = option;
@@ -177,23 +267,46 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     const int right = r.right() - padding;
     int y = r.top() + padding;
 
-    // Line 1: sender, icons on the right
+    // Line 1: sender, icons on the right; under the mouse Outlook's buttons instead (0.14.3)
     int iconsLeft = right;
+    const QList<std::pair<QString, QRect>> hover = (opt.state & QStyle::State_MouseOver) ? hoverRects(opt) : QList<std::pair<QString, QRect>>();
+    for (const auto &[action, rect] : hover) {
+        QString icon;
+        bool dimmed = false;
+        if (action == QLatin1String("read")) {
+            icon = unread ? QStringLiteral("mail-mark-read") : QStringLiteral("mail-mark-unread");
+        } else if (action == QLatin1String("delete")) {
+            icon = QStringLiteral("edit-delete");
+        } else if (action == QLatin1String("archive")) {
+            icon = QStringLiteral("archive-insert");
+        } else if (action == QLatin1String("flag")) {
+            icon = QStringLiteral("flag-red");
+            // Not flagged yet: a faint flag, as Outlook's outline
+            dimmed = index.data(MessageListModel::FlagRole).toInt() != 1;
+        } else {
+            icon = QStringLiteral("configure");
+            dimmed = true;
+        }
+        painter->setOpacity(dimmed ? 0.5 : 1.0);
+        QIcon::fromTheme(icon).paint(painter, rect.adjusted(2, 2, -2, -2));
+        painter->setOpacity(1.0);
+        iconsLeft = std::min(iconsLeft, rect.left() - 4);
+    }
     auto drawIcon = [&](const QString &iconName) {
         iconsLeft -= iconSize;
         QIcon::fromTheme(iconName).paint(painter, QRect(iconsLeft, y + (fm.height() - iconSize) / 2, iconSize, iconSize));
         iconsLeft -= 4;
     };
-    const int flag = index.data(MessageListModel::FlagRole).toInt();
+    const int flag = hover.isEmpty() ? index.data(MessageListModel::FlagRole).toInt() : 0;
     if (flag == 1) {
         drawIcon(QStringLiteral("flag-red"));
     } else if (flag == 2) {
         drawIcon(QStringLiteral("checkmark"));
     }
-    if (index.data(MessageListModel::HasAttachmentsRole).toBool()) {
+    if (hover.isEmpty() && index.data(MessageListModel::HasAttachmentsRole).toBool()) {
         drawIcon(QStringLiteral("mail-attachment"));
     }
-    if (index.data(MessageListModel::ImportanceRole).toInt() == 2) {
+    if (hover.isEmpty() && index.data(MessageListModel::ImportanceRole).toInt() == 2) {
         drawIcon(QStringLiteral("mail-mark-important"));
     }
     // A conditional formatting rule colours the sender and subject (not while selected)

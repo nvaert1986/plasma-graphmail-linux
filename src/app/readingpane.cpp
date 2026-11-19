@@ -27,6 +27,7 @@
 #include <QDir>
 #include <QTimeZone>
 #include <QMenu>
+#include <QToolButton>
 #include <QJsonObject>
 #include <QJsonDocument>
 #include <QInputDialog>
@@ -244,6 +245,11 @@ ReadingPane::ReadingPane(QWidget *parent)
     auto *fromLine = new QHBoxLayout;
     fromLine->addWidget(m_from, 1);
     fromLine->addWidget(m_date, 0, Qt::AlignRight | Qt::AlignTop);
+    // Outlook's Reply, Reply All, Forward and "..." at the top right (setMessageActions)
+    m_actionsRow = new QHBoxLayout;
+    m_actionsRow->setSpacing(0);
+    m_actionsRow->addStretch(1);
+    senderText->addLayout(m_actionsRow);
     senderText->addLayout(fromLine);
     senderText->addWidget(m_recipients);
     sender->addLayout(senderText, 1);
@@ -922,4 +928,45 @@ void ReadingPane::unsubscribe()
     });
 }
 
+
+void ReadingPane::setMessageActions(const QList<QAction *> &actions, const std::function<void(QMenu *)> &fillMore)
+{
+    for (QAction *action : actions) {
+        auto *button = new QToolButton(this);
+        button->setDefaultAction(action);
+        button->setAutoRaise(true);
+        m_actionsRow->addWidget(button);
+        m_actionButtons.append(button);
+    }
+    // "...": the message menu, filled when it opens (it follows the selection)
+    auto *more = new QToolButton(this);
+    more->setIcon(QIcon::fromTheme(QStringLiteral("overflow-menu")));
+    more->setToolTip(i18nc("@info:tooltip", "More actions"));
+    more->setAutoRaise(true);
+    more->setPopupMode(QToolButton::InstantPopup);
+    auto *menu = new QMenu(more);
+    connect(menu, &QMenu::aboutToShow, this, [menu, fillMore] {
+        menu->clear();
+        fillMore(menu);
+    });
+    more->setMenu(menu);
+    m_actionsRow->addWidget(more);
+    updateActionButtonStyle();
+}
+
+void ReadingPane::updateActionButtonStyle()
+{
+    // With their text the buttons need some 330 pixels: below about 600 only their icons (tooltips
+    // keep the names), so a narrow window keeps working (0.14.1)
+    const Qt::ToolButtonStyle style = width() < 600 ? Qt::ToolButtonIconOnly : Qt::ToolButtonTextBesideIcon;
+    for (QToolButton *button : std::as_const(m_actionButtons)) {
+        button->setToolButtonStyle(style);
+    }
+}
+
+void ReadingPane::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    updateActionButtonStyle();
+}
 }

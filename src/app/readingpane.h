@@ -10,6 +10,11 @@
 #include <QPointer>
 #include <QWidget>
 
+class QAction;
+class QMenu;
+class QToolButton;
+class QHBoxLayout;
+
 #include <functional>
 #include <memory>
 
@@ -43,6 +48,9 @@ public:
     ~ReadingPane() override;
 
     void showMessage(Store *store, BlobStore *blobs, qint64 message);
+    // Outlook's buttons at the top right of a message (0.14.3): Reply, Reply All, Forward and "...",
+    // whose menu the main window fills (its message menu); without this call the pane has none
+    void setMessageActions(const QList<QAction *> &actions, const std::function<void(QMenu *)> &fillMore);
     // Read receipts in Ask mode: whether the sender asked is not known yet (headers on their way);
     // the message is marked read (or the question shown) once it is
     void markReadWhenKnown();
@@ -159,6 +167,13 @@ private:
     // when nothing changed (the daemon answers every request, also when all was cached already)
     QString m_shown;
     QString shownState() const;
+    // The message buttons (setMessageActions); icons only while the pane is narrow
+    QList<QToolButton *> m_actionButtons;
+    QHBoxLayout *m_actionsRow = nullptr;
+    void updateActionButtonStyle();
+
+protected:
+    void resizeEvent(QResizeEvent *event) override;
 };
 
 }
