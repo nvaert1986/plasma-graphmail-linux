@@ -3,7 +3,7 @@
 A native KDE Plasma client for Microsoft 365 mailboxes: mail, calendar, contacts and tasks from
 Exchange Online, through Microsoft Graph. Written in C++ with Qt 6 and KDE Frameworks 6.
 
-Status: version 0.14.1.
+Status: version 0.14.2 (changes in [CHANGELOG.md](CHANGELOG.md)).
 
 ## Scope
 

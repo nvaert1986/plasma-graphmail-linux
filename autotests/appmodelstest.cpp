@@ -47,6 +47,12 @@
 #include <QTcpSocket>
 #include <QJsonDocument>
 #include <QTest>
+#include <QTextDocument>
+
+#include <KPIMTextEdit/RichTextComposer>
+
+#include "signaturedialog.h"
+#include "signatures.h"
 #include <QUrl>
 
 using namespace GraphMail;
@@ -78,6 +84,41 @@ private:
     }
 
 private Q_SLOTS:
+    void signatureFontsSurviveInsertion()
+    {
+        // A signature with one piece at 12 pt and one without its own size, as the signature editor
+        // shows them (the default font of a new message, 11 pt): saved, then inserted into a message
+        // whose default font differs, both keep the size the editor showed (0.14.2)
+        KPIMTextEdit::RichTextComposer editor;
+        QFont base;
+        base.setFamilies({QStringLiteral("Aptos"), QStringLiteral("Calibri"), QStringLiteral("Carlito")});
+        base.setPointSize(11);
+        editor.document()->setDefaultFont(base);
+        editor.activateRichText();
+        editor.setHtml(QStringLiteral("<p><span style=\"font-size:12pt\">Twelve</span> Eleven</p>"));
+        GraphMail::Signature signature;
+        GraphMail::SignatureDialog::store(&editor, &signature);
+        QTextDocument message;
+        QFont other;
+        other.setPointSize(9);
+        message.setDefaultFont(other);
+        QTextCursor cursor(&message);
+        cursor.insertHtml(signature.html);
+        const auto sizeAt = [&message](const QString &word) {
+            QTextCursor c = message.find(word);
+            return c.charFormat().fontPointSize();
+        };
+        QCOMPARE(sizeAt(QStringLiteral("Twelve")), 12.0);
+        QCOMPARE(sizeAt(QStringLiteral("Eleven")), 11.0);
+        // Opened and saved again: still one wrapper, not one per save
+        GraphMail::SignatureDialog::load(&editor, signature);
+        GraphMail::SignatureDialog::store(&editor, &signature);
+        GraphMail::SignatureDialog::load(&editor, signature);
+        GraphMail::SignatureDialog::store(&editor, &signature);
+        QCOMPARE(signature.html.count(QLatin1String("<div style=\"font-family:")), 1);
+        QVERIFY(signature.html.contains(QLatin1String("font-size:12pt")));
+    }
+
     void initTestCase()
     {
         QStandardPaths::setTestModeEnabled(true);

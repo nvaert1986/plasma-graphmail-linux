@@ -24,7 +24,13 @@ namespace
 constexpr int padding = 8;
 constexpr int lineGap = 2;
 constexpr int iconSize = 16;
-constexpr int unreadBarWidth = 3;
+constexpr int unreadBarWidth = 4;
+
+// a moved a share of the way towards b
+QColor blend(const QColor &a, const QColor &b, qreal share)
+{
+    return QColor(int(a.red() * (1 - share) + b.red() * share), int(a.green() * (1 - share) + b.green() * share), int(a.blue() * (1 - share) + b.blue() * share));
+}
 
 int avatarSize(const QFontMetrics &fm)
 {
@@ -108,6 +114,17 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     initStyleOption(&opt, index);
     const QWidget *widget = opt.widget;
     QStyle *style = widget ? widget->style() : QApplication::style();
+    // A flagged message has a light yellow row, as in Outlook (also when read). Mixed into the list's
+    // own background, so a dark colour scheme gets a dark yellow and the text stays readable; drawn
+    // first, so the selection and hover the style draws next still show (0.14.2)
+    if (index.data(MessageListModel::FlagRole).toInt() == 1 && !(opt.state & QStyle::State_Selected)) {
+        const QColor base = opt.palette.color(QPalette::Base);
+        const QColor yellow(255, 214, 0);
+        const qreal share = base.lightness() < 128 ? 0.22 : 0.2;
+        const QColor row(int(base.red() * (1 - share) + yellow.red() * share), int(base.green() * (1 - share) + yellow.green() * share),
+                         int(base.blue() * (1 - share) + yellow.blue() * share));
+        painter->fillRect(opt.rect, row);
+    }
     // The selection and hover background the style draws for every item view
     opt.text.clear();
     opt.icon = QIcon();
@@ -119,6 +136,14 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     const QColor text = palette.color(selected ? QPalette::HighlightedText : QPalette::Text);
     QColor dim = palette.color(selected ? QPalette::HighlightedText : QPalette::PlaceholderText);
     QColor accent = selected ? text : palette.color(QPalette::Highlight);
+    // Read and unread apart at a glance, as Outlook does, also in a dark colour scheme (where bold
+    // shows less and the accent is about as bright as the text, 0.14.2): read mail a softer colour,
+    // unread mail's subject a lighter accent on a dark background
+    const bool dark = palette.color(QPalette::Base).lightness() < 128;
+    const QColor readText = (selected || unread) ? text : blend(text, palette.color(QPalette::Base), dark ? 0.32 : 0.18);
+    if (!selected && dark) {
+        accent = blend(accent, QColor(Qt::white), 0.35);
+    }
 
     painter->save();
     const QRect r = opt.rect;
@@ -183,7 +208,7 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     QFont senderFont = opt.font;
     senderFont.setBold(unread);
     painter->setFont(senderFont);
-    painter->setPen(ruleColor.value_or(text));
+    painter->setPen(ruleColor.value_or(readText));
     const QFontMetrics sfm(senderFont);
     QString sender = !recipients.isEmpty() ? recipients : (name.isEmpty() ? address : name);
     // Conversation view: how many messages, as in Outlook
@@ -200,7 +225,7 @@ void MessageDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     subjectFont.setBold(unread);
     const QFontMetrics subfm(subjectFont);
     painter->setFont(opt.font);
-    painter->setPen(unread || ruleColor ? accent : text);
+    painter->setPen(unread || ruleColor ? accent : readText);
     const int dateWidth = fm.horizontalAdvance(date);
     painter->drawText(QRect(right - dateWidth, y, dateWidth, fm.height()), Qt::AlignRight | Qt::AlignVCenter, date);
     painter->setFont(subjectFont);

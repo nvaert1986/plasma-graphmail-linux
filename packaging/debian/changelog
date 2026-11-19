@@ -1,3 +1,12 @@
+plasma-graphmail-linux (0.14.2-1) unstable; urgency=medium
+
+  * Read and unread mail clearly apart, also in dark colour schemes;
+    flagged mails in light yellow; links in calendar items open; a
+    signature keeps its font size; side-bar labels never cut. More in
+    CHANGELOG.md.
+
+ -- nvaert1986 <25772781+nvaert1986@users.noreply.github.com>  Thu, 19 Nov 2026 14:00:00 +0100
+
 plasma-graphmail-linux (0.14.1-1) unstable; urgency=medium
 
   * Mails are drawn without the graphics card by default (Settings >

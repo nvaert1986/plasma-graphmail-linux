@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "eventdialog.h"
+#include "mailview.h"
 #include "accesstext.h"
 #include "calendaroptions.h"
 #include "calendarviews.h"
@@ -12,6 +13,7 @@
 #include "store.h"
 
 #include <KLocalizedString>
+#include <KTextToHTML>
 #include <KMessageBox>
 #include <QDateTimeEdit>
 #include <KSharedConfig>
@@ -35,7 +37,9 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QSplitter>
+#include <QMouseEvent>
 #include <QTextEdit>
+#include <QToolTip>
 #include <QToolButton>
 #include <QTimeEdit>
 #include <QTimeZone>
@@ -46,6 +50,56 @@ namespace GraphMail
 
 namespace
 {
+// Links in an item's text, as in Outlook: Ctrl+click opens one (a plain click when the item cannot be
+// edited), through Graph Mail's link handling (Teams join, synced SharePoint/OneDrive copy, browser).
+// A QTextEdit shows links but never opens them (0.14.2)
+class LinkClicks : public QObject
+{
+public:
+    explicit LinkClicks(QTextEdit *edit)
+        : QObject(edit)
+        , m_edit(edit)
+    {
+        edit->viewport()->setMouseTracking(true);
+        edit->viewport()->installEventFilter(this);
+    }
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (event->type() != QEvent::MouseMove && event->type() != QEvent::MouseButtonPress && event->type() != QEvent::MouseButtonRelease) {
+            return QObject::eventFilter(watched, event);
+        }
+        auto *mouse = static_cast<QMouseEvent *>(event);
+        const QString anchor = m_edit->anchorAt(mouse->position().toPoint());
+        const bool opens = m_edit->isReadOnly() || (mouse->modifiers() & Qt::ControlModifier);
+        if (event->type() == QEvent::MouseMove) {
+            m_edit->viewport()->setCursor(!anchor.isEmpty() && opens ? Qt::PointingHandCursor : Qt::IBeamCursor);
+            if (!anchor.isEmpty() && !m_edit->isReadOnly()) {
+                QToolTip::showText(mouse->globalPosition().toPoint(), i18nc("@info:tooltip", "Ctrl+click to open the link"), m_edit->viewport());
+            }
+            return false;
+        }
+        if (anchor.isEmpty() || !opens || mouse->button() != Qt::LeftButton) {
+            return false;
+        }
+        if (event->type() == QEvent::MouseButtonRelease) {
+            MailView::openLink(QUrl(anchor), false);
+        }
+        // Not also a cursor move or selection in the text
+        return true;
+    }
+
+private:
+    QTextEdit *m_edit;
+};
+
+// Plain text with its web addresses as links
+QString plainWithLinks(const QString &text)
+{
+    return KTextToHTML::convertToHtml(text, KTextToHTML::PreserveSpaces);
+}
+
 const QStringList &showAsNames()
 {
     static const QStringList names{QStringLiteral("free"), QStringLiteral("tentative"), QStringLiteral("busy"), QStringLiteral("oof"), QStringLiteral("workingElsewhere")};
@@ -360,6 +414,7 @@ EventDialog::EventDialog(MailboxSet *mailboxes, DaemonClient *daemon, CalendarDa
     layout->addWidget(m_responseRow);
     layout->addLayout(form);
     layout->addWidget(m_description, 1);
+    new LinkClicks(m_description);
     m_day = new TimeGridView(this);
     m_day->setMinimumWidth(240);
     connect(m_day, &CalendarView::newEventRequested, this, [this](const QDateTime &start, const QDateTime &end, bool allDay) {
@@ -442,7 +497,7 @@ EventDialog::EventDialog(MailboxSet *mailboxes, DaemonClient *daemon, CalendarDa
             m_subject->setCursorPosition(int(m_subject->text().size()));
         }
         if (!m_request.description.isEmpty()) {
-            m_description->setPlainText(m_request.description);
+            m_description->setHtml(plainWithLinks(m_request.description));
         }
     }
     if (!m_request.event) {
@@ -520,7 +575,7 @@ void EventDialog::fillFromEvent(const DisplayEvent &e)
     if (body.value(QLatin1String("contentType")).toString().compare(QLatin1String("html"), Qt::CaseInsensitive) == 0) {
         m_description->setHtml(body.value(QLatin1String("content")).toString());
     } else {
-        m_description->setPlainText(body.value(QLatin1String("content")).toString());
+        m_description->setHtml(plainWithLinks(body.value(QLatin1String("content")).toString()));
     }
     connect(m_description, &QTextEdit::textChanged, this, [this] {
         m_descriptionChanged = true;

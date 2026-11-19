@@ -27,6 +27,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSplitter>
+#include <QTextDocument>
 #include <QToolBar>
 #include <QUuid>
 #include <QVBoxLayout>
@@ -43,6 +44,28 @@ QString bodyOf(const QString &html)
     const QRegularExpressionMatch match = body.match(html);
     return match.hasMatch() ? match.captured(1).trimmed() : html;
 }
+
+// The font of a new message (composer.cpp mailFont): the signature editor shows text without its own
+// font as the message will
+QFont messageFont()
+{
+    QFont font;
+    font.setFamilies({QStringLiteral("Aptos"), QStringLiteral("Calibri"), QStringLiteral("Carlito"), QFont().family()});
+    font.setPointSize(11);
+    return font;
+}
+
+// The signature's text in the font the signature editor shows it in. Qt writes no font for text in the
+// document's default font: that default sits only in <body>, which saving drops, so such text took the
+// new message's default when inserted (a size changed from 11 to 12 came back as 11)
+QString withEditorFont(const QString &body, const QFont &font)
+{
+    QStringList families;
+    for (const QString &family : font.families()) {
+        families.append(QLatin1Char('\'') + family + QLatin1Char('\''));
+    }
+    return QStringLiteral("<div style=\"font-family:%1;font-size:%2pt\">%3</div>").arg(families.join(QLatin1Char(',')), QString::number(font.pointSizeF()), body);
+}
 }
 
 void SignatureDialog::load(KPIMTextEdit::RichTextComposer *editor, const Signature &signature)
@@ -55,7 +78,7 @@ void SignatureDialog::load(KPIMTextEdit::RichTextComposer *editor, const Signatu
 
 void SignatureDialog::store(KPIMTextEdit::RichTextComposer *editor, Signature *signature)
 {
-    signature->html = bodyOf(editor->composerControler()->toCleanHtml());
+    signature->html = withEditorFont(bodyOf(editor->composerControler()->toCleanHtml()), editor->document()->defaultFont());
     signature->images.clear();
     const auto images = editor->composerControler()->composerImages()->embeddedImages();
     for (const auto &image : images) {
@@ -134,6 +157,7 @@ SignatureDialog::SignatureDialog(MailboxSet *mailboxes, QWidget *parent)
 
     // The editor with the usual formatting
     m_editor->composerActions()->createActions(m_actions);
+    m_editor->document()->setDefaultFont(messageFont());
     m_editor->activateRichText();
     // A signature copied from Outlook on the web: its pictures point at the web
     auto *pasted = new PastedImages(m_editor);

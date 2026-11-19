@@ -26,6 +26,8 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 namespace GraphMail
 {
 
@@ -81,7 +83,9 @@ Shell::Shell(MailboxSet *mailboxes, DaemonClient *daemon)
         button->setAutoRaise(true);
         button->setCheckable(true);
         button->setFocusPolicy(Qt::NoFocus);
-        button->setMinimumWidth(64);
+        // At least as wide as its own label: a narrow window squeezed the bar to 64 pixels and cut
+        // longer translations ("Contactpersonen")
+        button->setMinimumWidth(std::max(64, button->sizeHint().width()));
         button->setContextMenuPolicy(Qt::CustomContextMenu);
         // Right-click: the module in a window of its own, as Outlook's "Open in New Window"
         connect(button, &QWidget::customContextMenuRequested, this, [this, button, i](const QPoint &pos) {

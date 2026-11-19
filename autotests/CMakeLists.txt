@@ -59,8 +59,12 @@ ecm_add_test(appmodelstest.cpp
     ../src/app/mimemapi.cpp
     ../src/app/accesstext.cpp
     ../src/app/maileditor.cpp
+    ../src/app/signaturedialog.cpp
+    ../src/app/signatures.cpp
+    ../src/app/coloraction.cpp
+    ../src/app/pastedimages.cpp
     TEST_NAME appmodelstest
-    LINK_LIBRARIES graphmailcore KF6::I18n KF6::ConfigCore KF6::WidgetsAddons KF6::Holidays KF6::CalendarCore graphmail_kmime KPim6::PimTextEdit Qt6::Widgets Qt6::DBus Qt6::Test
+    LINK_LIBRARIES graphmailcore KF6::I18n KF6::ConfigCore KF6::WidgetsAddons KF6::Holidays KF6::CalendarCore KF6::XmlGui graphmail_kmime KPim6::PimTextEdit Qt6::Widgets Qt6::DBus Qt6::Test
 )
 target_include_directories(appmodelstest PRIVATE ${CMAKE_SOURCE_DIR}/src/app)
 
