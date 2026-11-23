@@ -156,7 +156,9 @@ void CalendarData::removeFreeBusy(const QString &address)
 QHash<QString, QStringList> CalendarData::freeBusyMissing(QDate from, QDate to) const
 {
     QHash<QString, QStringList> missing;
-    const qint64 stale = QDateTime::currentMSecsSinceEpoch() - 10 * 60 * 1000;
+    // Colleagues' free/busy changes all day: older than four minutes is asked again (the calendar
+    // window asks every five minutes while it is open, 0.14.4; it was ten minutes and only on a redraw)
+    const qint64 stale = QDateTime::currentMSecsSinceEpoch() - 4 * 60 * 1000;
     for (const CalendarInfo &c : m_calendars) {
         if (!isFreeBusy(c.mailboxKey) || !c.shown) {
             continue;
@@ -167,6 +169,13 @@ QHash<QString, QStringList> CalendarData::freeBusyMissing(QDate from, QDate to) 
         }
     }
     return missing;
+}
+
+void CalendarData::expireFreeBusy()
+{
+    for (Busy &busy : m_busy) {
+        busy.fetched = 0;
+    }
 }
 
 void CalendarData::setFreeBusy(const QJsonObject &schedule, QDate from, QDate to)
@@ -180,6 +189,14 @@ void CalendarData::setFreeBusy(const QJsonObject &schedule, QDate from, QDate to
     }
     if (!calendar) {
         return;
+    }
+    // No answer at all (offline) for the same days: the blocks shown stay, the next round asks again
+    if (schedule.value(QLatin1String("error")).toObject().value(QLatin1String("message")).toString() == QLatin1String("no answer")) {
+        const auto old = m_busy.find(address);
+        if (old != m_busy.end() && old->from <= from && old->to >= to && !old->blocks.isEmpty()) {
+            old->fetched = QDateTime::currentMSecsSinceEpoch();
+            return;
+        }
     }
     Busy busy;
     busy.from = from;

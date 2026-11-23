@@ -54,6 +54,11 @@ Graph Mail works without these. They only add the features named here:
 - **LibreOffice**: previews of Word, Excel and PowerPoint attachments. Off by default, because not
   every office uses LibreOffice; turn it on under Settings > Preview Office Documents with
   LibreOffice. Needs Okular too. With OnlyOffice or Microsoft 365 on the web, use Open instead.
+- **Spelling dictionaries**: spell checking while you write, in the language chosen in the
+  composer's formatting row (Automatic follows the language you write in). Needs the hunspell
+  plugin of KDE's spell checker and a dictionary per language: Debian `sonnet6-plugins hunspell-nl
+  hunspell-en-us`, Fedora `kf6-sonnet-hunspell hunspell-nl hunspell-en-US`, Arch `hunspell
+  hunspell-nl hunspell-en_us`. The packages recommend them.
 
 Without them, Open shows any attachment in the program the desktop uses for that kind of file.
 

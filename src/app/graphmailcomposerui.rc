@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-FileCopyrightText: 2026 plasma-graphmail-linux contributors -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<gui name="plasma-graphmail-linux-composer" version="10"
+<gui name="plasma-graphmail-linux-composer" version="11"
      xmlns="http://www.kde.org/standards/kxmlgui/1.0"
      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
      xsi:schemaLocation="http://www.kde.org/standards/kxmlgui/1.0 http://www.kde.org/standards/kxmlgui/1.0/kxmlgui.xsd">
@@ -121,5 +121,7 @@
     <Action name="format_align_center"/>
     <Action name="format_align_right"/>
     <Action name="format_align_justify"/>
+    <Separator/>
+    <Action name="spell_language"/>
   </ToolBar>
 </gui>

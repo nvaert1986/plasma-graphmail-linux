@@ -5,6 +5,8 @@
 #include "graphsynclink.h"
 #include "maileditor.h"
 #include "pastedimages.h"
+#include "spelllanguage.h"
+#include "fontfamilybox.h"
 #include "coloraction.h"
 #include "accesstext.h"
 #include "avatar.h"
@@ -26,6 +28,7 @@
 #include <KActionCollection>
 #include <KActionMenu>
 #include <KConfigGroup>
+#include <KFontAction>
 #include <KLocalizedString>
 #include <KMessageBox>
 #include <KMessageWidget>
@@ -79,6 +82,7 @@
 #include <QCompleter>
 #include <QDialog>
 #include <QTextTable>
+#include <QWidgetAction>
 #include <QMouseEvent>
 #include <QAbstractTextDocumentLayout>
 #include <QScrollBar>
@@ -197,6 +201,7 @@ ComposerWindow::ComposerWindow(MailboxSet *mailboxes, DaemonClient *daemon, cons
     // The editor: rich text in Outlook's font, spell checking while typing
     m_editor->setSpellCheckingSupport(true);
     m_editor->setCheckSpellingEnabled(true);
+    m_spell = new SpellLanguage(m_editor, this);
     m_editor->document()->setDefaultFont(mailFont());
     m_editor->activateRichText();
     // Pictures pasted from a web page (Outlook on the web) point at the web: brought into the mail
@@ -272,6 +277,7 @@ ComposerWindow::ComposerWindow(MailboxSet *mailboxes, DaemonClient *daemon, cons
     }
 
     setupFrom();
+    m_spell->setMailbox(fromKey());
 
     // What the window starts with
     std::optional<Outgoing> stored;
@@ -358,6 +364,13 @@ ComposerWindow::~ComposerWindow() = default;
 void ComposerWindow::setupActions()
 {
     KActionCollection *actions = actionCollection();
+
+    // The spelling language, on the formatting row (0.14.4)
+    auto *spellLanguage = new QWidgetAction(this);
+    spellLanguage->setText(i18nc("@action", "Spelling Language"));
+    spellLanguage->setIcon(QIcon::fromTheme(QStringLiteral("tools-check-spelling")));
+    spellLanguage->setDefaultWidget(m_spell->comboBox());
+    actions->addAction(QStringLiteral("spell_language"), spellLanguage);
 
     // Send, with an arrow for Send As / Send on Behalf when writing from another mailbox
     m_send = new KActionMenu(QIcon::fromTheme(QStringLiteral("mail-send")), i18nc("@action", "Send"), this);
@@ -544,6 +557,10 @@ void ComposerWindow::setupActions()
     // The editor was switched to rich text before its actions existed; the table menu only learns the
     // mode from that switch and does nothing in plain text
     m_editor->composerActions()->textModeChanged(m_editor->textMode());
+    // The font box applies a font on Enter or a pick from its list, not at every letter typed
+    if (auto *fontFamily = qobject_cast<KFontAction *>(actions->action(QStringLiteral("format_font_family")))) {
+        new FontFamilyBox(fontFamily, m_editor);
+    }
     // Insert Table opens the table dialog at once: the editor's own Table is a menu of menus
     // (Insert > Table..., rows, columns, joining), kept for working on a table
     QAction *insertTable = actions->addAction(QStringLiteral("insert_table_dialog"));
@@ -1066,6 +1083,7 @@ void ComposerWindow::fromChanged()
         m_fromBefore = m_from->currentIndex();
     }
     const QString key = fromKey();
+    m_spell->setMailbox(key);
     // A new message lives in the mailbox it is sent from: move it when From changes
     if (m_record.kind == QLatin1String("new") && key != m_mailboxKey && !key.isEmpty()) {
         if (m_saved) {

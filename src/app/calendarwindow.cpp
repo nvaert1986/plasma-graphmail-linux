@@ -200,6 +200,14 @@ CalendarWindow::CalendarWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWid
     }
 
     // A calendar sync redraws (a little later: one change often comes with more)
+    m_freeBusyTimer.setInterval(5 * 60 * 1000);
+    connect(&m_freeBusyTimer, &QTimer::timeout, this, [this] {
+        if (isVisible()) {
+            const auto [first, last] = range();
+            fetchFreeBusy(first, last);
+        }
+    });
+    m_freeBusyTimer.start();
     m_reloadTimer.setSingleShot(true);
     m_reloadTimer.setInterval(300);
     connect(&m_reloadTimer, &QTimer::timeout, this, [this] {
@@ -382,6 +390,10 @@ void CalendarWindow::setupActions()
     actions->setDefaultShortcut(sync, Qt::Key_F9);
     connect(sync, &QAction::triggered, this, [this] {
         m_daemon->syncNow();
+        // Free/busy is not part of the mail service's sync: asked again here (0.14.4)
+        m_data->expireFreeBusy();
+        const auto [first, last] = range();
+        fetchFreeBusy(first, last);
     });
 
     QAction *remove = actions->addAction(QStringLiteral("delete_event"));
@@ -1422,7 +1434,7 @@ void CalendarWindow::fetchFreeBusy(QDate first, QDate last)
                                 m_data->setFreeBusy(v.toObject(), first, last);
                                 answered.append(v.toObject().value(QLatin1String("scheduleId")).toString().toLower());
                             }
-                            // No answer (offline): remembered as empty, asked again after ten minutes
+                            // No answer (offline): the blocks shown stay, asked again at the next round
                             for (const QString &address : addresses) {
                                 if (!answered.contains(address.toLower())) {
                                     m_data->setFreeBusy(QJsonObject{{QStringLiteral("scheduleId"), address},

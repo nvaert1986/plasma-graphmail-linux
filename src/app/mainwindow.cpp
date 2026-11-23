@@ -918,6 +918,18 @@ void MainWindow::setupActions()
         });
     }
     filterMenu->addSeparator();
+    // The order of the results: kept, and not reset by Clear Filters
+    m_searchBestMatch = filterMenu->addAction(QIcon::fromTheme(QStringLiteral("view-sort")), i18nc("@option:check search results order", "Best Match First"));
+    m_searchBestMatch->setCheckable(true);
+    m_searchBestMatch->setToolTip(i18nc("@info:tooltip", "Off: the newest mail first"));
+    m_searchBestMatch->setChecked(KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("Search")).readEntry("BestMatch", false));
+    connect(m_searchBestMatch, &QAction::toggled, this, [this](bool on) {
+        KConfigGroup group = KSharedConfig::openConfig(QStringLiteral("graphmailrc"), KConfig::NoGlobals)->group(QStringLiteral("Search"));
+        group.writeEntry("BestMatch", on);
+        group.sync();
+        search();
+    });
+    filterMenu->addSeparator();
     filterMenu->addAction(QIcon::fromTheme(QStringLiteral("edit-clear")), i18nc("@action:inmenu", "Clear Filters"), this, [this] {
         clearFilters();
         search();
@@ -2074,7 +2086,15 @@ void MainWindow::search()
                 hits.append({key, row, folderNames.value(row.folder)});
             }
         }
-        std::stable_sort(hits.begin(), hits.end(), [](const SearchHit &a, const SearchHit &b) {
+        std::stable_sort(hits.begin(), hits.end(), [&query](const SearchHit &a, const SearchHit &b) {
+            // Best match: ranked rows first, best first (bm25: lower is better); Graph's own hits,
+            // which the cache could not rank, after them by date
+            if (query.bestMatch && a.row.rank != b.row.rank) {
+                if (a.row.rank == 0 || b.row.rank == 0) {
+                    return b.row.rank == 0;
+                }
+                return a.row.rank < b.row.rank;
+            }
             return a.row.received != b.row.received ? a.row.received > b.row.received : a.row.id > b.row.id;
         });
         if (hits.size() > 1000) {
@@ -3063,7 +3083,7 @@ void MainWindow::showResults(int count, bool busy, const QString &note)
 SearchQuery MainWindow::searchQuery() const
 {
     SearchQuery query = SearchQuery::parse(m_searchField->text());
-    const bool typedFields = !query.fields.isEmpty();
+    query.bestMatch = m_searchBestMatch && m_searchBestMatch->isChecked();
     if (m_filterAttachments && m_filterAttachments->isChecked()) {
         query.attachments = true;
     }
@@ -3125,13 +3145,11 @@ SearchQuery MainWindow::searchQuery() const
             query.attachmentNames.append(it.value());
         } else {
             query.fields[it.key()].append(it.value());
+            // A filter's value is complete, not being typed: no prefix match for it
+            query.exact.append(it.value());
         }
     }
     query.categories += m_categoryFilters;
-    // A filter's value is complete, not being typed: no prefix match for it
-    if (query.words.isEmpty() && !typedFields && !m_textFilters.isEmpty()) {
-        query.lastIsPrefix = false;
-    }
     return query;
 }
 

@@ -110,8 +110,11 @@ public:
     void addFreeBusy(const QString &account, const QString &address, const QString &name);
     void removeFreeBusy(const QString &address);
     // Shown free/busy people (by account) whose times for these days are not known (or older
-    // than ten minutes): ask getSchedule and hand the answer to setFreeBusy()
+    // than four minutes): ask getSchedule and hand the answer to setFreeBusy()
     QHash<QString, QStringList> freeBusyMissing(QDate from, QDate to) const;
+    // Every free/busy answer counts as old: the next freeBusyMissing() asks again (Sync, 0.14.4).
+    // The blocks stay on screen until the new answer replaces them
+    void expireFreeBusy();
     void setFreeBusy(const QJsonObject &schedule, QDate from, QDate to);
 
 Q_SIGNALS:

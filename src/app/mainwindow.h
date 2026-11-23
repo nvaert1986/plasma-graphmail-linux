@@ -432,6 +432,8 @@ private:
     QAction *m_filterRead = nullptr;
     QAction *m_filterToMe = nullptr;
     QAction *m_filterCcMe = nullptr;
+    // Best match first instead of newest first (graphmailrc [Search] BestMatch, 0.14.4)
+    QAction *m_searchBestMatch = nullptr;
     QMenu *m_filterCategories = nullptr;
     // Filters that ask for a word: field ("from", "to", "cc", "subject", "body", "attachment")
     // -> its action and the value given

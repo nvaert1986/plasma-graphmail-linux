@@ -23,6 +23,7 @@ Build-Depends: debhelper-compat (= 13),
                libkf6calendarcore-dev,
                libkleo-dev,
                libkmime-dev,
+               libkf6sonnet-dev,
                libktextaddons-dev,
                libktnef-dev,
                libkpimtextedit-dev,
@@ -51,6 +52,11 @@ Depends: ${misc:Depends},
          qml6-module-org-kde-kirigami,
          qml6-module-qtquick-controls,
          qml6-module-qtquick-layouts
+# Spell checking in the composer: Sonnet's hunspell plugin and the Dutch and English dictionaries
+# (Sonnet itself recommends only the plugin)
+Recommends: sonnet6-plugins,
+            hunspell-nl,
+            hunspell-en-us | hunspell-en-gb
 # Previews of PDF and Office attachments: Okular's part, and LibreOffice for the conversion
 Suggests: libreoffice-writer | libreoffice,
           okular

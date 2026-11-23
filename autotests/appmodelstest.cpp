@@ -42,6 +42,15 @@
 #include <QTimeZone>
 #include <QMimeData>
 #include <QSignalSpy>
+#include <KActionCollection>
+#include <KFontAction>
+#include <KPIMTextEdit/RichTextComposer>
+#include <KPIMTextEdit/RichTextComposerActions>
+#include <QFontComboBox>
+#include <QFontDatabase>
+#include <QLineEdit>
+#include <QMainWindow>
+#include <QToolBar>
 #include <QStandardPaths>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -52,6 +61,11 @@
 #include <KPIMTextEdit/RichTextComposer>
 
 #include "signaturedialog.h"
+#include "spelllanguage.h"
+#include "fontfamilybox.h"
+
+#include <Sonnet/Speller>
+#include <QComboBox>
 #include "signatures.h"
 #include <QUrl>
 
@@ -117,6 +131,129 @@ private Q_SLOTS:
         GraphMail::SignatureDialog::store(&editor, &signature);
         QCOMPARE(signature.html.count(QLatin1String("<div style=\"font-family:")), 1);
         QVERIFY(signature.html.contains(QLatin1String("font-size:12pt")));
+    }
+
+    // 0.14.4: typing a font name in the font box with the whole text selected. Before, the first
+    // letter was applied as a font and put the focus back in the text, so the second letter
+    // replaced the text. Now the box keeps the focus and Enter applies the font
+    void fontBoxKeepsTheText()
+    {
+        using GraphMail::FontFamilyBox;
+        // A family that is no start of another one: typed whole, the box completes nothing more
+        QString family;
+        const QStringList families = QFontDatabase::families();
+        for (const QString &f : families) {
+            if (f.size() >= 4 && !f.contains(QLatin1Char('[')) && std::count_if(families.cbegin(), families.cend(), [&f](const QString &other) {
+                    return other.startsWith(f, Qt::CaseInsensitive);
+                }) == 1) {
+                family = f;
+                break;
+            }
+        }
+        if (family.isEmpty()) {
+            QSKIP("no suitable font installed");
+        }
+        QCOMPARE(FontFamilyBox::installedFamily(QStringLiteral("  ") + family.toUpper()), family);
+        QVERIFY(FontFamilyBox::installedFamily(QStringLiteral("No Such Font Family")).isEmpty());
+
+        QMainWindow window;
+        auto *editor = new KPIMTextEdit::RichTextComposer(&window);
+        window.setCentralWidget(editor);
+        editor->activateRichText();
+        KActionCollection actions(&window);
+        editor->composerActions()->createActions(&actions);
+        auto *fontAction = qobject_cast<KFontAction *>(actions.action(QStringLiteral("format_font_family")));
+        QVERIFY(fontAction);
+        new FontFamilyBox(fontAction, editor);
+        window.addToolBar(QStringLiteral("format"))->addAction(fontAction);
+        window.show();
+        window.activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(&window));
+        auto *box = window.findChild<QFontComboBox *>();
+        QVERIFY(box && box->lineEdit());
+
+        const QString body = QStringLiteral("The body of the mail, all of it selected.");
+        editor->setPlainText(body);
+        editor->setFocus();
+        editor->selectAll();
+        box->lineEdit()->setFocus();
+        QTRY_VERIFY(box->lineEdit()->hasFocus());
+        box->lineEdit()->selectAll();
+        for (const QChar c : family) {
+            QTest::keyClick(box->lineEdit(), c.toLatin1());
+            QVERIFY(box->hasFocus());
+        }
+        QCOMPARE(editor->toPlainText(), body);
+        QTest::keyClick(box->lineEdit(), Qt::Key_Return);
+        QCOMPARE(editor->toPlainText(), body);
+        QTRY_VERIFY(editor->hasFocus());
+        QTextCursor cursor(editor->document());
+        cursor.setPosition(5);
+        QCOMPARE(cursor.charFormat().fontFamilies().toStringList().value(0), family);
+
+        // A name that is no font changes nothing, and leaving the box shows the font at the cursor
+        editor->setFocus();
+        editor->selectAll();
+        box->lineEdit()->setFocus();
+        QTRY_VERIFY(box->lineEdit()->hasFocus());
+        box->lineEdit()->selectAll();
+        QTest::keyClicks(box->lineEdit(), QStringLiteral("zzqx"));
+        QTest::keyClick(box->lineEdit(), Qt::Key_Return);
+        editor->setFocus();
+        QTRY_VERIFY(editor->hasFocus());
+        QCOMPARE(editor->toPlainText(), body);
+        QCOMPARE(cursor.charFormat().fontFamilies().toStringList().value(0), family);
+        QCOMPARE(box->currentText(), family);
+    }
+
+    // 0.14.4: the composer's spelling language. Which dictionary a guessed language gets, and (when
+    // Dutch and English dictionaries are installed) Automatic following the text, a choice by hand
+    // staying and being remembered for the mailbox
+    void spellLanguageFollowsTheText()
+    {
+        using GraphMail::SpellLanguage;
+        const QStringList installed{QStringLiteral("en_AU"), QStringLiteral("en_GB"), QStringLiteral("en_US"), QStringLiteral("nl"), QStringLiteral("de_AT"), QStringLiteral("de_DE")};
+        QCOMPARE(SpellLanguage::pickDictionary(QStringLiteral("nl"), installed, {}, {}), QStringLiteral("nl"));
+        QCOMPARE(SpellLanguage::pickDictionary(QStringLiteral("en"), installed, QStringLiteral("en_GB"), QStringLiteral("nl_NL")), QStringLiteral("en_GB"));
+        QCOMPARE(SpellLanguage::pickDictionary(QStringLiteral("en"), installed, QStringLiteral("nl"), QStringLiteral("en_AU")), QStringLiteral("en_AU"));
+        QCOMPARE(SpellLanguage::pickDictionary(QStringLiteral("en"), installed, {}, QStringLiteral("C")), QStringLiteral("en_US"));
+        QCOMPARE(SpellLanguage::pickDictionary(QStringLiteral("de"), installed, {}, {}), QStringLiteral("de_DE"));
+        QCOMPARE(SpellLanguage::pickDictionary(QStringLiteral("nl"), {QStringLiteral("nl_BE"), QStringLiteral("nl_NL")}, {}, QStringLiteral("nl-BE")), QStringLiteral("nl_BE"));
+        QCOMPARE(SpellLanguage::pickDictionary(QStringLiteral("fr"), installed, {}, {}), QString());
+        QCOMPARE(SpellLanguage::pickDictionary(QString(), installed, {}, {}), QString());
+
+        const QStringList dictionaries = Sonnet::Speller().availableDictionaries().values();
+        const auto has = [&dictionaries](const QString &language) {
+            return std::any_of(dictionaries.cbegin(), dictionaries.cend(), [&language](const QString &d) {
+                return d == language || d.startsWith(language + QLatin1Char('_'));
+            });
+        };
+        if (!has(QStringLiteral("nl")) || !has(QStringLiteral("en"))) {
+            QSKIP("Needs Dutch and English spelling dictionaries");
+        }
+        QWidget window;
+        KPIMTextEdit::RichTextComposer editor(&window);
+        editor.setSpellCheckingSupport(true);
+        SpellLanguage spell(&editor, &window);
+        const QString mailbox = QStringLiteral("test/spell");
+        editor.setPlainText(QStringLiteral("Hoi Jan, de bestanden staan op de gedeelde schijf. Laat maar weten of het werkt, dan pas ik het morgen ook toe op de andere locatie."));
+        spell.setMailbox(mailbox);
+        QVERIFY2(spell.currentDictionary().startsWith(QLatin1String("nl")), qPrintable(spell.currentDictionary()));
+        QCOMPARE(spell.comboBox()->currentIndex(), 0);
+        editor.setPlainText(QStringLiteral("Hi John, the files are on the shared drive. Let me know whether it works, then I will apply it to the other location tomorrow as well."));
+        spell.setMailbox(mailbox);
+        QVERIFY2(spell.currentDictionary().startsWith(QLatin1String("en")), qPrintable(spell.currentDictionary()));
+        // By hand: English stays over Dutch text, and comes back for this mailbox
+        const int english = spell.comboBox()->findData(spell.currentDictionary());
+        QVERIFY(english > 0);
+        Q_EMIT spell.comboBox()->activated(english);
+        editor.setPlainText(QStringLiteral("Hoi Jan, de bestanden staan op de gedeelde schijf. Laat maar weten of het werkt, dan pas ik het morgen ook toe op de andere locatie."));
+        spell.setMailbox(mailbox);
+        QVERIFY(spell.currentDictionary().startsWith(QLatin1String("en")));
+        QCOMPARE(spell.comboBox()->currentIndex(), english);
+        // Back to Automatic
+        Q_EMIT spell.comboBox()->activated(0);
+        QVERIFY(spell.currentDictionary().startsWith(QLatin1String("nl")));
     }
 
     void initTestCase()

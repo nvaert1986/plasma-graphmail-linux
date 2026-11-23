@@ -165,6 +165,8 @@ private:
     MonthView *m_month;
     AgendaView *m_agenda;
     QTimer m_reloadTimer;
+    // Colleagues' free/busy asked again while the window is open (0.14.4)
+    QTimer m_freeBusyTimer;
     bool m_filling = false;
     bool m_testMode = false;
     bool m_testSeries = false;

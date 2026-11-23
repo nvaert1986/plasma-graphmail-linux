@@ -845,10 +845,11 @@ QString Store::ftsQuery(const QString &text)
         // Quoted, so FTS5 operators the user typed (AND, NOT, NEAR, "-", ":") are just text
         QString quoted = word;
         terms.append(QLatin1Char('"') + quoted.replace(QLatin1Char('"'), QStringLiteral("\"\"")) + QLatin1Char('"'));
-    }
-    // While typing, the last word is probably incomplete
-    if (!text.isEmpty() && !text.back().isSpace()) {
-        terms.last().append(QLatin1Char('*'));
+        // Every word matches as a prefix ("fact jans" finds "factuur Jansen", 0.14.4); a word the
+        // user put in quotes is matched whole
+        if (!word.startsWith(QLatin1Char('"'))) {
+            terms.last().append(QLatin1Char('*'));
+        }
     }
     return terms.join(QLatin1Char(' '));
 }
@@ -859,8 +860,10 @@ QList<ListRow> Store::search(const SearchQuery &query, const QList<qint64> &fold
         return {};
     }
     const QString match = query.fts();
+    // Column weights for the rank: subject, sender name, sender address, to, cc, preview, body text
     QString sql = QStringLiteral("SELECT m.id, m.sender_name, m.sender_address, m.subject, m.preview, m.received, m.is_read, m.flag, m.importance, "
-                                 "m.has_attachments, m.to_list, m.categories, m.folder FROM messages m");
+                                 "m.has_attachments, m.to_list, m.categories, m.folder, %1 FROM messages m")
+                      .arg(match.isEmpty() ? QStringLiteral("0") : QStringLiteral("bm25(messages_fts, 10.0, 5.0, 5.0, 2.0, 2.0, 1.0, 1.0)"));
     QStringList where;
     QVariantList values;
     if (!match.isEmpty()) {
@@ -921,7 +924,8 @@ QList<ListRow> Store::search(const SearchQuery &query, const QList<qint64> &fold
     if (!where.isEmpty()) {
         sql += QStringLiteral(" WHERE ") + where.join(QStringLiteral(" AND "));
     }
-    sql += QStringLiteral(" ORDER BY m.received DESC, m.id DESC LIMIT ?");
+    sql += query.bestMatch && !match.isEmpty() ? QStringLiteral(" ORDER BY 14, m.received DESC, m.id DESC LIMIT ?")
+                                               : QStringLiteral(" ORDER BY m.received DESC, m.id DESC LIMIT ?");
     values << limit;
     QList<ListRow> rows;
     QSqlQuery q(m_db);
@@ -933,6 +937,7 @@ QList<ListRow> Store::search(const SearchQuery &query, const QList<qint64> &fold
         while (q.next()) {
             ListRow row = readListRow(q);
             row.folder = q.value(12).toLongLong();
+            row.rank = q.value(13).toDouble();
             rows.append(row);
         }
     } else {

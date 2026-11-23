@@ -515,6 +515,9 @@ void MailboxWorker::tick()
         }
         --free;
         m_running.insert(key);
+        if (key == QLatin1String("calendar")) {
+            freshenSharedCalendars(t);
+        }
         CollectionSync *sync = m_entries[key].sync.get();
         sync->run([this, key](const SyncResult &result) {
             collectionDone(key, result);
@@ -743,9 +746,34 @@ void MailboxWorker::syncNow()
     for (Entry &entry : m_entries) {
         entry.due = 0;
     }
+    m_freshenCalendars = true;
     m_pausedUntil = 0;
     m_backoffMs = 0;
     tick();
+}
+
+void MailboxWorker::freshenSharedCalendars(qint64 t)
+{
+    // Only a colleague's calendar opened without their mail (calendar-only, docs/PHASE7.md)
+    if (m_config.mail || !m_config.calendar || !m_store) {
+        return;
+    }
+    if (!m_freshenCalendars && m_calendarsFreshAt != 0 && t - m_calendarsFreshAt < sharedCalendarFreshMs) {
+        return;
+    }
+    // The first round after a start keeps the delta links (the calendars were read before); Sync
+    // and every quarter of an hour read them whole: a fresh chain, with mark and sweep for what is
+    // gone. A calendar that is only shared with the user showed nothing new after its first copy
+    // (pilot report, 0.14.4), which the delta links alone did not bring
+    if (m_calendarsFreshAt != 0 || m_freshenCalendars) {
+        const QList<ParentRow> calendars = m_store->parents(ItemKind::Event);
+        for (const ParentRow &calendar : calendars) {
+            m_store->setParentDeltaLink(ItemKind::Event, calendar.id, {}, now(), {});
+        }
+        qCDebug(GRAPHMAIL) << "Reading" << calendars.size() << "calendar(s) of" << m_config.mailbox << "whole";
+    }
+    m_calendarsFreshAt = t;
+    m_freshenCalendars = false;
 }
 
 void MailboxWorker::resyncFolder(qint64 folder)
@@ -2007,8 +2035,10 @@ void MailboxWorker::answerIds(quint64 request, const QString &first, int max)
                 (v.toString().startsWith(QLatin1String("AAMk")) ? rest : immutable).append(v);
             }
             if (rest.isEmpty()) {
-                const QJsonObject answer{{QStringLiteral("ok"), true}, {QStringLiteral("ids"), immutable}, {QStringLiteral("more"), more}};
-                Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
+                fillMissingMessages(immutable, [this, request, immutable, more] {
+                    const QJsonObject answer{{QStringLiteral("ok"), true}, {QStringLiteral("ids"), immutable}, {QStringLiteral("more"), more}};
+                    Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
+                });
                 return;
             }
             // $search ignores the immutable id preference (phase 8 probe): translate to the
@@ -2029,15 +2059,65 @@ void MailboxWorker::answerIds(quint64 request, const QString &first, int max)
                 for (const QJsonValue &v : results) {
                     immutable.append(v.toObject().value(QLatin1String("targetId")).toString());
                 }
-                const QJsonObject answer{{QStringLiteral("ok"), translated.ok()},
-                                         {QStringLiteral("problem"), accessProblem(translated)},
-                                         {QStringLiteral("ids"), immutable},
-                                         {QStringLiteral("more"), more}};
-                Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
+                const bool ok = translated.ok();
+                const QString problem = accessProblem(translated);
+                fillMissingMessages(immutable, [this, request, immutable, more, ok, problem] {
+                    const QJsonObject answer{{QStringLiteral("ok"), ok}, {QStringLiteral("problem"), problem}, {QStringLiteral("ids"), immutable}, {QStringLiteral("more"), more}};
+                    Q_EMIT queryAnswered(request, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Compact)));
+                });
             });
         });
     };
     (*page)(first);
+}
+
+void MailboxWorker::fillMissingMessages(const QJsonArray &ids, const std::function<void()> &done)
+{
+    if (!m_store || ids.isEmpty()) {
+        done();
+        return;
+    }
+    QStringList all;
+    for (const QJsonValue &v : ids) {
+        all.append(v.toString());
+    }
+    const QHash<QString, qint64> cached = m_store->messageIdsByGraphIds(all);
+    QStringList missing;
+    for (const QString &id : std::as_const(all)) {
+        if (!id.isEmpty() && !cached.contains(id) && missing.size() < maxSearchFill) {
+            missing.append(id);
+        }
+    }
+    if (missing.isEmpty()) {
+        done();
+        return;
+    }
+    // The client keeps to the mailbox's concurrency; every answer counts down, a failed one too
+    auto pending = std::make_shared<int>(int(missing.size()));
+    auto stored = std::make_shared<int>(0);
+    for (const QString &id : std::as_const(missing)) {
+        GraphCore::GraphRequestSpec spec;
+        spec.pathOrUrl = m_ctx.root + QStringLiteral("/messages/") + id + QStringLiteral("?$select=") + Mapper::messageSelect();
+        spec.headers = {GraphCore::Prefer::header({GraphCore::Prefer::immutableId()})};
+        GraphCore::GraphRequest *r = m_client->start(spec);
+        connect(r, &GraphCore::GraphRequest::finished, this, [this, r, pending, stored, done] {
+            const GraphCore::GraphResponse response = r->response();
+            r->deleteLater();
+            if (response.ok() && m_store) {
+                const QJsonObject json = response.json();
+                // Only into a folder the cache knows: a hit in an excluded or unknown folder stays out
+                if (const std::optional<FolderRow> folder = m_store->folderByGraphId(json.value(QLatin1String("parentFolderId")).toString())) {
+                    if (m_store->upsertMessage(Mapper::message(json, folder->id), m_store->generation(folder->id)) == Store::Upsert::Inserted) {
+                        ++*stored;
+                    }
+                }
+            }
+            if (--*pending == 0) {
+                qCDebug(GRAPHMAIL) << "Search: stored" << *stored << "messages the cache did not have";
+                done();
+            }
+        });
+    }
 }
 
 void MailboxWorker::dismissOverdueReminders()

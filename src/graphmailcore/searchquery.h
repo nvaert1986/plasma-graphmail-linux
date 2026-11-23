@@ -31,8 +31,12 @@ struct SearchQuery {
     // Local midnight in milliseconds; 0 = no limit. receivedTo is exclusive.
     qint64 receivedFrom = 0;
     qint64 receivedTo = 0;
-    // The last word is still being typed: match it as a prefix locally
-    bool lastIsPrefix = false;
+    // Words and field values typed in quotes ("invoice"), and filter values: matched locally as whole
+    // words. Every other word matches as a prefix, "fact jans" finds "factuur Jansen" (0.14.4; before,
+    // only the last word did)
+    QStringList exact;
+    // Best match first instead of newest first (the search's Filters menu, 0.14.4); not from the text
+    bool bestMatch = false;
 
     static SearchQuery parse(const QString &text);
     bool isEmpty() const;

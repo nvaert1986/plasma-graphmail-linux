@@ -104,6 +104,8 @@ add_executable(plasma-graphmail-linux
     app/composer.cpp
     app/coloraction.cpp
     app/pastedimages.cpp
+    app/spelllanguage.cpp
+    app/fontfamilybox.cpp
     app/maileditor.cpp
     app/conditionalformat.cpp
     app/accesstext.cpp
@@ -174,6 +176,8 @@ target_link_libraries(plasma-graphmail-linux PRIVATE
     KPim6::Tnef
     KPim6::PimTextEdit
     KF6::TextEmoticonsWidgets
+    KF6::SonnetCore
+    KF6::SonnetUi
     KF6::Holidays
     KF6::CalendarCore
 )

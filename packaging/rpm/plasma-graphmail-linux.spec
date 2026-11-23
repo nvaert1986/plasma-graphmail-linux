@@ -4,7 +4,7 @@
 # (with plasma-graphmail-linux-<version>.tar.gz next to it)
 
 Name:           plasma-graphmail-linux
-Version:        0.14.3
+Version:        0.14.4
 Release:        1%{?dist}
 Summary:        Mail, calendar, contacts and tasks of Microsoft 365 for KDE Plasma
 License:        GPL-3.0-or-later
@@ -40,6 +40,7 @@ BuildRequires:  cmake(KF6KIO)
 BuildRequires:  cmake(KF6Notifications)
 BuildRequires:  cmake(KF6NotifyConfig)
 BuildRequires:  cmake(KF6Parts)
+BuildRequires:  cmake(KF6Sonnet)
 BuildRequires:  cmake(KF6TextEmoticonsWidgets)
 BuildRequires:  cmake(KF6WidgetsAddons)
 BuildRequires:  cmake(KF6XmlGui)
@@ -63,6 +64,10 @@ Requires:       plasma-workspace
 Requires:       qt6-qtdeclarative
 # The SQLite driver of the local cache is part of qt6-qtbase
 Requires:       qt6-qtbase
+# Spell checking in the composer: Sonnet's hunspell plugin and the Dutch and English dictionaries
+Recommends:     kf6-sonnet-hunspell
+Recommends:     hunspell-nl
+Recommends:     hunspell-en-US
 # Previews of PDF and Office attachments: Okular's part, and LibreOffice for the conversion
 Recommends:     okular
 Recommends:     libreoffice-writer
@@ -116,6 +121,10 @@ affiliated with Microsoft.
 %{_userunitdir}/plasma-graphmail-linux.service
 
 %changelog
+* Mon Nov 23 2026 nvaert1986 <25772781+nvaert1986@users.noreply.github.com> - 0.14.4-1
+- Search: every word a prefix, Microsoft 365's hits for mail not stored locally, Best Match First;
+  spelling language box with automatic detection; colleagues' calendars and free/busy refreshed
+
 * Thu Nov 19 2026 nvaert1986 <25772781+nvaert1986@users.noreply.github.com> - 0.14.3-1
 - Reply, Reply All, Forward and More buttons in the reading pane; quick buttons on a hovered mail
   (read/unread, delete, archive, flag; the gear chooses); a sent draft no longer shows its old body

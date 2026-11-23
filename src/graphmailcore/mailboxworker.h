@@ -178,6 +178,17 @@ private:
     void addFolder(qint64 folder);
     // Answers a query with the message ids of every page of a list (search, search folder)
     void answerIds(quint64 request, const QString &firstUrl, int max);
+    // A calendar-only mailbox (a colleague's calendar): on Sync and every sharedCalendarFreshMs its
+    // calendars are read whole instead of through their delta links (0.14.4)
+    void freshenSharedCalendars(qint64 t);
+    static constexpr qint64 sharedCalendarFreshMs = 15LL * 60 * 1000;
+    qint64 m_calendarsFreshAt = 0;
+    bool m_freshenCalendars = false;
+    // Graph's hits that the cache does not have (older mail, a folder still in its first sync):
+    // up to maxSearchFill of them fetched and stored in their folder, so the app can list them
+    // (0.14.4; before, they were left out). done() runs when every fetch has answered
+    void fillMissingMessages(const QJsonArray &ids, const std::function<void()> &done);
+    static constexpr int maxSearchFill = 100;
     // One batch of the background fill; stops the timer when nothing is left
     void indexBodies();
     void addCollection(std::unique_ptr<CollectionSync> sync, PollClass pollClass);

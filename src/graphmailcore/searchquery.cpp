@@ -87,17 +87,18 @@ SearchQuery SearchQuery::parse(const QString &text)
     SearchQuery q;
     static const QStringList textFields{QStringLiteral("from"), QStringLiteral("to"), QStringLiteral("cc"), QStringLiteral("subject"), QStringLiteral("body")};
     static const QRegularExpression separator(QStringLiteral(":|>=|<="));
-    QString lastKind;
     const QStringList all = tokens(text);
     for (const QString &token : all) {
         const qsizetype at = token.indexOf(separator);
         const QString key = at > 0 ? token.left(at).toLower() : QString();
         const QString op = at > 0 ? (token.mid(at, 2) == QLatin1String(">=") || token.mid(at, 2) == QLatin1String("<=") ? token.mid(at, 2) : QStringLiteral(":")) : QString();
         const QString value = at > 0 ? unquoted(token.mid(at + op.size())) : QString();
-        lastKind.clear();
+        const bool quoted = at > 0 ? token.mid(at + op.size()).startsWith(QLatin1Char('"')) : token.startsWith(QLatin1Char('"'));
         if (textFields.contains(key) && op == QLatin1String(":") && hasText(value)) {
             q.fields[key].append(value);
-            lastKind = key;
+            if (quoted) {
+                q.exact.append(value);
+            }
         } else if ((key == QLatin1String("hasattachments") || key == QLatin1String("hasattachment")) && yesNo(value)) {
             q.attachments = yesNo(value);
         } else if ((key == QLatin1String("category") || key == QLatin1String("categories")) && op == QLatin1String(":") && !value.isEmpty()) {
@@ -123,11 +124,11 @@ SearchQuery SearchQuery::parse(const QString &text)
         } else if (hasText(unquoted(token))) {
             // Unknown keys ("re:", "http://...") are words like any other
             q.words.append(unquoted(token));
-            lastKind = QStringLiteral("word");
+            if (quoted) {
+                q.exact.append(unquoted(token));
+            }
         }
     }
-    // A last word without a closing quote or trailing space is still being typed
-    q.lastIsPrefix = !lastKind.isEmpty() && !text.isEmpty() && !text.back().isSpace() && !text.endsWith(QLatin1Char('"'));
     return q;
 }
 
@@ -148,13 +149,13 @@ QString SearchQuery::fts() const
     QStringList terms;
     // Which term is the one being typed: the last word, or the last value of the last field
     for (qsizetype i = 0; i < words.size(); ++i) {
-        terms.append(ftsString(words.at(i), lastIsPrefix && i == words.size() - 1 && fields.isEmpty()));
+        terms.append(ftsString(words.at(i), !exact.contains(words.at(i))));
     }
     const QStringList order = fieldOrder();
     for (const QString &field : order) {
         const QStringList values = fields.value(field);
         for (qsizetype i = 0; i < values.size(); ++i) {
-            terms.append(columns.value(field) + QStringLiteral(" : ") + ftsString(values.at(i), lastIsPrefix && words.isEmpty() && i == values.size() - 1));
+            terms.append(columns.value(field) + QStringLiteral(" : ") + ftsString(values.at(i), !exact.contains(values.at(i))));
         }
     }
     return terms.join(QLatin1Char(' '));

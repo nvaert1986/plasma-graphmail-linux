@@ -3,6 +3,7 @@
 
 #include "fakegraphserver.h"
 #include "mailboxworker.h"
+#include "store.h"
 #include "throttle.h"
 #include "tokenprovider.h"
 
@@ -95,6 +96,37 @@ private Q_SLOTS:
         worker.stop();
     }
 
+    // 0.14.4: a colleague's calendar-only mailbox is read whole again on Sync (a fresh chain with a
+    // start date), not only through its delta link
+    void calendarOnlyReadsWholeOnSync()
+    {
+        FakeGraphServer server;
+        server.handler = [&server](const FakeRequest &r) {
+            if (r.target.contains("/calendars?")) {
+                return jsonReply(200, R"({"value":[{"id":"C1","name":"Calendar","canEdit":false,"isDefaultCalendar":true,"owner":{"address":"abc@example.com"}}]})");
+            }
+            if (r.target.contains("calendarView/delta")) {
+                const QByteArray link = server.baseUrl().toUtf8() + "/users/abc/calendarView/delta?$deltatoken=t1";
+                return jsonReply(200, R"({"value":[],"@odata.deltaLink":")" + link + R"("})");
+            }
+            return jsonReply(404, R"({"error":{"code":"ErrorItemNotFound","message":"m"}})");
+        };
+        auto fresh = [&server] {
+            return std::count_if(server.requests.cbegin(), server.requests.cend(), [](const FakeRequest &r) {
+                return r.target.contains("calendarView/delta?startDateTime=");
+            });
+        };
+        MailboxWorker worker(calendarOnly(server), &tokens);
+        QSignalSpy status(&worker, &MailboxWorker::statusChanged);
+        worker.start();
+        QTRY_COMPARE_WITH_TIMEOUT(fresh(), 1, 10000);
+        QTRY_COMPARE_WITH_TIMEOUT(lastState(status), QStringLiteral("idle"), 10000);
+        worker.syncNow();
+        QTRY_COMPARE_WITH_TIMEOUT(fresh(), 2, 10000);
+        QTRY_COMPARE_WITH_TIMEOUT(lastState(status), QStringLiteral("idle"), 10000);
+        worker.stop();
+    }
+
     // The colleague takes the share away: Graph answers 404 ErrorItemNotFound. The worker says
     // "no access" and does not keep asking (the next try is an hour later)
     void calendarShareTakenAway()
@@ -159,6 +191,54 @@ private Q_SLOTS:
         QVERIFY(seen.value("PATCH").contains("/messageRules/R1 {\"isEnabled\":false}"));
         QVERIFY(seen.value("DELETE").contains("/messageRules/R1"));
         worker.stop();
+    }
+
+    // 0.14.4: Graph's search hits the cache does not have are fetched and stored in their folder, so
+    // the app lists them; a hit in a folder the cache does not know stays out
+    void searchStoresMissingHits()
+    {
+        FakeGraphServer server;
+        server.handler = [&server](const FakeRequest &r) {
+            const QByteArray base = server.baseUrl().toUtf8();
+            if (r.target.contains("/mailFolders/delta")) {
+                return jsonReply(200, R"({"value":[{"id":"F1","displayName":"Inbox","totalItemCount":0,"unreadItemCount":0}],"@odata.deltaLink":")" + base
+                                          + R"(/users/abc/mailFolders/delta?$deltatoken=t"})");
+            }
+            if (r.target.contains("/messages/delta") || (r.target.contains("/messages?") && r.target.contains("receivedDateTime"))) {
+                return jsonReply(200, R"({"value":[],"@odata.deltaLink":")" + base + R"(/users/abc/mailFolders/F1/messages/delta?$deltatoken=m"})");
+            }
+            if (r.target.contains("$search=")) {
+                return jsonReply(200, R"({"value":[{"id":"IMM1"},{"id":"IMM2"}]})");
+            }
+            if (r.target.contains("/messages/IMM1?")) {
+                return jsonReply(200, R"({"id":"IMM1","parentFolderId":"F1","subject":"Old invoice","receivedDateTime":"2020-01-02T03:04:05Z","changeKey":"k1"})");
+            }
+            if (r.target.contains("/messages/IMM2?")) {
+                return jsonReply(200, R"({"id":"IMM2","parentFolderId":"FX","subject":"Elsewhere","receivedDateTime":"2020-01-02T03:04:05Z","changeKey":"k2"})");
+            }
+            return jsonReply(404, R"({"error":{"code":"ErrorItemNotFound","message":"m"}})");
+        };
+        MailboxConfig config = calendarOnly(server);
+        config.mail = true;
+        config.calendar = false;
+        MailboxWorker worker(config, &tokens);
+        QSignalSpy status(&worker, &MailboxWorker::statusChanged);
+        QSignalSpy answers(&worker, &MailboxWorker::queryAnswered);
+        worker.start();
+        QTRY_COMPARE_WITH_TIMEOUT(lastState(status), QStringLiteral("idle"), 10000);
+        worker.query(1, QStringLiteral("search"), QStringLiteral(R"({"kql":"invoice","max":10})"));
+        QTRY_COMPARE_WITH_TIMEOUT(answers.size(), 1, 10000);
+        const QJsonObject answer = QJsonDocument::fromJson(answers.at(0).at(1).toString().toUtf8()).object();
+        QVERIFY(answer.value(QLatin1String("ok")).toBool());
+        QCOMPARE(answer.value(QLatin1String("ids")).toArray().size(), 2);
+        worker.stop();
+        Store store;
+        QString error;
+        QVERIFY2(store.open(config.cacheDir + QStringLiteral("/cache.db"), Store::Mode::ReadOnly, &error), qPrintable(error));
+        const std::optional<MessageRow> found = store.messageByGraphId(QStringLiteral("IMM1"));
+        QVERIFY(found);
+        QCOMPARE(found->subject, QStringLiteral("Old invoice"));
+        QVERIFY(!store.messageByGraphId(QStringLiteral("IMM2")));
     }
 
     // Imports (docs/PHASE9B.md): containers made or found, the default To Do list, items posted to

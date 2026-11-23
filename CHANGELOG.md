@@ -4,6 +4,34 @@ All notable changes to Graph Mail (plasma-graphmail-linux). The suite's apps sha
 (0.14 with plasma-graphcore-linux 0.14); the third number counts fixes. Fixes for a series go on its
 branch (`0.14`).
 
+## 0.14.4 (2026-11-23)
+
+**Added**
+- A spelling language box on the composer's formatting row. **Automatic** (the default) follows the
+  language you write in, also when KDE's own language detection is off; a language picked by hand
+  stays for that mail. The choice is remembered per sending mailbox.
+- Search: **Best Match First** in the search's Filters menu: mail with the words in the subject or
+  sender comes before mail that only mentions them. Off: the newest mail first, as before.
+- The packages recommend KDE's hunspell spell-check plugin and the Dutch and English dictionaries;
+  without a dictionary the language box says what to install.
+
+**Fixed**
+- Search matched only the last word as the start of a word, every earlier word had to be complete:
+  "fact jans" found nothing. Every word now matches as the start of a word ("factuur Jansen"); put a
+  word in quotes to match it whole.
+- Search lists Microsoft 365's hits for mail that is not stored on this computer (older mail, a
+  folder still copying) instead of leaving them out.
+- The free/busy times of colleagues who did not share their calendar were only fetched again when
+  the calendar was redrawn, at most every ten minutes, and never by Sync: Sync now fetches them, and
+  an open calendar window asks again every five minutes. When Microsoft 365 cannot be reached, the
+  times shown stay.
+- A colleague's calendar added as a calendar of its own (shared with you, without their mail)
+  could show nothing new after it was first copied, also not after Sync: it is now read whole on
+  Sync and every quarter of an hour, besides the quick check for changes.
+- Typing a font name in the composer's font box with text selected replaced the text from the second
+  letter on: every letter was applied as a font and put the cursor back in the text. The box now
+  keeps the cursor while you type and applies the font on Enter or a pick from its list.
+
 ## 0.14.3 (2026-11-19)
 
 **Added**

@@ -222,6 +222,8 @@ private:
     QLineEdit *m_subject;
     QListWidget *m_attachmentList;
     KPIMTextEdit::RichTextComposer *m_editor;
+    // The spelling language box (0.14.4)
+    class SpellLanguage *m_spell = nullptr;
     QSplitter *m_splitter;
     QWidget *m_quoteBox;
     QLabel *m_quoteHeader;

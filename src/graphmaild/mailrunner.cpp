@@ -102,7 +102,6 @@ QList<RunnerMatch> MailRunner::Match(const QString &query)
         return {};
     }
     SearchQuery search = SearchQuery::parse(text);
-    search.lastIsPrefix = true;
     if (search.fts().isEmpty()) {
         return {};
     }

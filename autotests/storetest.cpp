@@ -403,7 +403,9 @@ private Q_SLOTS:
         };
         QCOMPARE(subjects(QStringLiteral("ticket")), QStringList{a.subject});
         QCOMPARE(subjects(QStringLiteral("acm")), QStringList{a.subject}); // prefix while typing
-        QCOMPARE(subjects(QStringLiteral("acm ")), QStringList{}); // a finished word is not a prefix
+        QCOMPARE(subjects(QStringLiteral("acm ")), QStringList{a.subject}); // every word is a prefix (0.14.4)
+        QCOMPARE(subjects(QStringLiteral("supp clos")), QStringList{a.subject}); // also the first one
+        QCOMPARE(subjects(QStringLiteral("\"acm\"")), QStringList{}); // in quotes: the whole word
         QCOMPARE(subjects(QStringLiteral("support closure")), QStringList{a.subject}); // sender + subject, both required
         QCOMPARE(subjects(QStringLiteral("cafe")), QStringList{b.subject}); // diacritics ignored
         QCOMPARE(subjects(QStringLiteral("twelve")), QStringList{b.subject}); // preview
@@ -445,14 +447,16 @@ private Q_SLOTS:
         QCOMPARE(q.attachments, std::optional<bool>(true));
         QCOMPARE(q.unread, std::optional<bool>(true));
         QCOMPARE(q.receivedFrom, QDateTime(QDate(2026, 11, 1), QTime(0, 0)).toMSecsSinceEpoch());
-        QVERIFY(!q.lastIsPrefix);
+        QCOMPARE(q.exact, QStringList{QStringLiteral("quarterly report")});
         QCOMPARE(q.kql(), QStringLiteral("invoice AND from:jan AND subject:\"quarterly report\" AND hasattachments:true AND received>=2026-11-01"));
-        QVERIFY(q.fts().contains(QStringLiteral("{sender_name sender_address} : \"jan\"")));
-        // Typing: the last word is a prefix; unknown keys and URLs are plain words
+        QVERIFY(q.fts().contains(QStringLiteral("{sender_name sender_address} : \"jan\"*")));
+        QVERIFY(q.fts().contains(QStringLiteral("{subject} : \"quarterly report\" ")) || q.fts().endsWith(QStringLiteral("{subject} : \"quarterly report\"")));
+        // Every word is a prefix (0.14.4); unknown keys and URLs are plain words
         q = SearchQuery::parse(QStringLiteral("re:status http://x.example invo"));
         QCOMPARE(q.words, (QStringList{QStringLiteral("re:status"), QStringLiteral("http://x.example"), QStringLiteral("invo")}));
-        QVERIFY(q.lastIsPrefix);
-        QVERIFY(q.fts().endsWith(QStringLiteral("\"invo\"*")));
+        QCOMPARE(q.fts(), QStringLiteral("\"re:status\"* \"http://x.example\"* \"invo\"*"));
+        // A quoted word is matched whole
+        QCOMPARE(SearchQuery::parse(QStringLiteral("fact \"jansen\"")).fts(), QStringLiteral("\"fact\"* \"jansen\""));
         // Only filters: no MATCH at all
         q = SearchQuery::parse(QStringLiteral("isflagged:yes"));
         QVERIFY(q.fts().isEmpty());
@@ -480,6 +484,28 @@ private Q_SLOTS:
     }
 
     // Body text and recipients are searchable while the body is offline; filters and folders
+    // 0.14.4: best match first ranks a word in the subject above the same word in the preview, also
+    // when that mail is older; without it the newest comes first
+    void searchBestMatchFirst()
+    {
+        MessageRow older = makeMessage(QStringLiteral("old"), inbox, 1000, QStringLiteral("Invoice for November"));
+        MessageRow newer = makeMessage(QStringLiteral("new"), inbox, 5000, QStringLiteral("Lunch"));
+        newer.preview = QStringLiteral("and the invoice is attached somewhere below");
+        for (const MessageRow &m : {older, newer}) {
+            QCOMPARE(store.upsertMessage(m), Store::Upsert::Inserted);
+        }
+        SearchQuery q = SearchQuery::parse(QStringLiteral("invoice"));
+        QList<ListRow> rows = store.search(q, {}, 10);
+        QCOMPARE(rows.size(), 2);
+        QCOMPARE(rows.at(0).subject, QStringLiteral("Lunch"));
+        q.bestMatch = true;
+        rows = store.search(q, {}, 10);
+        QCOMPARE(rows.size(), 2);
+        QCOMPARE(rows.at(0).subject, QStringLiteral("Invoice for November"));
+        QVERIFY(rows.at(0).rank < rows.at(1).rank);
+        QVERIFY(rows.at(1).rank < 0);
+    }
+
     void searchBodiesRecipientsAndFilters()
     {
         MessageRow a = makeMessage(QStringLiteral("a"), inbox, 3000, QStringLiteral("Meeting notes"));
@@ -542,9 +568,9 @@ private Q_SLOTS:
 
     void ftsQueryEscaping()
     {
-        QCOMPARE(Store::ftsQuery(QStringLiteral("hello wor")), QStringLiteral("\"hello\" \"wor\"*"));
-        QCOMPARE(Store::ftsQuery(QStringLiteral("hello ")), QStringLiteral("\"hello\""));
-        QCOMPARE(Store::ftsQuery(QStringLiteral("say \"hi\"")), QStringLiteral("\"say\" \"\"\"hi\"\"\"*"));
+        QCOMPARE(Store::ftsQuery(QStringLiteral("hello wor")), QStringLiteral("\"hello\"* \"wor\"*"));
+        QCOMPARE(Store::ftsQuery(QStringLiteral("hello ")), QStringLiteral("\"hello\"*"));
+        QCOMPARE(Store::ftsQuery(QStringLiteral("say \"hi\"")), QStringLiteral("\"say\"* \"\"\"hi\"\"\""));
         QCOMPARE(Store::ftsQuery(QStringLiteral(" - & ")), QString());
         QCOMPARE(Store::ftsQuery(QString()), QString());
     }

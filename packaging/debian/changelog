@@ -1,3 +1,14 @@
+plasma-graphmail-linux (0.14.4-1) unstable; urgency=medium
+
+  * Search matches every word as a prefix, lists Microsoft 365's hits for
+    mail not stored locally and can sort by best match; a spelling
+    language box in the composer follows the language you write in;
+    colleagues' calendars and free/busy times are refreshed; typing in
+    the font box no longer replaces the selected text. More in
+    CHANGELOG.md.
+
+ -- nvaert1986 <25772781+nvaert1986@users.noreply.github.com>  Mon, 23 Nov 2026 16:00:00 +0100
+
 plasma-graphmail-linux (0.14.3-1) unstable; urgency=medium
 
   * Reply, Reply All, Forward and More buttons in the reading pane; quick

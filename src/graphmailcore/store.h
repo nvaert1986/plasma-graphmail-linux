@@ -97,6 +97,9 @@ struct ListRow {
     qint64 folder = 0;
     // The message's categories (names; their colours are the mailbox's master categories)
     QStringList categories;
+    // Only from search(SearchQuery) with words: how well it matches (FTS5 bm25, lower is better;
+    // a word in the subject or sender counts more than one in the text). 0: no word match
+    double rank = 0;
 };
 
 // A categories column (a JSON array of names) as a list

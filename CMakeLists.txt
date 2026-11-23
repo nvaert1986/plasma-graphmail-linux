@@ -4,7 +4,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 # The version follows the last finished phase (0.1.0 = phase 1), patch numbers for fixes
-project(plasma-graphmail-linux VERSION 0.14.3 LANGUAGES CXX)
+project(plasma-graphmail-linux VERSION 0.14.4 LANGUAGES CXX)
 
 # Same floor as plasma-onedrive-linux: the shared Graph library is built by both
 set(QT_MIN_VERSION "6.8.0")
@@ -59,6 +59,8 @@ if(GRAPHMAIL_KMIME_CREATE_POLICY)
 endif()
 find_package(KPim6Tnef REQUIRED)
 find_package(KPim6TextEdit REQUIRED)
+# The composer's spelling language: the dictionaries and the language guesser (0.14.4)
+find_package(KF6Sonnet ${KF_MIN_VERSION} REQUIRED)
 # The composer's emoji picker (KTextAddons, already there for KPim6TextEdit)
 find_package(KF6TextEmoticonsWidgets REQUIRED)
 # Holidays in the calendar (KDE's holiday regions)
