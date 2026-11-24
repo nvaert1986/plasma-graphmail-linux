@@ -130,6 +130,11 @@ private:
     QWidget *editEvent(const DisplayEvent &event, bool series);
     std::optional<DisplayEvent> testEvent(const QString &mailboxKey, qint64 id) const;
     void deleteEvent(const DisplayEvent &event);
+    // Dragging in the calendar (0.14.5): an editable event that is no meeting of someone else
+    bool canMove(const DisplayEvent &event) const;
+    // An event dragged to another time, day or length: a meeting of one's own asks first, as its
+    // attendees get an update; an occurrence of a series moves alone
+    void moveEvent(const DisplayEvent &event, const QDateTime &start, const QDateTime &end, bool allDay);
     void respond(const DisplayEvent &event, const QString &action, int sendMode);
     void setEventCategory(const DisplayEvent &event, const QString &name, bool on);
     // Colleagues' calendars (docs/PHASE7.md): shared ones are shown or added as a calendar-only

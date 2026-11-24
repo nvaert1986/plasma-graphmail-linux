@@ -355,6 +355,15 @@ bool Store::updateOperationPayload(qint64 id, const QString &payload)
     return q.exec() || fail(QStringLiteral("updateOperationPayload"), q.lastError().text());
 }
 
+bool Store::retargetOperations(const QString &from, const QString &to)
+{
+    QSqlQuery q(m_db);
+    q.prepare(QStringLiteral("UPDATE ops SET target = ? WHERE target = ? AND state = 0"));
+    q.addBindValue(to);
+    q.addBindValue(from);
+    return q.exec() || fail(QStringLiteral("retargetOperations"), q.lastError().text());
+}
+
 std::optional<OperationRow> Store::pendingOperation(const QString &target, const QString &kind) const
 {
     QSqlQuery q(m_db);

@@ -4,7 +4,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: plasma-graphmail-linux\n"
-"PO-Revision-Date: 2026-11-23 10:52+0100\n"
+"PO-Revision-Date: 2026-11-24 14:45+0100\n"
 "Last-Translator: plasma-graphmail-linux contributors\n"
 "Language-Team: Dutch\n"
 "Language: nl\n"
@@ -80,7 +80,9 @@ msgctxt "@info %1 a mailbox"
 msgid ""
 "You have no access to %1. Ask its owner or your administrator to share it "
 "with you."
-msgstr "U hebt geen toegang tot %1. Vraag de eigenaar of uw beheerder om het met u te delen."
+msgstr ""
+"U hebt geen toegang tot %1. Vraag de eigenaar of uw beheerder om het met u "
+"te delen."
 
 #: src/app/accesstext.cpp:22
 #, kde-format
@@ -88,7 +90,9 @@ msgctxt "@info %1 an address"
 msgid ""
 "You may not send as %1. Ask your administrator for Send As or Send on Behalf "
 "permission."
-msgstr "U mag niet verzenden als %1. Vraag uw beheerder om de machtiging Verzenden als of Verzenden namens."
+msgstr ""
+"U mag niet verzenden als %1. Vraag uw beheerder om de machtiging Verzenden "
+"als of Verzenden namens."
 
 #: src/app/accesstext.cpp:25
 #, kde-format
@@ -96,20 +100,26 @@ msgctxt "@info %1 an address"
 msgid ""
 "A calendar cannot be shared with %1: Exchange shares calendars only with "
 "people, not with shared mailboxes or groups."
-msgstr "Een agenda kan niet worden gedeeld met %1: Exchange deelt agenda's alleen met personen, niet met gedeelde postvakken of groepen."
+msgstr ""
+"Een agenda kan niet worden gedeeld met %1: Exchange deelt agenda's alleen "
+"met personen, niet met gedeelde postvakken of groepen."
 
 #: src/app/accesstext.cpp:28
 #, kde-format
 msgctxt "@info"
 msgid "Microsoft 365 could not be reached. Check the connection and try again."
-msgstr "Microsoft 365 is niet bereikbaar. Controleer de verbinding en probeer het opnieuw."
+msgstr ""
+"Microsoft 365 is niet bereikbaar. Controleer de verbinding en probeer het "
+"opnieuw."
 
 #: src/app/accesstext.cpp:31
 #, kde-format
 msgctxt "@info %1 a calendar"
 msgid ""
 "You can only view %1: its owner did not give you permission to change it."
-msgstr "U kunt %1 alleen bekijken: de eigenaar heeft u geen machtiging gegeven om deze te wijzigen."
+msgstr ""
+"U kunt %1 alleen bekijken: de eigenaar heeft u geen machtiging gegeven om "
+"deze te wijzigen."
 
 #: src/app/accesstext.cpp:33
 #, kde-format
@@ -183,7 +193,9 @@ msgctxt "@info"
 msgid ""
 "PDF files are previewed with Okular. Install Okular (the package \"okular\") "
 "to see them here, or use Open."
-msgstr "Van PDF-bestanden wordt een voorbeeld getoond met Okular. Installeer Okular (het pakket \"okular\") om ze hier te zien, of gebruik Openen."
+msgstr ""
+"Van PDF-bestanden wordt een voorbeeld getoond met Okular. Installeer Okular "
+"(het pakket \"okular\") om ze hier te zien, of gebruik Openen."
 
 #: src/app/attachmentpreview.cpp:161
 #, kde-format
@@ -193,7 +205,12 @@ msgid ""
 "(the package \"libreoffice\") and Okular, and are turned on under Settings > "
 "Preview Office Documents with LibreOffice. Open shows the file in the "
 "program you use for it, such as OnlyOffice or Microsoft 365 on the web."
-msgstr "Voorbeelden van Word-, Excel- en PowerPoint-bestanden staan uit. Ze hebben LibreOffice (het pakket \"libreoffice\") en Okular nodig en worden aangezet onder Instellingen > Voorbeeld van Office-documenten met LibreOffice. Openen toont het bestand in het programma dat u ervoor gebruikt, zoals OnlyOffice of Microsoft 365 op het web."
+msgstr ""
+"Voorbeelden van Word-, Excel- en PowerPoint-bestanden staan uit. Ze hebben "
+"LibreOffice (het pakket \"libreoffice\") en Okular nodig en worden aangezet "
+"onder Instellingen > Voorbeeld van Office-documenten met LibreOffice. Openen "
+"toont het bestand in het programma dat u ervoor gebruikt, zoals OnlyOffice "
+"of Microsoft 365 op het web."
 
 #: src/app/attachmentpreview.cpp:165
 #, kde-format
@@ -202,7 +219,10 @@ msgid ""
 "Previews of Word, Excel and PowerPoint files need LibreOffice (the package "
 "\"libreoffice\") and Okular (the package \"okular\"). Install what is "
 "missing, or use Open."
-msgstr "Voorbeelden van Word-, Excel- en PowerPoint-bestanden hebben LibreOffice (het pakket \"libreoffice\") en Okular (het pakket \"okular\") nodig. Installeer wat ontbreekt, of gebruik Openen."
+msgstr ""
+"Voorbeelden van Word-, Excel- en PowerPoint-bestanden hebben LibreOffice "
+"(het pakket \"libreoffice\") en Okular (het pakket \"okular\") nodig. "
+"Installeer wat ontbreekt, of gebruik Openen."
 
 #: src/app/attachmentpreview.cpp:172
 #, kde-format
@@ -210,7 +230,9 @@ msgctxt "@info"
 msgid ""
 "There is no preview for this kind of file. Open it with another program "
 "instead."
-msgstr "Voor dit soort bestand is er geen voorbeeld. Open het in plaats daarvan met een ander programma."
+msgstr ""
+"Voor dit soort bestand is er geen voorbeeld. Open het in plaats daarvan met "
+"een ander programma."
 
 #: src/app/attachmentpreview.cpp:204
 #, kde-format
@@ -222,7 +244,9 @@ msgstr "Het voorbeeld kon niet worden gemaakt."
 #, kde-format
 msgctxt "@info"
 msgid "Okular could not be loaded for the preview. Use Open instead."
-msgstr "Okular kon niet worden geladen voor het voorbeeld. Gebruik in plaats daarvan Openen."
+msgstr ""
+"Okular kon niet worden geladen voor het voorbeeld. Gebruik in plaats daarvan "
+"Openen."
 
 #: src/app/attachmentpreview.cpp:227
 #, kde-format
@@ -235,7 +259,9 @@ msgstr "Het voorbeeld wordt met LibreOffice gemaakt..."
 msgctxt "@info"
 msgid ""
 "LibreOffice could not make a preview of this document. Use Open instead."
-msgstr "LibreOffice kon geen voorbeeld van dit document maken. Gebruik in plaats daarvan Openen."
+msgstr ""
+"LibreOffice kon geen voorbeeld van dit document maken. Gebruik in plaats "
+"daarvan Openen."
 
 #: src/app/attachmentstrip.cpp:66
 #, kde-format
@@ -249,7 +275,9 @@ msgctxt "@info:tooltip attachment name, size"
 msgid ""
 "%1 (%2)\n"
 "Open it, or right-click to save"
-msgstr "%1 (%2)\nOpen de bijlage, of klik met rechts om op te slaan"
+msgstr ""
+"%1 (%2)\n"
+"Open de bijlage, of klik met rechts om op te slaan"
 
 #: src/app/attachmentstrip.cpp:72
 #, kde-format
@@ -263,7 +291,7 @@ msgctxt "@action:inmenu"
 msgid "Preview"
 msgstr "Voorbeeld"
 
-#: src/app/attachmentstrip.cpp:101 src/app/calendarwindow.cpp:1342
+#: src/app/attachmentstrip.cpp:101 src/app/calendarwindow.cpp:1389
 #: src/app/tnefdialog.cpp:75
 #, kde-format
 msgctxt "@action:inmenu"
@@ -446,7 +474,7 @@ msgctxt "@item free/busy"
 msgid "Working elsewhere"
 msgstr "Werkt elders"
 
-#: src/app/calendarexport.cpp:68 src/app/calendarwindow.cpp:846
+#: src/app/calendarexport.cpp:68 src/app/calendarwindow.cpp:850
 #, kde-format
 msgctxt "@title:window"
 msgid "Export Calendar"
@@ -458,7 +486,7 @@ msgctxt "@label:listbox"
 msgid "Calendar:"
 msgstr "Agenda:"
 
-#: src/app/calendarexport.cpp:82 src/app/mainwindow.cpp:843
+#: src/app/calendarexport.cpp:82 src/app/mainwindow.cpp:849
 #, kde-format
 msgctxt "@label:chooser"
 msgid "From:"
@@ -476,7 +504,9 @@ msgctxt "@info"
 msgid ""
 "Only what this computer has of the calendar goes into the file (see Offline "
 "Settings)."
-msgstr "Alleen wat deze computer van de agenda heeft gaat in het bestand (zie Offline-instellingen)."
+msgstr ""
+"Alleen wat deze computer van de agenda heeft gaat in het bestand (zie "
+"Offline-instellingen)."
 
 #: src/app/calendaroptions.cpp:134
 #, kde-format
@@ -594,7 +624,9 @@ msgctxt "@info"
 msgid ""
 "These settings are kept on this computer. The reminders apply to new events, "
 "not to invitations you receive."
-msgstr "Deze instellingen worden op deze computer bewaard. De herinneringen gelden voor nieuwe afspraken, niet voor uitnodigingen die u ontvangt."
+msgstr ""
+"Deze instellingen worden op deze computer bewaard. De herinneringen gelden "
+"voor nieuwe afspraken, niet voor uitnodigingen die u ontvangt."
 
 #: src/app/calendarsharingdialog.cpp:47
 #, kde-format
@@ -673,14 +705,14 @@ msgstr "Delen: %1"
 #: src/app/calendarsharingdialog.cpp:94
 #, kde-format
 msgctxt "@title:column"
-msgid "Person"
-msgstr "Persoon"
+msgid "Permission"
+msgstr "Machtiging"
 
 #: src/app/calendarsharingdialog.cpp:94
 #, kde-format
 msgctxt "@title:column"
-msgid "Permission"
-msgstr "Machtiging"
+msgid "Person"
+msgstr "Persoon"
 
 #: src/app/calendarsharingdialog.cpp:99
 #, kde-format
@@ -749,37 +781,37 @@ msgctxt "@info %1 a person"
 msgid "No longer shared with %1."
 msgstr "Niet meer gedeeld met %1."
 
-#: src/app/calendarviews.cpp:86
+#: src/app/calendarviews.cpp:87 src/app/calendarwindow.cpp:1294
 #, kde-format
 msgctxt "@item an event without a subject"
 msgid "(no subject)"
 msgstr "(geen onderwerp)"
 
-#: src/app/calendarviews.cpp:112
+#: src/app/calendarviews.cpp:113
 #, kde-format
 msgctxt "@info an event lasting the whole day"
 msgid "All day"
 msgstr "Hele dag"
 
-#: src/app/calendarviews.cpp:113
+#: src/app/calendarviews.cpp:114
 #, kde-format
 msgctxt "@info an all-day event over several days"
 msgid "%1 - %2"
 msgstr "%1 - %2"
 
-#: src/app/calendarviews.cpp:120
+#: src/app/calendarviews.cpp:121
 #, kde-format
 msgctxt "@info event time over several days"
 msgid "%1 %2 - %3 %4"
 msgstr "%1 %2 - %3 %4"
 
-#: src/app/calendarviews.cpp:124
+#: src/app/calendarviews.cpp:125
 #, kde-format
 msgctxt "@info event start and end time"
 msgid "%1 - %2"
 msgstr "%1 - %2"
 
-#: src/app/calendarviews.cpp:901
+#: src/app/calendarviews.cpp:1254
 #, kde-format
 msgctxt "@info month view"
 msgid "%1 more"
@@ -787,29 +819,29 @@ msgid_plural "%1 more"
 msgstr[0] "nog %1"
 msgstr[1] "nog %1"
 
-#: src/app/calendarviews.cpp:1008
-#, kde-format
-msgctxt "@title:column"
-msgid "Time"
-msgstr "Tijd"
-
-#: src/app/calendarviews.cpp:1008
-#, kde-format
-msgctxt "@title:column"
-msgid "Subject"
-msgstr "Onderwerp"
-
-#: src/app/calendarviews.cpp:1008
+#: src/app/calendarviews.cpp:1428
 #, kde-format
 msgctxt "@title:column"
 msgid "Location"
 msgstr "Locatie"
 
-#: src/app/calendarviews.cpp:1008
+#: src/app/calendarviews.cpp:1428
 #, kde-format
 msgctxt "@title:column"
 msgid "Organizer"
 msgstr "Organisator"
+
+#: src/app/calendarviews.cpp:1428
+#, kde-format
+msgctxt "@title:column"
+msgid "Subject"
+msgstr "Onderwerp"
+
+#: src/app/calendarviews.cpp:1428
+#, kde-format
+msgctxt "@title:column"
+msgid "Time"
+msgstr "Tijd"
 
 #: src/app/calendarwindow.cpp:87
 #, kde-format
@@ -826,514 +858,549 @@ msgstr "Delen..."
 #: src/app/calendarwindow.cpp:122
 #, kde-format
 msgctxt "@action:inmenu"
-msgid "Remove from My Calendars"
-msgstr "Uit mijn agenda's verwijderen"
+msgid "Remove from Graph Mail"
+msgstr "Uit Graph Mail verwijderen"
 
 #: src/app/calendarwindow.cpp:122
 #, kde-format
 msgctxt "@action:inmenu"
-msgid "Remove from Graph Mail"
-msgstr "Uit Graph Mail verwijderen"
+msgid "Remove from My Calendars"
+msgstr "Uit mijn agenda's verwijderen"
 
-#: src/app/calendarwindow.cpp:227
+#: src/app/calendarwindow.cpp:231
 #, kde-format
 msgctxt "@info:status"
 msgid "Exchange did not accept a change: %1"
 msgstr "Exchange heeft een wijziging niet geaccepteerd: %1"
 
-#: src/app/calendarwindow.cpp:280
+#: src/app/calendarwindow.cpp:284
 #, kde-format
 msgctxt "@action"
 msgid "New Event"
 msgstr "Nieuwe afspraak"
 
-#: src/app/calendarwindow.cpp:281 src/app/contactswindow.cpp:291
-#: src/app/mainwindow.cpp:964 src/app/taskswindow.cpp:321
+#: src/app/calendarwindow.cpp:285 src/app/contactswindow.cpp:291
+#: src/app/mainwindow.cpp:970 src/app/taskswindow.cpp:321
 #, kde-format
 msgctxt "@action short toolbar text"
 msgid "New"
 msgstr "Nieuw"
 
-#: src/app/calendarwindow.cpp:291
+#: src/app/calendarwindow.cpp:295
 #, kde-format
 msgctxt "@action"
 msgid "New Meeting"
 msgstr "Nieuwe vergadering"
 
-#: src/app/calendarwindow.cpp:302
+#: src/app/calendarwindow.cpp:306
 #, kde-format
 msgctxt "@action"
 msgid "Join Teams Meeting"
 msgstr "Deelnemen aan Teams-vergadering"
 
-#: src/app/calendarwindow.cpp:303
+#: src/app/calendarwindow.cpp:307
 #, kde-format
 msgctxt "@action short toolbar text"
 msgid "Join"
 msgstr "Deelnemen"
 
-#: src/app/calendarwindow.cpp:315
+#: src/app/calendarwindow.cpp:319
 #, kde-format
 msgctxt "@action"
 msgid "Today"
 msgstr "Vandaag"
 
-#: src/app/calendarwindow.cpp:322
+#: src/app/calendarwindow.cpp:326
 #, kde-format
 msgctxt "@action"
 msgid "Previous"
 msgstr "Vorige"
 
-#: src/app/calendarwindow.cpp:329
+#: src/app/calendarwindow.cpp:333
 #, kde-format
 msgctxt "@action"
 msgid "Next"
 msgstr "Volgende"
 
-#: src/app/calendarwindow.cpp:343
+#: src/app/calendarwindow.cpp:347
 #, kde-format
 msgctxt "@action"
 msgid "Day"
 msgstr "Dag"
 
-#: src/app/calendarwindow.cpp:344
+#: src/app/calendarwindow.cpp:348
 #, kde-format
 msgctxt "@action"
 msgid "Work Week"
 msgstr "Werkweek"
 
-#: src/app/calendarwindow.cpp:345
+#: src/app/calendarwindow.cpp:349
 #, kde-format
 msgctxt "@action"
 msgid "Week"
 msgstr "Week"
 
-#: src/app/calendarwindow.cpp:346
+#: src/app/calendarwindow.cpp:350
 #, kde-format
 msgctxt "@action"
 msgid "Month"
 msgstr "Maand"
 
-#: src/app/calendarwindow.cpp:347
+#: src/app/calendarwindow.cpp:351
 #, kde-format
 msgctxt "@action"
 msgid "Agenda"
 msgstr "Lijst"
 
-#: src/app/calendarwindow.cpp:364 src/app/contactswindow.cpp:320
+#: src/app/calendarwindow.cpp:368 src/app/contactswindow.cpp:320
 #: src/app/taskswindow.cpp:340
 #, kde-format
 msgctxt "@action"
 msgid "Mail"
 msgstr "E-mail"
 
-#: src/app/calendarwindow.cpp:375 src/app/mainwindow.cpp:1016
+#: src/app/calendarwindow.cpp:379 src/app/mainwindow.cpp:1022
 #: src/app/taskswindow.cpp:342
 #, kde-format
 msgctxt "@action"
 msgid "Contacts"
 msgstr "Contactpersonen"
 
-#: src/app/calendarwindow.cpp:375 src/app/contactswindow.cpp:322
-#: src/app/mainwindow.cpp:1021
+#: src/app/calendarwindow.cpp:379 src/app/contactswindow.cpp:322
+#: src/app/mainwindow.cpp:1027
 #, kde-format
 msgctxt "@action"
 msgid "Tasks"
 msgstr "Taken"
 
-#: src/app/calendarwindow.cpp:388 src/app/mainwindow.cpp:501
+#: src/app/calendarwindow.cpp:392 src/app/mainwindow.cpp:507
 #, kde-format
 msgctxt "@action"
 msgid "Sync"
 msgstr "Synchroniseren"
 
-#: src/app/calendarwindow.cpp:400
+#: src/app/calendarwindow.cpp:404
 #, kde-format
 msgctxt "@action"
 msgid "Delete Event"
 msgstr "Afspraak verwijderen"
 
-#: src/app/calendarwindow.cpp:410
+#: src/app/calendarwindow.cpp:414
 #, kde-format
 msgctxt "@action"
 msgid "Show Week Numbers"
 msgstr "Weeknummers tonen"
 
-#: src/app/calendarwindow.cpp:420
+#: src/app/calendarwindow.cpp:424
 #, kde-format
 msgctxt "@action"
 msgid "Delete Meeting Requests After Responding"
 msgstr "Vergaderverzoeken verwijderen na beantwoorden"
 
-#: src/app/calendarwindow.cpp:429
+#: src/app/calendarwindow.cpp:433
 #, kde-format
 msgctxt "@action"
 msgid "Calendar Options..."
 msgstr "Agenda-opties..."
 
-#: src/app/calendarwindow.cpp:439
+#: src/app/calendarwindow.cpp:443
 #, kde-format
 msgctxt "@action"
 msgid "Second Time Zone..."
 msgstr "Tweede tijdzone..."
 
-#: src/app/calendarwindow.cpp:444
+#: src/app/calendarwindow.cpp:448
 #, kde-format
 msgctxt "@action"
 msgid "Add a Colleague's Calendar..."
 msgstr "Agenda van een collega toevoegen..."
 
-#: src/app/calendarwindow.cpp:450
+#: src/app/calendarwindow.cpp:454
 #, kde-format
 msgctxt "@action"
 msgid "Import Calendar File..."
 msgstr "Agendabestand importeren..."
 
-#: src/app/calendarwindow.cpp:453
+#: src/app/calendarwindow.cpp:457
 #, kde-format
 msgctxt "@title:window"
 msgid "Import Calendar File"
 msgstr "Agendabestand importeren"
 
-#: src/app/calendarwindow.cpp:454
+#: src/app/calendarwindow.cpp:458
 #, kde-format
 msgctxt "@item:inlistbox file type"
 msgid "Calendar files (*.ics *.ical *.ifb)"
 msgstr "Agendabestanden (*.ics *.ical *.ifb)"
 
-#: src/app/calendarwindow.cpp:461
+#: src/app/calendarwindow.cpp:465
 #, kde-format
 msgctxt "@info"
 msgid "There are no events in this file."
 msgstr "Dit bestand bevat geen afspraken."
 
-#: src/app/calendarwindow.cpp:465
+#: src/app/calendarwindow.cpp:469
 #, kde-format
 msgctxt "@action"
 msgid "Export Calendar..."
 msgstr "Agenda exporteren..."
 
-#: src/app/calendarwindow.cpp:519
+#: src/app/calendarwindow.cpp:523
 #, kde-format
 msgctxt "@info:tooltip %1 the owner"
 msgid "%1 (read only)"
 msgstr "%1 (alleen lezen)"
 
-#: src/app/calendarwindow.cpp:759
+#: src/app/calendarwindow.cpp:763
 #, kde-format
 msgctxt "@title days of one month"
 msgid "%1 - %2"
 msgstr "%1 - %2"
 
-#: src/app/calendarwindow.cpp:761
+#: src/app/calendarwindow.cpp:765
 #, kde-format
 msgctxt "@title a range of days"
 msgid "%1 - %2"
 msgstr "%1 - %2"
 
-#: src/app/calendarwindow.cpp:765
+#: src/app/calendarwindow.cpp:769
 #, kde-format
 msgctxt "@title %1 days, %2 a week number"
 msgid "%1 (week %2)"
 msgstr "%1 (week %2)"
 
-#: src/app/calendarwindow.cpp:847
+#: src/app/calendarwindow.cpp:851
 #, kde-format
 msgctxt "@item:inlistbox file type"
 msgid "Calendar files (*.ics)"
 msgstr "Agendabestanden (*.ics)"
 
-#: src/app/calendarwindow.cpp:864 src/app/readingpane.cpp:689
+#: src/app/calendarwindow.cpp:868 src/app/readingpane.cpp:689
 #, kde-format
 msgctxt "@info"
 msgid "Could not save %1: %2"
 msgstr "Kan %1 niet opslaan: %2"
 
-#: src/app/calendarwindow.cpp:921
+#: src/app/calendarwindow.cpp:925
 #, kde-format
 msgctxt "@title:window"
 msgid "Second Time Zone"
 msgstr "Tweede tijdzone"
 
-#: src/app/calendarwindow.cpp:922
+#: src/app/calendarwindow.cpp:926
 #, kde-format
 msgctxt "@option:check"
 msgid "Show a second time zone"
 msgstr "Een tweede tijdzone tonen"
 
-#: src/app/calendarwindow.cpp:946
+#: src/app/calendarwindow.cpp:950
 #, kde-format
 msgctxt "@info:placeholder"
 msgid "Shown above its hours, e.g. New York"
 msgstr "Getoond boven de uren, bijv. New York"
 
-#: src/app/calendarwindow.cpp:959 src/app/mailboxsettingsdialog.cpp:94
+#: src/app/calendarwindow.cpp:963 src/app/mailboxsettingsdialog.cpp:94
 #: src/app/mailboxsettingsdialog.cpp:111
 #, kde-format
 msgctxt "@label:listbox"
 msgid "Time zone:"
 msgstr "Tijdzone:"
 
-#: src/app/calendarwindow.cpp:960
+#: src/app/calendarwindow.cpp:964
 #, kde-format
 msgctxt "@label:textbox"
 msgid "Label:"
 msgstr "Label:"
 
-#: src/app/calendarwindow.cpp:961
+#: src/app/calendarwindow.cpp:965
 #, kde-format
 msgctxt "@label:textbox"
 msgid "Label of your own time zone:"
 msgstr "Label van uw eigen tijdzone:"
 
-#: src/app/calendarwindow.cpp:1006
+#: src/app/calendarwindow.cpp:1010
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "New Event"
 msgstr "Nieuwe afspraak"
 
-#: src/app/calendarwindow.cpp:1009
+#: src/app/calendarwindow.cpp:1013
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "New All-Day Event"
 msgstr "Nieuwe afspraak voor de hele dag"
 
-#: src/app/calendarwindow.cpp:1013
+#: src/app/calendarwindow.cpp:1017
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "New Meeting"
 msgstr "Nieuwe vergadering"
 
-#: src/app/calendarwindow.cpp:1138
+#: src/app/calendarwindow.cpp:1142
 #, kde-format
 msgctxt "@title:window"
 msgid "Delete Recurring Event"
 msgstr "Terugkerende afspraak verwijderen"
 
-#: src/app/calendarwindow.cpp:1138
+#: src/app/calendarwindow.cpp:1142
 #, kde-format
 msgctxt "@title:window"
 msgid "Open Recurring Event"
 msgstr "Terugkerende afspraak openen"
 
-#: src/app/calendarwindow.cpp:1139
+#: src/app/calendarwindow.cpp:1143
 #, kde-format
 msgctxt "@info"
 msgid "\"%1\" is a recurring event."
 msgstr "\"%1\" is een terugkerende afspraak."
 
-#: src/app/calendarwindow.cpp:1140
+#: src/app/calendarwindow.cpp:1144
 #, kde-format
 msgctxt "@option:radio"
 msgid "Delete this occurrence"
 msgstr "Dit exemplaar verwijderen"
 
-#: src/app/calendarwindow.cpp:1140
+#: src/app/calendarwindow.cpp:1144
 #, kde-format
 msgctxt "@option:radio"
 msgid "Open this occurrence"
 msgstr "Dit exemplaar openen"
 
-#: src/app/calendarwindow.cpp:1141
+#: src/app/calendarwindow.cpp:1145
 #, kde-format
 msgctxt "@option:radio"
 msgid "Delete the series"
 msgstr "De reeks verwijderen"
 
-#: src/app/calendarwindow.cpp:1141
+#: src/app/calendarwindow.cpp:1145
 #, kde-format
 msgctxt "@option:radio"
 msgid "Open the series"
 msgstr "De reeks openen"
 
-#: src/app/calendarwindow.cpp:1160
+#: src/app/calendarwindow.cpp:1164
 #, kde-format
 msgctxt "@info"
 msgid ""
 "The series of this event is not in the calendar yet. Try again after the "
 "next sync."
-msgstr "De reeks van deze afspraak staat nog niet in de agenda. Probeer het opnieuw na de volgende synchronisatie."
+msgstr ""
+"De reeks van deze afspraak staat nog niet in de agenda. Probeer het opnieuw "
+"na de volgende synchronisatie."
 
-#: src/app/calendarwindow.cpp:1199
-#, kde-format
-msgctxt "@info"
-msgid "Delete every occurrence of \"%1\"?"
-msgstr "Alle exemplaren van \"%1\" verwijderen?"
-
-#: src/app/calendarwindow.cpp:1199
+#: src/app/calendarwindow.cpp:1203
 #, kde-format
 msgctxt "@title:window"
 msgid "Delete Series"
 msgstr "Reeks verwijderen"
 
-#: src/app/calendarwindow.cpp:1295
+#: src/app/calendarwindow.cpp:1203
+#, kde-format
+msgctxt "@info"
+msgid "Delete every occurrence of \"%1\"?"
+msgstr "Alle exemplaren van \"%1\" verwijderen?"
+
+#: src/app/calendarwindow.cpp:1301
+#, kde-format
+msgctxt "@info %1 a day, %2 its times"
+msgid "%1, %2"
+msgstr "%1, %2"
+
+#: src/app/calendarwindow.cpp:1303
+#, kde-format
+msgctxt "@info"
+msgid ""
+"Move \"%1\" to %2?\n"
+"The attendees get an update with the new time."
+msgstr ""
+"\"%1\" verplaatsen naar %2?\n"
+"De deelnemers krijgen een update met de nieuwe tijd."
+
+#: src/app/calendarwindow.cpp:1304
+#, kde-format
+msgctxt "@title:window"
+msgid "Move Meeting"
+msgstr "Vergadering verplaatsen"
+
+#: src/app/calendarwindow.cpp:1305 src/app/eventdialog.cpp:697
+#, kde-format
+msgctxt "@action:button"
+msgid "Send Update"
+msgstr "Update verzenden"
+
+#: src/app/calendarwindow.cpp:1342
 #, kde-format
 msgctxt "@title:window"
 msgid "Cancel Meeting"
 msgstr "Vergadering annuleren"
 
-#: src/app/calendarwindow.cpp:1296
+#: src/app/calendarwindow.cpp:1343
 #, kde-format
 msgctxt "@label:textbox"
 msgid "The attendees get a cancellation. Message (optional):"
 msgstr "De deelnemers krijgen een annulering. Bericht (optioneel):"
 
-#: src/app/calendarwindow.cpp:1305
+#: src/app/calendarwindow.cpp:1352
 #, kde-format
 msgctxt "@info"
 msgid "Delete \"%1\"?"
 msgstr "\"%1\" verwijderen?"
 
-#: src/app/calendarwindow.cpp:1305
+#: src/app/calendarwindow.cpp:1352
 #, kde-format
 msgctxt "@title:window"
 msgid "Delete Event"
 msgstr "Afspraak verwijderen"
 
-#: src/app/calendarwindow.cpp:1316 src/app/calendarwindow.cpp:1385
-#: src/app/eventdialog.cpp:1032 src/app/readingpane.cpp:417
+#: src/app/calendarwindow.cpp:1363 src/app/calendarwindow.cpp:1432
+#: src/app/eventdialog.cpp:1041 src/app/readingpane.cpp:417
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Send the Response Now"
 msgstr "Het antwoord nu verzenden"
 
-#: src/app/calendarwindow.cpp:1317 src/app/calendarwindow.cpp:1388
-#: src/app/eventdialog.cpp:1033 src/app/readingpane.cpp:418
+#: src/app/calendarwindow.cpp:1364 src/app/calendarwindow.cpp:1435
+#: src/app/eventdialog.cpp:1042 src/app/readingpane.cpp:418
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Edit the Response Before Sending..."
 msgstr "Het antwoord bewerken voor verzenden..."
 
-#: src/app/calendarwindow.cpp:1318 src/app/calendarwindow.cpp:1391
-#: src/app/eventdialog.cpp:1034 src/app/readingpane.cpp:419
+#: src/app/calendarwindow.cpp:1365 src/app/calendarwindow.cpp:1438
+#: src/app/eventdialog.cpp:1043 src/app/readingpane.cpp:419
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Do Not Send a Response"
 msgstr "Geen antwoord verzenden"
 
-#: src/app/calendarwindow.cpp:1328 src/app/eventdialog.cpp:1042
-#: src/app/readingpane.cpp:429
-#, kde-format
-msgctxt "@title:window"
-msgid "Response"
-msgstr "Antwoord"
-
-#: src/app/calendarwindow.cpp:1328 src/app/eventdialog.cpp:1042
+#: src/app/calendarwindow.cpp:1375 src/app/eventdialog.cpp:1051
 #: src/app/readingpane.cpp:429
 #, kde-format
 msgctxt "@label:textbox"
 msgid "Message to the organizer:"
 msgstr "Bericht aan de organisator:"
 
-#: src/app/calendarwindow.cpp:1347
+#: src/app/calendarwindow.cpp:1375 src/app/eventdialog.cpp:1051
+#: src/app/readingpane.cpp:429
+#, kde-format
+msgctxt "@title:window"
+msgid "Response"
+msgstr "Antwoord"
+
+#: src/app/calendarwindow.cpp:1394
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Join Teams Meeting"
 msgstr "Deelnemen aan Teams-vergadering"
 
-#: src/app/calendarwindow.cpp:1353 src/app/mainwindow.cpp:2842
+#: src/app/calendarwindow.cpp:1400 src/app/mainwindow.cpp:2849
 #, kde-format
 msgctxt "@title:menu"
 msgid "Categorize"
 msgstr "Categoriseren"
 
-#: src/app/calendarwindow.cpp:1368 src/app/categorylist.cpp:120
-#: src/app/mainwindow.cpp:879 src/app/mainwindow.cpp:2755
+#: src/app/calendarwindow.cpp:1415 src/app/categorylist.cpp:120
+#: src/app/mainwindow.cpp:885 src/app/mainwindow.cpp:2761
 #, kde-format
 msgctxt "@item:inmenu"
 msgid "(no categories)"
 msgstr "(geen categorieën)"
 
-#: src/app/calendarwindow.cpp:1379
+#: src/app/calendarwindow.cpp:1426
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Accept"
 msgstr "Accepteren"
 
-#: src/app/calendarwindow.cpp:1380
+#: src/app/calendarwindow.cpp:1427
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Tentative"
 msgstr "Voorlopig"
 
-#: src/app/calendarwindow.cpp:1381
+#: src/app/calendarwindow.cpp:1428
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Decline"
 msgstr "Weigeren"
 
-#: src/app/calendarwindow.cpp:1396
+#: src/app/calendarwindow.cpp:1443
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Propose New Time..."
 msgstr "Nieuwe tijd voorstellen..."
 
-#: src/app/calendarwindow.cpp:1406
+#: src/app/calendarwindow.cpp:1453
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Delete"
 msgstr "Verwijderen"
 
-#: src/app/calendarwindow.cpp:1470
+#: src/app/calendarwindow.cpp:1517
 #, kde-format
 msgctxt "@info %1 a person"
 msgid ""
 "%1 has not shared their calendar with you: their free/busy times are shown."
-msgstr "%1 heeft de agenda niet met u gedeeld: de beschikbaarheid wordt getoond."
+msgstr ""
+"%1 heeft de agenda niet met u gedeeld: de beschikbaarheid wordt getoond."
 
-#: src/app/calendarwindow.cpp:1480
+#: src/app/calendarwindow.cpp:1527
 #, kde-format
 msgctxt "@info %1 a person"
 msgid "%1's calendar is shown."
 msgstr "De agenda van %1 wordt getoond."
 
-#: src/app/calendarwindow.cpp:1496
+#: src/app/calendarwindow.cpp:1543
 #, kde-format
 msgctxt "@info %1 a person"
 msgid "%1's calendar was added; Graph Mail is copying it now."
 msgstr "De agenda van %1 is toegevoegd; Graph Mail kopieert deze nu."
 
-#: src/app/calendarwindow.cpp:1505
+#: src/app/calendarwindow.cpp:1552
 #, kde-format
 msgctxt "@title:window"
 msgid "Add a Colleague's Calendar"
 msgstr "Agenda van een collega toevoegen"
 
-#: src/app/calendarwindow.cpp:1508
+#: src/app/calendarwindow.cpp:1555
 #, kde-format
 msgctxt "@info:placeholder"
 msgid "Name or address of a colleague"
 msgstr "Naam of adres van een collega"
 
-#: src/app/calendarwindow.cpp:1509
+#: src/app/calendarwindow.cpp:1556
 #, kde-format
 msgctxt "@info"
 msgid ""
 "Graph Mail shows their calendar if it is shared with you, else when they are "
 "free or busy."
-msgstr "Graph Mail toont de agenda als die met u gedeeld is, anders wanneer de collega vrij of bezet is."
+msgstr ""
+"Graph Mail toont de agenda als die met u gedeeld is, anders wanneer de "
+"collega vrij of bezet is."
 
-#: src/app/calendarwindow.cpp:1525
+#: src/app/calendarwindow.cpp:1572
 #, kde-format
 msgctxt "@info:status"
 msgid "Looking up %1..."
 msgstr "Bezig met opzoeken van %1..."
 
-#: src/app/calendarwindow.cpp:1543
+#: src/app/calendarwindow.cpp:1590
 #, kde-format
 msgctxt "@info %1 a calendar"
 msgid ""
 "Remove %1 from your calendars? It also leaves your calendar list in Outlook; "
 "the calendar itself stays with its owner."
-msgstr "%1 uit uw agenda's verwijderen? De agenda verdwijnt ook uit uw agendalijst in Outlook; de agenda zelf blijft bij de eigenaar."
+msgstr ""
+"%1 uit uw agenda's verwijderen? De agenda verdwijnt ook uit uw agendalijst "
+"in Outlook; de agenda zelf blijft bij de eigenaar."
 
-#: src/app/calendarwindow.cpp:1545
+#: src/app/calendarwindow.cpp:1592
 #, kde-format
 msgctxt "@info %1 a calendar"
 msgid "Remove %1 from Graph Mail? Nothing changes in Microsoft 365."
 msgstr "%1 uit Graph Mail verwijderen? In Microsoft 365 verandert er niets."
 
-#: src/app/calendarwindow.cpp:1546
+#: src/app/calendarwindow.cpp:1593
 #, kde-format
 msgctxt "@title:window"
 msgid "Remove Calendar"
@@ -1346,7 +1413,7 @@ msgid "New"
 msgstr "Nieuw"
 
 #: src/app/categoriesdialog.cpp:63 src/app/contactswindow.cpp:126
-#: src/app/eventdialog.cpp:251 src/app/mainwindow.cpp:2678
+#: src/app/eventdialog.cpp:251 src/app/mainwindow.cpp:2684
 #: src/app/quicksteps.cpp:124 src/app/rulesdialog.cpp:414
 #: src/app/signaturedialog.cpp:107 src/app/taskswindow.cpp:115
 #: src/app/waitingwindow.cpp:91
@@ -1400,14 +1467,14 @@ msgstr "Categorie verwijderen"
 #: src/app/categorylist.cpp:31
 #, kde-format
 msgctxt "@item category colour"
-msgid "Red"
-msgstr "Rood"
+msgid "Orange"
+msgstr "Oranje"
 
 #: src/app/categorylist.cpp:31
 #, kde-format
 msgctxt "@item category colour"
-msgid "Orange"
-msgstr "Oranje"
+msgid "Red"
+msgstr "Rood"
 
 #: src/app/categorylist.cpp:32
 #, kde-format
@@ -1436,20 +1503,14 @@ msgstr "Blauwgroen"
 #: src/app/categorylist.cpp:34
 #, kde-format
 msgctxt "@item category colour"
-msgid "Olive"
-msgstr "Olijfgroen"
+msgid "Blue"
+msgstr "Blauw"
 
 #: src/app/categorylist.cpp:34
 #, kde-format
 msgctxt "@item category colour"
-msgid "Blue"
-msgstr "Blauw"
-
-#: src/app/categorylist.cpp:35
-#, kde-format
-msgctxt "@item category colour"
-msgid "Purple"
-msgstr "Paars"
+msgid "Olive"
+msgstr "Olijfgroen"
 
 #: src/app/categorylist.cpp:35
 #, kde-format
@@ -1457,11 +1518,11 @@ msgctxt "@item category colour"
 msgid "Cranberry"
 msgstr "Cranberry"
 
-#: src/app/categorylist.cpp:36
+#: src/app/categorylist.cpp:35
 #, kde-format
 msgctxt "@item category colour"
-msgid "Steel"
-msgstr "Staal"
+msgid "Purple"
+msgstr "Paars"
 
 #: src/app/categorylist.cpp:36
 #, kde-format
@@ -1469,17 +1530,23 @@ msgctxt "@item category colour"
 msgid "Dark steel"
 msgstr "Donker staal"
 
-#: src/app/categorylist.cpp:37
+#: src/app/categorylist.cpp:36
 #, kde-format
 msgctxt "@item category colour"
-msgid "Grey"
-msgstr "Grijs"
+msgid "Steel"
+msgstr "Staal"
 
 #: src/app/categorylist.cpp:37
 #, kde-format
 msgctxt "@item category colour"
 msgid "Dark grey"
 msgstr "Donkergrijs"
+
+#: src/app/categorylist.cpp:37
+#, kde-format
+msgctxt "@item category colour"
+msgid "Grey"
+msgstr "Grijs"
 
 #: src/app/categorylist.cpp:38
 #, kde-format
@@ -1496,20 +1563,14 @@ msgstr "Donkerrood"
 #: src/app/categorylist.cpp:39
 #, kde-format
 msgctxt "@item category colour"
-msgid "Dark orange"
-msgstr "Donkeroranje"
+msgid "Dark brown"
+msgstr "Donkerbruin"
 
 #: src/app/categorylist.cpp:39
 #, kde-format
 msgctxt "@item category colour"
-msgid "Dark brown"
-msgstr "Donkerbruin"
-
-#: src/app/categorylist.cpp:40
-#, kde-format
-msgctxt "@item category colour"
-msgid "Dark yellow"
-msgstr "Donkergeel"
+msgid "Dark orange"
+msgstr "Donkeroranje"
 
 #: src/app/categorylist.cpp:40
 #, kde-format
@@ -1517,17 +1578,23 @@ msgctxt "@item category colour"
 msgid "Dark green"
 msgstr "Donkergroen"
 
-#: src/app/categorylist.cpp:41
+#: src/app/categorylist.cpp:40
 #, kde-format
 msgctxt "@item category colour"
-msgid "Dark teal"
-msgstr "Donkerblauwgroen"
+msgid "Dark yellow"
+msgstr "Donkergeel"
 
 #: src/app/categorylist.cpp:41
 #, kde-format
 msgctxt "@item category colour"
 msgid "Dark olive"
 msgstr "Donker olijfgroen"
+
+#: src/app/categorylist.cpp:41
+#, kde-format
+msgctxt "@item category colour"
+msgid "Dark teal"
+msgstr "Donkerblauwgroen"
 
 #: src/app/categorylist.cpp:42
 #, kde-format
@@ -1609,7 +1676,12 @@ msgid ""
 "own mailboxes. A folder can have its own setting or be left alone (Clean Up "
 "Settings in its menu). Messages flagged for follow-up stay. Deleted Items, "
 "Drafts, Outbox, Junk Email and the Archive folder are never touched."
-msgstr "E-mail ouder dan de gekozen leeftijd wordt opgeruimd in elke e-mailmap van uw eigen postvakken. Een map kan een eigen instelling krijgen of worden overgeslagen (Opruiminstellingen in het menu van de map). Berichten met een opvolgvlag blijven staan. Verwijderde items, Concepten, Postvak UIT, Ongewenste e-mail en de map Archief worden nooit aangeraakt."
+msgstr ""
+"E-mail ouder dan de gekozen leeftijd wordt opgeruimd in elke e-mailmap van "
+"uw eigen postvakken. Een map kan een eigen instelling krijgen of worden "
+"overgeslagen (Opruiminstellingen in het menu van de map). Berichten met een "
+"opvolgvlag blijven staan. Verwijderde items, Concepten, Postvak UIT, "
+"Ongewenste e-mail en de map Archief worden nooit aangeraakt."
 
 #: src/app/cleanup.cpp:260 src/app/cleanup.cpp:352
 #, kde-format
@@ -1721,7 +1793,9 @@ msgctxt "@info"
 msgid ""
 "Nothing to clean up: no folder has mail older than its age, or cleanup is "
 "off."
-msgstr "Niets op te ruimen: geen map heeft e-mail ouder dan de ingestelde leeftijd, of opruimen staat uit."
+msgstr ""
+"Niets op te ruimen: geen map heeft e-mail ouder dan de ingestelde leeftijd, "
+"of opruimen staat uit."
 
 #: src/app/cleanup.cpp:397
 #, kde-format
@@ -1779,49 +1853,49 @@ msgctxt "@action:inmenu"
 msgid "More Colors..."
 msgstr "Meer kleuren..."
 
-#: src/app/composer.cpp:149
+#: src/app/composer.cpp:151
 #, kde-format
 msgctxt "@label:textbox"
 msgid "Bcc:"
 msgstr "BCC:"
 
-#: src/app/composer.cpp:151
+#: src/app/composer.cpp:153
 #, kde-format
 msgctxt "@label:textbox"
 msgid "Reply to:"
 msgstr "Antwoorden aan:"
 
-#: src/app/composer.cpp:176
+#: src/app/composer.cpp:178
 #, kde-format
 msgctxt "@label:listbox"
 msgid "From:"
 msgstr "Van:"
 
-#: src/app/composer.cpp:177
+#: src/app/composer.cpp:179
 #, kde-format
 msgctxt "@label:textbox"
 msgid "To:"
 msgstr "Aan:"
 
-#: src/app/composer.cpp:178
+#: src/app/composer.cpp:180
 #, kde-format
 msgctxt "@label:textbox"
 msgid "Cc:"
 msgstr "CC:"
 
-#: src/app/composer.cpp:181
+#: src/app/composer.cpp:183
 #, kde-format
 msgctxt "@label:textbox"
 msgid "Subject:"
 msgstr "Onderwerp:"
 
-#: src/app/composer.cpp:195
+#: src/app/composer.cpp:197
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Remove Attachment"
 msgstr "Bijlage verwijderen"
 
-#: src/app/composer.cpp:213 src/app/signaturedialog.cpp:170
+#: src/app/composer.cpp:215 src/app/signaturedialog.cpp:170
 #, kde-format
 msgctxt "@info"
 msgid ""
@@ -1831,512 +1905,530 @@ msgid ""
 msgid_plural ""
 "%1 pictures could not be copied. The browser copies some pictures as links "
 "that only work inside it: save them there and add them with Insert Image."
-msgstr[0] "%1 afbeelding kon niet worden gekopieerd. De browser kopieert sommige afbeeldingen als koppelingen die alleen in de browser werken: sla de afbeelding daar op en voeg ze toe met Afbeelding invoegen."
-msgstr[1] "%1 afbeeldingen konden niet worden gekopieerd. De browser kopieert sommige afbeeldingen als koppelingen die alleen in de browser werken: sla ze daar op en voeg ze toe met Afbeelding invoegen."
+msgstr[0] ""
+"%1 afbeelding kon niet worden gekopieerd. De browser kopieert sommige "
+"afbeeldingen als koppelingen die alleen in de browser werken: sla de "
+"afbeelding daar op en voeg ze toe met Afbeelding invoegen."
+msgstr[1] ""
+"%1 afbeeldingen konden niet worden gekopieerd. De browser kopieert sommige "
+"afbeeldingen als koppelingen die alleen in de browser werken: sla ze daar op "
+"en voeg ze toe met Afbeelding invoegen."
 
-#: src/app/composer.cpp:216 src/app/signaturedialog.cpp:173
+#: src/app/composer.cpp:218 src/app/signaturedialog.cpp:173
 #, kde-format
 msgctxt "@title:window"
 msgid "Pasted Pictures"
 msgstr "Geplakte afbeeldingen"
 
-#: src/app/composer.cpp:338
+#: src/app/composer.cpp:340
 #, kde-format
 msgctxt "@info"
 msgid "Exchange did not accept this message: %1"
 msgstr "Exchange heeft dit bericht niet geaccepteerd: %1"
 
-#: src/app/composer.cpp:368
+#: src/app/composer.cpp:370
 #, kde-format
 msgctxt "@action"
 msgid "Spelling Language"
 msgstr "Spellingstaal"
 
-#: src/app/composer.cpp:374
+#: src/app/composer.cpp:376
 #, kde-format
 msgctxt "@action"
 msgid "Send"
 msgstr "Verzenden"
 
-#: src/app/composer.cpp:416
+#: src/app/composer.cpp:425
 #, kde-format
 msgctxt "@action"
 msgid "Check Names"
 msgstr "Namen controleren"
 
-#: src/app/composer.cpp:424
+#: src/app/composer.cpp:433
 #, kde-format
 msgctxt "@action"
 msgid "Save Draft"
 msgstr "Concept opslaan"
 
-#: src/app/composer.cpp:432
+#: src/app/composer.cpp:441
 #, kde-format
 msgctxt "@action"
 msgid "Attach File..."
 msgstr "Bestand bijvoegen..."
 
-#: src/app/composer.cpp:433
+#: src/app/composer.cpp:442
 #, kde-format
 msgctxt "@action short toolbar text"
 msgid "Attach"
 msgstr "Bijvoegen"
 
-#: src/app/composer.cpp:437 src/app/mainwindow.cpp:1777
+#: src/app/composer.cpp:446 src/app/mainwindow.cpp:1783
 #, kde-format
 msgctxt "@title:window"
 msgid "Attach Files"
 msgstr "Bestanden bijvoegen"
 
-#: src/app/composer.cpp:442
+#: src/app/composer.cpp:451
 #, kde-format
 msgctxt "@action"
 msgid "Attach from OneDrive or SharePoint..."
 msgstr "Bijvoegen uit OneDrive of SharePoint..."
 
-#: src/app/composer.cpp:448
+#: src/app/composer.cpp:457
 #, kde-format
 msgctxt "@action"
 msgid "Discard"
 msgstr "Negeren"
 
-#: src/app/composer.cpp:452
+#: src/app/composer.cpp:461
 #, kde-format
 msgctxt "@info"
 msgid "Discard this message? It is deleted from Drafts too."
 msgstr "Dit bericht negeren? Het wordt ook uit Concepten verwijderd."
 
-#: src/app/composer.cpp:453
+#: src/app/composer.cpp:462
 #, kde-format
 msgctxt "@title:window"
 msgid "Discard Message"
 msgstr "Bericht negeren"
 
-#: src/app/composer.cpp:460
+#: src/app/composer.cpp:469
 #, kde-format
 msgctxt "@action"
 msgid "High Importance"
 msgstr "Urgentie: hoog"
 
-#: src/app/composer.cpp:462
+#: src/app/composer.cpp:471
 #, kde-format
 msgctxt "@action"
 msgid "Low Importance"
 msgstr "Urgentie: laag"
 
-#: src/app/composer.cpp:478
+#: src/app/composer.cpp:487
 #, kde-format
 msgctxt "@action"
 msgid "Request a Delivery Receipt"
 msgstr "Ontvangstbevestiging vragen"
 
-#: src/app/composer.cpp:480
+#: src/app/composer.cpp:489
 #, kde-format
 msgctxt "@action"
 msgid "Request a Read Receipt"
 msgstr "Leesbevestiging vragen"
 
-#: src/app/composer.cpp:482
+#: src/app/composer.cpp:491
 #, kde-format
 msgctxt "@action"
 msgid "Sensitivity"
 msgstr "Gevoeligheid"
 
-#: src/app/composer.cpp:483
+#: src/app/composer.cpp:492
 #, kde-format
 msgctxt "@item sensitivity"
 msgid "Normal"
 msgstr "Normaal"
 
-#: src/app/composer.cpp:483
+#: src/app/composer.cpp:492
 #, kde-format
 msgctxt "@item sensitivity"
 msgid "Personal"
 msgstr "Persoonlijk"
 
-#: src/app/composer.cpp:483
+#: src/app/composer.cpp:492
 #, kde-format
 msgctxt "@item sensitivity"
 msgid "Private"
 msgstr "Privé"
 
-#: src/app/composer.cpp:484
+#: src/app/composer.cpp:493
 #, kde-format
 msgctxt "@item sensitivity"
 msgid "Confidential"
 msgstr "Vertrouwelijk"
 
-#: src/app/composer.cpp:493
+#: src/app/composer.cpp:502
 #, kde-format
 msgctxt "@action"
 msgid "Save as Template..."
 msgstr "Opslaan als sjabloon..."
 
-#: src/app/composer.cpp:500
+#: src/app/composer.cpp:509
 #, kde-format
 msgctxt "@action"
 msgid "Plain Text"
 msgstr "Tekst zonder opmaak"
 
-#: src/app/composer.cpp:501
+#: src/app/composer.cpp:510
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Write this message without formatting"
 msgstr "Dit bericht zonder opmaak schrijven"
 
-#: src/app/composer.cpp:512
+#: src/app/composer.cpp:521
 #, kde-format
 msgctxt "@action"
 msgid "Show Bcc"
 msgstr "BCC weergeven"
 
-#: src/app/composer.cpp:520
+#: src/app/composer.cpp:529
 #, kde-format
 msgctxt "@action"
 msgid "Show Reply To"
 msgstr "Antwoorden aan tonen"
 
-#: src/app/composer.cpp:529
+#: src/app/composer.cpp:538
 #, kde-format
 msgctxt "@action"
 msgid "Signature"
 msgstr "Handtekening"
 
-#: src/app/composer.cpp:535
+#: src/app/composer.cpp:544
 #, kde-format
 msgctxt "@item:inmenu no signature"
 msgid "(None)"
 msgstr "(Geen)"
 
-#: src/app/composer.cpp:547
+#: src/app/composer.cpp:556
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Signatures..."
 msgstr "Handtekeningen..."
 
-#: src/app/composer.cpp:561
+#: src/app/composer.cpp:574
 #, kde-format
 msgctxt "@action"
 msgid "Insert Table..."
 msgstr "Tabel invoegen..."
 
-#: src/app/composer.cpp:562
+#: src/app/composer.cpp:575
 #, kde-format
 msgctxt "@action short toolbar text"
 msgid "Table"
 msgstr "Tabel"
 
-#: src/app/composer.cpp:609
+#: src/app/composer.cpp:622
 #, kde-format
 msgctxt "@action"
 msgid "Insert Emoji"
 msgstr "Emoji invoegen"
 
-#: src/app/composer.cpp:634
+#: src/app/composer.cpp:647
 #, kde-format
 msgctxt "@title:window"
 msgid "Print Draft"
 msgstr "Concept afdrukken"
 
-#: src/app/composer.cpp:639
+#: src/app/composer.cpp:652
 #, kde-format
 msgctxt "@action"
 msgid "Print Draft..."
 msgstr "Concept afdrukken..."
 
-#: src/app/composer.cpp:662
+#: src/app/composer.cpp:675
 #, kde-format
 msgctxt "@item:inlistbox"
 msgid "Other Address..."
 msgstr "Ander adres..."
 
-#: src/app/composer.cpp:713
+#: src/app/composer.cpp:726
 #, kde-format
 msgctxt "@title:window"
 msgid "Other From Address"
 msgstr "Ander Van-adres"
 
-#: src/app/composer.cpp:715
+#: src/app/composer.cpp:728
 #, kde-format
 msgctxt "@info:placeholder"
 msgid "Address to send from"
 msgstr "Adres om vanaf te verzenden"
 
-#: src/app/composer.cpp:717
+#: src/app/composer.cpp:730
 #, kde-format
 msgctxt "@info"
 msgid ""
 "Microsoft 365 sends as this address if you have Send As or Send on Behalf "
 "permission for it. The sent copy stays in your own Sent Items."
-msgstr "Microsoft 365 verzendt namens dit adres als u er de machtiging Verzenden als of Verzenden namens voor hebt. De verzonden kopie blijft in uw eigen Verzonden items."
+msgstr ""
+"Microsoft 365 verzendt namens dit adres als u er de machtiging Verzenden als "
+"of Verzenden namens voor hebt. De verzonden kopie blijft in uw eigen "
+"Verzonden items."
 
-#: src/app/composer.cpp:1001
+#: src/app/composer.cpp:1014
 #, kde-format
 msgctxt "@info"
 msgid "This message was not sent: %1"
 msgstr "Dit bericht is niet verzonden: %1"
 
-#: src/app/composer.cpp:1132
+#: src/app/composer.cpp:1145
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Send this message"
 msgstr "Dit bericht verzenden"
 
-#: src/app/composer.cpp:1142
+#: src/app/composer.cpp:1155
 #, kde-format
 msgctxt "@action:inmenu %1 a mailbox address"
 msgid "Send As %1"
 msgstr "Verzenden als %1"
 
-#: src/app/composer.cpp:1144
+#: src/app/composer.cpp:1157
 #, kde-format
 msgctxt "@action:inmenu %1 a mailbox address"
 msgid "Send on Behalf of %1"
 msgstr "Verzenden namens %1"
 
-#: src/app/composer.cpp:1158
+#: src/app/composer.cpp:1171
 #, kde-format
 msgctxt "@action:inmenu %1 a mailbox address"
 msgid "Send on Behalf of %1 (not possible: you have Send As)"
 msgstr "Verzenden namens %1 (niet mogelijk: u hebt Verzenden als)"
 
-#: src/app/composer.cpp:1159
+#: src/app/composer.cpp:1172
 #, kde-format
 msgctxt "@info:tooltip"
 msgid ""
 "You have Send As on this mailbox, so Exchange sends as the mailbox (learned "
 "%1)"
-msgstr "U hebt Verzenden als op dit postvak, dus Exchange verzendt als het postvak (vastgesteld %1)"
+msgstr ""
+"U hebt Verzenden als op dit postvak, dus Exchange verzendt als het postvak "
+"(vastgesteld %1)"
 
-#: src/app/composer.cpp:1162
+#: src/app/composer.cpp:1175
 #, kde-format
 msgctxt "@action:inmenu %1 a mailbox address"
 msgid "Send As %1 (not possible: you only have Send on Behalf)"
 msgstr "Verzenden als %1 (niet mogelijk: u hebt alleen Verzenden namens)"
 
-#: src/app/composer.cpp:1163
+#: src/app/composer.cpp:1176
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "You only have Send on Behalf on this mailbox (learned %1)"
 msgstr "U hebt op dit postvak alleen Verzenden namens (vastgesteld %1)"
 
-#: src/app/composer.cpp:1167
+#: src/app/composer.cpp:1180
 #, kde-format
 msgctxt "@action:inmenu %1 a mailbox address, %2 a date"
 msgid "Send As %1 (refused by Exchange on %2)"
 msgstr "Verzenden als %1 (geweigerd door Exchange op %2)"
 
-#: src/app/composer.cpp:1168
+#: src/app/composer.cpp:1181
 #, kde-format
 msgctxt "@action:inmenu %1 a mailbox address, %2 a date"
 msgid "Send on Behalf of %1 (refused by Exchange on %2)"
 msgstr "Verzenden namens %1 (geweigerd door Exchange op %2)"
 
-#: src/app/composer.cpp:1174
+#: src/app/composer.cpp:1187
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Make This the Default"
 msgstr "Als standaard instellen"
 
-#: src/app/composer.cpp:1182
+#: src/app/composer.cpp:1195
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Forget What Exchange Allowed"
 msgstr "Vergeten wat Exchange toestond"
 
-#: src/app/composer.cpp:1190
+#: src/app/composer.cpp:1203
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Send this message from %1"
 msgstr "Dit bericht verzenden vanaf %1"
 
-#: src/app/composer.cpp:1193
+#: src/app/composer.cpp:1206
 #, kde-format
 msgctxt "@info"
 msgid ""
 "Exchange refused mail from %1 on %2: you have neither Send As nor Send on "
 "Behalf there. Choose another From address, or use \"Forget What Exchange "
 "Allowed\" on the Send arrow to try again."
-msgstr "Exchange heeft op %2 e-mail vanaf %1 geweigerd: u hebt daar geen Verzenden als en geen Verzenden namens. Kies een ander Van-adres, of gebruik \"Vergeten wat Exchange toestond\" op de pijl naast Verzenden om het opnieuw te proberen."
+msgstr ""
+"Exchange heeft op %2 e-mail vanaf %1 geweigerd: u hebt daar geen Verzenden "
+"als en geen Verzenden namens. Kies een ander Van-adres, of gebruik "
+"\"Vergeten wat Exchange toestond\" op de pijl naast Verzenden om het opnieuw "
+"te proberen."
 
-#: src/app/composer.cpp:1298 src/app/printing.cpp:75
+#: src/app/composer.cpp:1311 src/app/printing.cpp:75
 #, kde-format
 msgctxt "@item attachment name, size"
 msgid "%1 (%2)"
 msgstr "%1 (%2)"
 
-#: src/app/composer.cpp:1303
+#: src/app/composer.cpp:1316
 #, kde-format
 msgctxt "@item a OneDrive link that failed"
 msgid "no link: %1"
 msgstr "geen koppeling: %1"
 
-#: src/app/composer.cpp:1304
+#: src/app/composer.cpp:1317
 #, kde-format
 msgctxt "@item"
 msgid "uploading to OneDrive..."
 msgstr "wordt naar OneDrive geüpload..."
 
-#: src/app/composer.cpp:1305
+#: src/app/composer.cpp:1318
 #, kde-format
 msgctxt "@item"
 msgid "OneDrive link"
 msgstr "OneDrive-koppeling"
 
-#: src/app/composer.cpp:1307
+#: src/app/composer.cpp:1320
 #, kde-format
 msgctxt "@item attachment name, state"
 msgid "%1 (%2)"
 msgstr "%1 (%2)"
 
-#: src/app/composer.cpp:1323
+#: src/app/composer.cpp:1336
 #, kde-format
 msgctxt "@title:window a message without a subject yet"
 msgid "New Message"
 msgstr "Nieuw bericht"
 
-#: src/app/composer.cpp:1450
+#: src/app/composer.cpp:1463
 #, kde-format
 msgctxt "@title:window"
 msgid "Check Names"
 msgstr "Namen controleren"
 
-#: src/app/composer.cpp:1450
+#: src/app/composer.cpp:1463
 #, kde-format
 msgctxt "@label:listbox"
 msgid "More than one person matches \"%1\":"
 msgstr "Meer dan één persoon past bij \"%1\":"
 
-#: src/app/composer.cpp:1466
+#: src/app/composer.cpp:1479
 #, kde-format
 msgctxt "@info"
 msgid "No one was found for: %1"
 msgstr "Niemand gevonden voor: %1"
 
-#: src/app/composer.cpp:1683
-#, kde-format
-msgctxt "@info"
-msgid "These are not mail addresses: %1"
-msgstr "Dit zijn geen e-mailadressen: %1"
-
-#: src/app/composer.cpp:1683
+#: src/app/composer.cpp:1696
 #, kde-format
 msgctxt "@title:window"
 msgid "Check the Recipients"
 msgstr "Controleer de geadresseerden"
 
-#: src/app/composer.cpp:1687
+#: src/app/composer.cpp:1696
+#, kde-format
+msgctxt "@info"
+msgid "These are not mail addresses: %1"
+msgstr "Dit zijn geen e-mailadressen: %1"
+
+#: src/app/composer.cpp:1700
 #, kde-format
 msgctxt "@info"
 msgid "Add at least one recipient."
 msgstr "Voeg minstens één geadresseerde toe."
 
-#: src/app/composer.cpp:1687
+#: src/app/composer.cpp:1700
 #, kde-format
 msgctxt "@title:window"
 msgid "No Recipients"
 msgstr "Geen geadresseerden"
 
-#: src/app/composer.cpp:1697
+#: src/app/composer.cpp:1710
 #, kde-format
 msgctxt "@info"
 msgid "The message mentions an attachment, but nothing is attached."
 msgstr "Het bericht noemt een bijlage, maar er is niets bijgevoegd."
 
-#: src/app/composer.cpp:1698
+#: src/app/composer.cpp:1711
 #, kde-format
 msgctxt "@title:window"
 msgid "Forgot an Attachment?"
 msgstr "Bijlage vergeten?"
 
-#: src/app/composer.cpp:1699
+#: src/app/composer.cpp:1712
 #, kde-format
 msgctxt "@action:button"
 msgid "Attach a File..."
 msgstr "Bestand bijvoegen..."
 
-#: src/app/composer.cpp:1700 src/app/composer.cpp:1715
-#: src/app/composercloud.cpp:255
+#: src/app/composer.cpp:1713 src/app/composer.cpp:1728
+#: src/app/composercloud.cpp:256
 #, kde-format
 msgctxt "@action:button"
 msgid "Send Anyway"
 msgstr "Toch verzenden"
 
-#: src/app/composer.cpp:1713
+#: src/app/composer.cpp:1726
 #, kde-format
 msgctxt "@info"
 msgid "This message has no subject. Send it anyway?"
 msgstr "Dit bericht heeft geen onderwerp. Toch verzenden?"
 
-#: src/app/composer.cpp:1714
+#: src/app/composer.cpp:1727
 #, kde-format
 msgctxt "@title:window"
 msgid "No Subject"
 msgstr "Geen onderwerp"
 
-#: src/app/composer.cpp:1752
+#: src/app/composer.cpp:1765
 #, kde-format
 msgctxt "@title:window"
 msgid "Delay Delivery"
 msgstr "Bezorging uitstellen"
 
-#: src/app/composer.cpp:1753
+#: src/app/composer.cpp:1766
 #, kde-format
 msgctxt "@option:check"
 msgid "Do not deliver before:"
 msgstr "Niet bezorgen voor:"
 
-#: src/app/composer.cpp:1760
+#: src/app/composer.cpp:1773
 #, kde-format
 msgctxt "@info"
 msgid ""
 "Microsoft 365 keeps the message and sends it then, also when this computer "
 "is off."
-msgstr "Microsoft 365 bewaart het bericht en verzendt het dan, ook als deze computer uit staat."
+msgstr ""
+"Microsoft 365 bewaart het bericht en verzendt het dan, ook als deze computer "
+"uit staat."
 
-#: src/app/composer.cpp:1784
+#: src/app/composer.cpp:1797
 #, kde-format
 msgctxt "@action %1 a date and time"
 msgid "Schedule Send (%1)..."
 msgstr "Verzenden plannen (%1)..."
 
-#: src/app/composer.cpp:1786
+#: src/app/composer.cpp:1799
 #, kde-format
 msgctxt "@action"
 msgid "Schedule Send..."
 msgstr "Verzenden plannen..."
 
-#: src/app/composer.cpp:1836
+#: src/app/composer.cpp:1849
 #, kde-format
 msgctxt "@info %1 an address, %2 its automatic reply"
 msgid "<b>%1</b> has automatic replies on: %2"
 msgstr "<b>%1</b> heeft automatische antwoorden aan: %2"
 
-#: src/app/composer.cpp:1839
+#: src/app/composer.cpp:1852
 #, kde-format
 msgctxt "@info %1 an address"
 msgid "The mailbox of <b>%1</b> is full: the message may not be delivered."
-msgstr "Het postvak van <b>%1</b> is vol: het bericht wordt mogelijk niet bezorgd."
+msgstr ""
+"Het postvak van <b>%1</b> is vol: het bericht wordt mogelijk niet bezorgd."
 
-#: src/app/composer.cpp:1842
+#: src/app/composer.cpp:1855
 #, kde-format
 msgctxt "@info %1 an address"
 msgid "<b>%1</b> is outside your organization."
 msgstr "<b>%1</b> valt buiten uw organisatie."
 
-#: src/app/composer.cpp:1845
+#: src/app/composer.cpp:1858
 #, kde-format
 msgctxt "@info %1 an address"
 msgid "<b>%1</b> does not accept mail from you."
 msgstr "<b>%1</b> accepteert geen e-mail van u."
 
-#: src/app/composer.cpp:1848
+#: src/app/composer.cpp:1861
 #, kde-format
 msgctxt "@info %1 an address"
 msgid "<b>%1</b> is moderated: the message waits for approval."
 msgstr "<b>%1</b> wordt gemodereerd: het bericht wacht op goedkeuring."
 
-#: src/app/composer.cpp:1853
+#: src/app/composer.cpp:1866
 #, kde-format
 msgctxt "@info %2 a group, %3 external members"
 msgid "<b>%2</b> has %1 member, %3 outside your organization."
@@ -2344,7 +2436,7 @@ msgid_plural "<b>%2</b> has %1 members, %3 outside your organization."
 msgstr[0] "<b>%2</b> heeft %1 lid, %3 buiten uw organisatie."
 msgstr[1] "<b>%2</b> heeft %1 leden, %3 buiten uw organisatie."
 
-#: src/app/composer.cpp:1855
+#: src/app/composer.cpp:1868
 #, kde-format
 msgctxt "@info %2 a group"
 msgid "<b>%2</b> has %1 member."
@@ -2352,19 +2444,13 @@ msgid_plural "<b>%2</b> has %1 members."
 msgstr[0] "<b>%2</b> heeft %1 lid."
 msgstr[1] "<b>%2</b> heeft %1 leden."
 
-#: src/app/composer.cpp:1868
+#: src/app/composer.cpp:1881
 #, kde-format
 msgctxt "@info %1 a size"
 msgid "The attachments are larger than a recipient accepts (%1)."
 msgstr "De bijlagen zijn groter dan een geadresseerde accepteert (%1)."
 
-#: src/app/composer.cpp:1947
-#, kde-format
-msgctxt "@title:window"
-msgid "Save as Template"
-msgstr "Opslaan als sjabloon"
-
-#: src/app/composer.cpp:1947 src/app/conditionalformat.cpp:122
+#: src/app/composer.cpp:1960 src/app/conditionalformat.cpp:122
 #: src/app/quicksteps.cpp:290 src/app/rulesdialog.cpp:269
 #: src/app/searchfolderdialog.cpp:108 src/app/signaturedialog.cpp:110
 #: src/app/signaturedialog.cpp:126 src/app/taskswindow.cpp:761
@@ -2374,25 +2460,31 @@ msgctxt "@label:textbox"
 msgid "Name:"
 msgstr "Naam:"
 
-#: src/app/composer.cpp:1955
+#: src/app/composer.cpp:1960
+#, kde-format
+msgctxt "@title:window"
+msgid "Save as Template"
+msgstr "Opslaan als sjabloon"
+
+#: src/app/composer.cpp:1968
 #, kde-format
 msgctxt "@info %1 a folder"
 msgid "The template could not be saved in %1."
 msgstr "Het sjabloon kan niet worden opgeslagen in %1."
 
-#: src/app/composer.cpp:1959
+#: src/app/composer.cpp:1972
 #, kde-format
 msgctxt "@info %1 a template's name"
 msgid "Saved as the template \"%1\"."
 msgstr "Opgeslagen als het sjabloon \"%1\"."
 
-#: src/app/composer.cpp:2044
+#: src/app/composer.cpp:2057
 #, kde-format
 msgctxt "@info"
 msgid "Save this message as a draft?"
 msgstr "Dit bericht als concept opslaan?"
 
-#: src/app/composer.cpp:2045
+#: src/app/composer.cpp:2058
 #, kde-format
 msgctxt "@title:window"
 msgid "Close Message"
@@ -2410,20 +2502,25 @@ msgctxt "@info %1 file names"
 msgid ""
 "These files are not in a OneDrive or SharePoint folder that Graph Sync syncs "
 "for this account: %1"
-msgstr "Deze bestanden staan niet in een OneDrive- of SharePoint-map die Graph Sync voor dit account synchroniseert: %1"
+msgstr ""
+"Deze bestanden staan niet in een OneDrive- of SharePoint-map die Graph Sync "
+"voor dit account synchroniseert: %1"
 
 #: src/app/composercloud.cpp:214
 #, kde-format
 msgctxt "@info:status"
 msgid ""
 "Waiting for the files to be uploaded to OneDrive; the message is sent then."
-msgstr "Wachten tot de bestanden naar OneDrive zijn geüpload; dan wordt het bericht verzonden."
+msgstr ""
+"Wachten tot de bestanden naar OneDrive zijn geüpload; dan wordt het bericht "
+"verzonden."
 
 #: src/app/composercloud.cpp:233
 #, kde-format
 msgctxt "@info:status"
 msgid "Giving the recipients access to the OneDrive and SharePoint files..."
-msgstr "De ontvangers krijgen toegang tot de OneDrive- en SharePoint-bestanden..."
+msgstr ""
+"De ontvangers krijgen toegang tot de OneDrive- en SharePoint-bestanden..."
 
 #: src/app/composercloud.cpp:240
 #, kde-format
@@ -2431,7 +2528,7 @@ msgctxt "@info %1 a file name, %2 the reason"
 msgid "%1: %2"
 msgstr "%1: %2"
 
-#: src/app/composercloud.cpp:253
+#: src/app/composercloud.cpp:254
 #, kde-format
 msgctxt "@info"
 msgid ""
@@ -2439,9 +2536,13 @@ msgid ""
 "%1\n"
 "\n"
 "Send the message anyway?"
-msgstr "De ontvangers konden niet tot elk bestand toegang krijgen:\n%1\n\nHet bericht toch verzenden?"
+msgstr ""
+"De ontvangers konden niet tot elk bestand toegang krijgen:\n"
+"%1\n"
+"\n"
+"Het bericht toch verzenden?"
 
-#: src/app/composercloud.cpp:254
+#: src/app/composercloud.cpp:255
 #, kde-format
 msgctxt "@title:window"
 msgid "Send"
@@ -2465,7 +2566,9 @@ msgctxt "@info"
 msgid ""
 "Messages that match a rule get its colour in the message list. The first "
 "rule that matches wins."
-msgstr "Berichten die aan een regel voldoen krijgen de kleur ervan in de berichtenlijst. De eerste regel die past, telt."
+msgstr ""
+"Berichten die aan een regel voldoen krijgen de kleur ervan in de "
+"berichtenlijst. De eerste regel die past, telt."
 
 #: src/app/conditionalformat.cpp:119
 #, kde-format
@@ -2650,8 +2753,8 @@ msgstr "Contactpersonen"
 #: src/app/contactswindow.cpp:135
 #, kde-format
 msgctxt "@title:column"
-msgid "Name"
-msgstr "Naam"
+msgid "Company"
+msgstr "Bedrijf"
 
 #: src/app/contactswindow.cpp:135
 #, kde-format
@@ -2662,8 +2765,8 @@ msgstr "E-mail"
 #: src/app/contactswindow.cpp:135
 #, kde-format
 msgctxt "@title:column"
-msgid "Company"
-msgstr "Bedrijf"
+msgid "Name"
+msgstr "Naam"
 
 #: src/app/contactswindow.cpp:135
 #, kde-format
@@ -2713,7 +2816,7 @@ msgctxt "@item:inmenu name order"
 msgid "Last, First"
 msgstr "Achternaam, Voornaam"
 
-#: src/app/contactswindow.cpp:321 src/app/mainwindow.cpp:1011
+#: src/app/contactswindow.cpp:321 src/app/mainwindow.cpp:1017
 #: src/app/taskswindow.cpp:341
 #, kde-format
 msgctxt "@action"
@@ -2741,14 +2844,14 @@ msgstr "Iedereen in uw organisatie (alleen lezen)"
 #: src/app/contactswindow.cpp:397
 #, kde-format
 msgctxt "@info:placeholder"
-msgid "Search people in your organisation"
-msgstr "Personen in uw organisatie zoeken"
+msgid "Filter contacts"
+msgstr "Contactpersonen filteren"
 
 #: src/app/contactswindow.cpp:397
 #, kde-format
 msgctxt "@info:placeholder"
-msgid "Filter contacts"
-msgstr "Contactpersonen filteren"
+msgid "Search people in your organisation"
+msgstr "Personen in uw organisatie zoeken"
 
 #: src/app/contactswindow.cpp:443
 #, kde-format
@@ -2832,15 +2935,15 @@ msgstr "Directe medewerkers:"
 
 #: src/app/contactswindow.cpp:696
 #, kde-format
-msgctxt "@info"
-msgid "Delete the contact \"%1\"?"
-msgstr "De contactpersoon \"%1\" verwijderen?"
-
-#: src/app/contactswindow.cpp:696
-#, kde-format
 msgctxt "@title:window"
 msgid "Delete Contact"
 msgstr "Contactpersoon verwijderen"
+
+#: src/app/contactswindow.cpp:696
+#, kde-format
+msgctxt "@info"
+msgid "Delete the contact \"%1\"?"
+msgstr "De contactpersoon \"%1\" verwijderen?"
 
 #: src/app/contactswindow.cpp:733
 #, kde-format
@@ -2935,6 +3038,12 @@ msgstr "Voeg een locatie of ruimte toe"
 #: src/app/eventdialog.cpp:265
 #, kde-format
 msgctxt "@item:inlistbox show as"
+msgid "Busy"
+msgstr "Bezet"
+
+#: src/app/eventdialog.cpp:265
+#, kde-format
+msgctxt "@item:inlistbox show as"
 msgid "Free"
 msgstr "Beschikbaar"
 
@@ -2943,12 +3052,6 @@ msgstr "Beschikbaar"
 msgctxt "@item:inlistbox show as"
 msgid "Tentative"
 msgstr "Voorlopig"
-
-#: src/app/eventdialog.cpp:265
-#, kde-format
-msgctxt "@item:inlistbox show as"
-msgid "Busy"
-msgstr "Bezet"
 
 #: src/app/eventdialog.cpp:266
 #, kde-format
@@ -2977,14 +3080,14 @@ msgstr "Elke dag"
 #: src/app/eventdialog.cpp:271
 #, kde-format
 msgctxt "@item:inlistbox repeat"
-msgid "Every weekday"
-msgstr "Elke werkdag"
+msgid "Every week"
+msgstr "Elke week"
 
 #: src/app/eventdialog.cpp:271
 #, kde-format
 msgctxt "@item:inlistbox repeat"
-msgid "Every week"
-msgstr "Elke week"
+msgid "Every weekday"
+msgstr "Elke werkdag"
 
 #: src/app/eventdialog.cpp:272
 #, kde-format
@@ -3083,13 +3186,13 @@ msgctxt "@label:textbox"
 msgid "Optional:"
 msgstr "Optioneel:"
 
-#: src/app/eventdialog.cpp:390 src/app/eventdialog.cpp:1004
+#: src/app/eventdialog.cpp:390 src/app/eventdialog.cpp:1013
 #, kde-format
 msgctxt "@label"
 msgid "Start:"
 msgstr "Begin:"
 
-#: src/app/eventdialog.cpp:391 src/app/eventdialog.cpp:1005
+#: src/app/eventdialog.cpp:391 src/app/eventdialog.cpp:1014
 #, kde-format
 msgctxt "@label"
 msgid "End:"
@@ -3119,109 +3222,105 @@ msgctxt "@title:window"
 msgid "New Meeting"
 msgstr "Nieuwe vergadering"
 
-#: src/app/eventdialog.cpp:519
+#: src/app/eventdialog.cpp:518
 #, kde-format
 msgctxt "@title:window"
 msgid "Event"
 msgstr "Afspraak"
 
-#: src/app/eventdialog.cpp:591
+#: src/app/eventdialog.cpp:590
 #, kde-format
 msgctxt "@item:inlistbox"
 msgid "One occurrence of a series"
 msgstr "Eén exemplaar van een reeks"
 
-#: src/app/eventdialog.cpp:602 src/app/readingpane.cpp:366
-#, kde-format
-msgctxt "@info"
-msgid "You accepted."
-msgstr "U hebt geaccepteerd."
-
-#: src/app/eventdialog.cpp:602 src/app/readingpane.cpp:367
+#: src/app/eventdialog.cpp:601 src/app/readingpane.cpp:367
 #, kde-format
 msgctxt "@info"
 msgid "You accepted tentatively."
 msgstr "U hebt voorlopig geaccepteerd."
 
-#: src/app/eventdialog.cpp:603 src/app/readingpane.cpp:368
+#: src/app/eventdialog.cpp:601 src/app/readingpane.cpp:366
+#, kde-format
+msgctxt "@info"
+msgid "You accepted."
+msgstr "U hebt geaccepteerd."
+
+#: src/app/eventdialog.cpp:602 src/app/readingpane.cpp:368
 #, kde-format
 msgctxt "@info"
 msgid "You declined."
 msgstr "U hebt geweigerd."
 
-#: src/app/eventdialog.cpp:604 src/app/readingpane.cpp:369
+#: src/app/eventdialog.cpp:603 src/app/readingpane.cpp:369
 #, kde-format
 msgctxt "@info"
 msgid "Please respond."
 msgstr "Reageer alstublieft."
 
-#: src/app/eventdialog.cpp:605
+#: src/app/eventdialog.cpp:604
 #, kde-format
 msgctxt "@info meeting organizer, then the state"
 msgid "Organized by %1. %2"
 msgstr "Georganiseerd door %1. %2"
 
-#: src/app/eventdialog.cpp:616
+#: src/app/eventdialog.cpp:615
 #, kde-format
 msgctxt "@info"
 msgid "This meeting was cancelled."
 msgstr "Deze vergadering is geannuleerd."
 
-#: src/app/eventdialog.cpp:641
+#: src/app/eventdialog.cpp:640
 #, kde-format
 msgctxt "@action:button"
 msgid "Close"
 msgstr "Sluiten"
 
-#: src/app/eventdialog.cpp:688
-#, kde-format
-msgctxt "@action:button"
-msgid "Send Update"
-msgstr "Update verzenden"
-
-#: src/app/eventdialog.cpp:688
-#, kde-format
-msgctxt "@action:button"
-msgid "Send"
-msgstr "Verzenden"
-
-#: src/app/eventdialog.cpp:688 src/app/taskswindow.cpp:114
+#: src/app/eventdialog.cpp:697 src/app/taskswindow.cpp:114
 #, kde-format
 msgctxt "@action:button"
 msgid "Save"
 msgstr "Opslaan"
 
-#: src/app/eventdialog.cpp:786
+#: src/app/eventdialog.cpp:697
+#, kde-format
+msgctxt "@action:button"
+msgid "Send"
+msgstr "Verzenden"
+
+#: src/app/eventdialog.cpp:795
 #, kde-format
 msgctxt "@info"
 msgid "Looking up busy times..."
 msgstr "Bezette tijden opzoeken..."
 
-#: src/app/eventdialog.cpp:794
+#: src/app/eventdialog.cpp:803
 #, kde-format
 msgctxt "@info"
 msgid "Busy times are not available (offline?)"
 msgstr "Bezette tijden zijn niet beschikbaar (offline?)"
 
-#: src/app/eventdialog.cpp:814
+#: src/app/eventdialog.cpp:823
 #, kde-format
 msgctxt "@title:window"
 msgid "Rooms"
 msgstr "Ruimten"
 
-#: src/app/eventdialog.cpp:816
+#: src/app/eventdialog.cpp:825
 #, kde-format
 msgctxt "@info"
 msgid "Looking up rooms..."
 msgstr "Ruimten opzoeken..."
 
-#: src/app/eventdialog.cpp:828
+#: src/app/eventdialog.cpp:837
 #, kde-format
 msgctxt "@info"
 msgid "Rooms are not available (offline, or no room list in this organization)"
-msgstr "Ruimten zijn niet beschikbaar (offline, of geen ruimtelijst in deze organisatie)"
+msgstr ""
+"Ruimten zijn niet beschikbaar (offline, of geen ruimtelijst in deze "
+"organisatie)"
 
-#: src/app/eventdialog.cpp:829
+#: src/app/eventdialog.cpp:838
 #, kde-format
 msgctxt "@info"
 msgid "%1 room"
@@ -3229,7 +3328,7 @@ msgid_plural "%1 rooms"
 msgstr[0] "%1 ruimte"
 msgstr[1] "%1 ruimten"
 
-#: src/app/eventdialog.cpp:835
+#: src/app/eventdialog.cpp:844
 #, kde-format
 msgctxt "@item room capacity"
 msgid "%1 person"
@@ -3237,43 +3336,43 @@ msgid_plural "%1 people"
 msgstr[0] "%1 persoon"
 msgstr[1] "%1 personen"
 
-#: src/app/eventdialog.cpp:985
+#: src/app/eventdialog.cpp:994
 #, kde-format
 msgctxt "@title:window"
 msgid "Propose New Time"
 msgstr "Nieuwe tijd voorstellen"
 
-#: src/app/eventdialog.cpp:998
+#: src/app/eventdialog.cpp:1007
 #, kde-format
 msgctxt "@item:inlistbox"
 msgid "Tentative and propose this time"
 msgstr "Voorlopig en deze tijd voorstellen"
 
-#: src/app/eventdialog.cpp:999
+#: src/app/eventdialog.cpp:1008
 #, kde-format
 msgctxt "@item:inlistbox"
 msgid "Decline and propose this time"
 msgstr "Weigeren en deze tijd voorstellen"
 
-#: src/app/eventdialog.cpp:1002
+#: src/app/eventdialog.cpp:1011
 #, kde-format
 msgctxt "@info:placeholder"
 msgid "Message to the organizer (optional)"
 msgstr "Bericht aan de organisator (optioneel)"
 
-#: src/app/eventdialog.cpp:1006
+#: src/app/eventdialog.cpp:1015
 #, kde-format
 msgctxt "@label:listbox"
 msgid "Answer:"
 msgstr "Antwoord:"
 
-#: src/app/eventdialog.cpp:1008
+#: src/app/eventdialog.cpp:1017
 #, kde-format
 msgctxt "@action:button"
 msgid "Send Proposal"
 msgstr "Voorstel verzenden"
 
-#: src/app/eventdialog.cpp:1076
+#: src/app/eventdialog.cpp:1085
 #, kde-format
 msgctxt "@info"
 msgid ""
@@ -3284,18 +3383,26 @@ msgid_plural ""
 "This series has %1 occurrences that were changed on their own. Changing the "
 "time or the repeat of the whole series undoes those changes, and occurrences "
 "you deleted come back."
-msgstr[0] "Deze reeks heeft %1 exemplaar dat apart is gewijzigd. Als u de tijd of de herhaling van de hele reeks wijzigt, wordt die wijziging ongedaan gemaakt en komen verwijderde exemplaren terug."
-msgstr[1] "Deze reeks heeft %1 exemplaren die apart zijn gewijzigd. Als u de tijd of de herhaling van de hele reeks wijzigt, worden die wijzigingen ongedaan gemaakt en komen verwijderde exemplaren terug."
+msgstr[0] ""
+"Deze reeks heeft %1 exemplaar dat apart is gewijzigd. Als u de tijd of de "
+"herhaling van de hele reeks wijzigt, wordt die wijziging ongedaan gemaakt en "
+"komen verwijderde exemplaren terug."
+msgstr[1] ""
+"Deze reeks heeft %1 exemplaren die apart zijn gewijzigd. Als u de tijd of de "
+"herhaling van de hele reeks wijzigt, worden die wijzigingen ongedaan gemaakt "
+"en komen verwijderde exemplaren terug."
 
-#: src/app/eventdialog.cpp:1079
+#: src/app/eventdialog.cpp:1088
 #, kde-format
 msgctxt "@info"
 msgid ""
 "Changing the time or the repeat of the whole series undoes changes made to "
 "single occurrences, and occurrences you deleted come back."
-msgstr "Als u de tijd of de herhaling van de hele reeks wijzigt, worden wijzigingen in losse exemplaren ongedaan gemaakt en komen verwijderde exemplaren terug."
+msgstr ""
+"Als u de tijd of de herhaling van de hele reeks wijzigt, worden wijzigingen "
+"in losse exemplaren ongedaan gemaakt en komen verwijderde exemplaren terug."
 
-#: src/app/eventdialog.cpp:1080
+#: src/app/eventdialog.cpp:1089
 #, kde-format
 msgctxt "@title:window"
 msgid "Change the Series"
@@ -3313,7 +3420,7 @@ msgctxt "@item folder pane"
 msgid "Favorites"
 msgstr "Favorieten"
 
-#: src/app/foldermodel.cpp:226 src/app/mainwindow.cpp:3589
+#: src/app/foldermodel.cpp:226 src/app/mainwindow.cpp:3596
 #, kde-format
 msgctxt "@item folder pane, the Inboxes of every mailbox"
 msgid "All Inboxes"
@@ -3329,7 +3436,9 @@ msgstr "%1 (%2)"
 #, kde-format
 msgctxt "@info"
 msgid "\"%1\" repeats in a way Graph Mail cannot copy: it is added once."
-msgstr "\"%1\" herhaalt op een manier die Graph Mail niet kan overnemen: de afspraak wordt één keer toegevoegd."
+msgstr ""
+"\"%1\" herhaalt op een manier die Graph Mail niet kan overnemen: de afspraak "
+"wordt één keer toegevoegd."
 
 #: src/app/icsdialog.cpp:160
 #, kde-format
@@ -3369,13 +3478,6 @@ msgctxt "@title:window"
 msgid "Mailboxes"
 msgstr "Postvakken"
 
-#: src/app/mailboxesdialog.cpp:46 src/app/offlinedialog.cpp:88
-#: src/app/waitingwindow.cpp:85 src/app/waitingwindow.cpp:87
-#, kde-format
-msgctxt "@title:column"
-msgid "Mailbox"
-msgstr "Postvak"
-
 #: src/app/mailboxesdialog.cpp:46
 #, kde-format
 msgctxt "@title:column"
@@ -3387,6 +3489,13 @@ msgstr "Adres"
 msgctxt "@title:column"
 msgid "Gives"
 msgstr "Geeft"
+
+#: src/app/mailboxesdialog.cpp:46 src/app/offlinedialog.cpp:88
+#: src/app/waitingwindow.cpp:85 src/app/waitingwindow.cpp:87
+#, kde-format
+msgctxt "@title:column"
+msgid "Mailbox"
+msgstr "Postvak"
 
 #: src/app/mailboxesdialog.cpp:53
 #, kde-format
@@ -3418,7 +3527,9 @@ msgctxt "@info"
 msgid ""
 "Other mailboxes and calendars you have access to. Graph Mail keeps a copy of "
 "what each gives."
-msgstr "Andere postvakken en agenda's waar u toegang toe hebt. Graph Mail bewaart een kopie van wat elk geeft."
+msgstr ""
+"Andere postvakken en agenda's waar u toegang toe hebt. Graph Mail bewaart "
+"een kopie van wat elk geeft."
 
 #: src/app/mailboxesdialog.cpp:133
 #, kde-format
@@ -3454,7 +3565,9 @@ msgstr "Deze agenda staat al tussen uw agenda's (hij is met u gedeeld)."
 #, kde-format
 msgctxt "@info"
 msgid "Their free/busy times show when you invite them to a meeting."
-msgstr "De beschikbaarheid ziet u wanneer u de collega voor een vergadering uitnodigt."
+msgstr ""
+"De beschikbaarheid ziet u wanneer u de collega voor een vergadering "
+"uitnodigt."
 
 #: src/app/mailboxesdialog.cpp:231
 #, kde-format
@@ -3468,7 +3581,9 @@ msgctxt "@info"
 msgid ""
 "Remove %1 from Graph Mail? Its copy on this computer is deleted; nothing "
 "changes in Microsoft 365."
-msgstr "%1 uit Graph Mail verwijderen? De kopie op deze computer wordt verwijderd; in Microsoft 365 verandert er niets."
+msgstr ""
+"%1 uit Graph Mail verwijderen? De kopie op deze computer wordt verwijderd; "
+"in Microsoft 365 verandert er niets."
 
 #: src/app/mailboxesdialog.cpp:246
 #, kde-format
@@ -3543,7 +3658,10 @@ msgid ""
 "Exchange uses these for meeting times, automatic replies and Outlook on the "
 "web. Graph Mail shows dates and times as set in Plasma's region settings, as "
 "Outlook follows those of Windows."
-msgstr "Exchange gebruikt deze voor vergadertijden, automatische antwoorden en Outlook op het web. Graph Mail toont datums en tijden zoals ingesteld in de regio-instellingen van Plasma, zoals Outlook die van Windows volgt."
+msgstr ""
+"Exchange gebruikt deze voor vergadertijden, automatische antwoorden en "
+"Outlook op het web. Graph Mail toont datums en tijden zoals ingesteld in de "
+"regio-instellingen van Plasma, zoals Outlook die van Windows volgt."
 
 #: src/app/mailboxsettingsdialog.cpp:146
 #, kde-format
@@ -3662,14 +3780,19 @@ msgstr "E-mail, agenda en contactpersonen voor Microsoft 365 op KDE Plasma"
 msgid ""
 "Not affiliated with or endorsed by Microsoft. Microsoft 365 and Exchange "
 "Online are trademarks of Microsoft Corporation."
-msgstr "Niet gelieerd aan of goedgekeurd door Microsoft. Microsoft 365 en Exchange Online zijn handelsmerken van Microsoft Corporation."
+msgstr ""
+"Niet gelieerd aan of goedgekeurd door Microsoft. Microsoft 365 en Exchange "
+"Online zijn handelsmerken van Microsoft Corporation."
 
 #: src/app/main.cpp:207
 #, kde-format
 msgid ""
 "Outlook messages (.msg), mail files (.eml) to show, Outlook data files "
 "(.pst) to import, or mailto: links to write to"
-msgstr "Outlook-berichten (.msg) en e-mailbestanden (.eml) om te bekijken, Outlook-gegevensbestanden (.pst) om te importeren, of mailto:-koppelingen om een bericht te schrijven"
+msgstr ""
+"Outlook-berichten (.msg) en e-mailbestanden (.eml) om te bekijken, Outlook-"
+"gegevensbestanden (.pst) om te importeren, of mailto:-koppelingen om een "
+"bericht te schrijven"
 
 #: src/app/main.cpp:210
 #, kde-format
@@ -3686,7 +3809,9 @@ msgstr "Deze map openen (account/postvak/map-id)"
 msgid ""
 "Save a picture of the window to this file and quit (tests; never marks "
 "anything as read)"
-msgstr "Een afbeelding van het venster in dit bestand opslaan en afsluiten (tests; markeert nooit iets als gelezen)"
+msgstr ""
+"Een afbeelding van het venster in dit bestand opslaan en afsluiten (tests; "
+"markeert nooit iets als gelezen)"
 
 #: src/app/main.cpp:213
 #, kde-format
@@ -3703,20 +3828,26 @@ msgstr "Dit bericht in de lijst selecteren voor --screenshot (rijnummer)"
 msgid ""
 "With --screenshot: show Message Details of the selected message once its "
 "headers are in (tests)"
-msgstr "Met --screenshot: Berichtdetails van het geselecteerde bericht tonen zodra de kopregels binnen zijn (tests)"
+msgstr ""
+"Met --screenshot: Berichtdetails van het geselecteerde bericht tonen zodra "
+"de kopregels binnen zijn (tests)"
 
 #: src/app/main.cpp:216
 #, kde-format
 msgid ""
 "With --screenshot: show Reply with Meeting for the selected message (tests)"
-msgstr "Met --screenshot: Beantwoorden met vergadering tonen voor het geselecteerde bericht (tests)"
+msgstr ""
+"Met --screenshot: Beantwoorden met vergadering tonen voor het geselecteerde "
+"bericht (tests)"
 
 #: src/app/main.cpp:217
 #, kde-format
 msgid ""
 "With --screenshot: the selected message as if dropped on calendar or tasks "
 "(tests)"
-msgstr "Met --screenshot: het geselecteerde bericht alsof het op agenda of taken is neergezet (tests)"
+msgstr ""
+"Met --screenshot: het geselecteerde bericht alsof het op agenda of taken is "
+"neergezet (tests)"
 
 #: src/app/main.cpp:218
 #, kde-format
@@ -3738,62 +3869,80 @@ msgstr "Met --screenshot: Oude e-mail opruimen tonen (tests)"
 msgid ""
 "With --contacts, --directory-search and --screenshot: Forward as vCard for "
 "the first person found (tests)"
-msgstr "Met --contacts, --directory-search en --screenshot: Doorsturen als vCard voor de eerst gevonden persoon (tests)"
+msgstr ""
+"Met --contacts, --directory-search en --screenshot: Doorsturen als vCard "
+"voor de eerst gevonden persoon (tests)"
 
 #: src/app/main.cpp:222
 #, kde-format
 msgid ""
 "With --screenshot: move this message to a folder, then Undo, account/mailbox/"
 "message|folder; logged (tests)"
-msgstr "Met --screenshot: dit bericht naar een map verplaatsen en dan Ongedaan maken, account/postvak/bericht|map; gelogd (tests)"
+msgstr ""
+"Met --screenshot: dit bericht naar een map verplaatsen en dan Ongedaan "
+"maken, account/postvak/bericht|map; gelogd (tests)"
 
 #: src/app/main.cpp:223
 #, kde-format
 msgid ""
 "Use a dark palette and log whether the shown message got the dark style "
 "(tests)"
-msgstr "Een donker palet gebruiken en loggen of het getoonde bericht de donkere stijl kreeg (tests)"
+msgstr ""
+"Een donker palet gebruiken en loggen of het getoonde bericht de donkere "
+"stijl kreeg (tests)"
 
 #: src/app/main.cpp:224
 #, kde-format
 msgid ""
 "With --message and --screenshot: preview this attachment (row id) (tests)"
-msgstr "Met --message en --screenshot: een voorbeeld van deze bijlage tonen (rij-id) (tests)"
+msgstr ""
+"Met --message en --screenshot: een voorbeeld van deze bijlage tonen (rij-id) "
+"(tests)"
 
 #: src/app/main.cpp:225
 #, kde-format
 msgid ""
 "With --screenshot: sweep without the dialog, account/mailbox/message|scope|"
 "folder (scope 0 all, 2 all but the newest; folder 0 deletes) (tests)"
-msgstr "Met --screenshot: opruimen zonder het dialoogvenster, account/postvak/bericht|bereik|map (bereik 0 alles, 2 alles behalve het nieuwste; map 0 verwijdert) (tests)"
+msgstr ""
+"Met --screenshot: opruimen zonder het dialoogvenster, account/postvak/"
+"bericht|bereik|map (bereik 0 alles, 2 alles behalve het nieuwste; map 0 "
+"verwijdert) (tests)"
 
 #: src/app/main.cpp:226
 #, kde-format
 msgid ""
 "With --calendar and --screenshot: select this time, start|end (yyyy-MM-"
 "ddTHH:mm) (tests)"
-msgstr "Met --calendar en --screenshot: deze tijd selecteren, begin|einde (yyyy-MM-ddTHH:mm) (tests)"
+msgstr ""
+"Met --calendar en --screenshot: deze tijd selecteren, begin|einde (yyyy-MM-"
+"ddTHH:mm) (tests)"
 
 #: src/app/main.cpp:227
 #, kde-format
 msgid ""
 "With --calendar: drag in the date picker from one day number to another "
 "(\"10-13\"), logged (tests)"
-msgstr "Met --calendar: sleep in de datumkiezer van het ene dagnummer naar het andere (\"10-13\"), gelogd (tests)"
+msgstr ""
+"Met --calendar: sleep in de datumkiezer van het ene dagnummer naar het "
+"andere (\"10-13\"), gelogd (tests)"
 
 #: src/app/main.cpp:228
 #, kde-format
 msgid ""
 "With --calendar and --screenshot: mouse steps on the week grid, logged "
 "(tests)"
-msgstr "Met --calendar en --screenshot: muisstappen op het weekraster, gelogd (tests)"
+msgstr ""
+"Met --calendar en --screenshot: muisstappen op het weekraster, gelogd (tests)"
 
 #: src/app/main.cpp:229
 #, kde-format
 msgid ""
 "With --calendar and --screenshot: export the default calendar into this .ics "
 "file, logged (tests)"
-msgstr "Met --calendar en --screenshot: de standaardagenda naar dit .ics-bestand exporteren, gelogd (tests)"
+msgstr ""
+"Met --calendar en --screenshot: de standaardagenda naar dit .ics-bestand "
+"exporteren, gelogd (tests)"
 
 #: src/app/main.cpp:230
 #, kde-format
@@ -3801,7 +3950,10 @@ msgid ""
 "With --screenshot: give this folder its own cleanup rule (move to Archive, "
 "older than 1 day), run, Undo, remove the rule, account/mailbox/folder; "
 "logged (tests)"
-msgstr "Met --screenshot: deze map een eigen opruimregel geven (naar Archief, ouder dan 1 dag), uitvoeren, Ongedaan maken, de regel weghalen, account/postvak/map; gelogd (tests)"
+msgstr ""
+"Met --screenshot: deze map een eigen opruimregel geven (naar Archief, ouder "
+"dan 1 dag), uitvoeren, Ongedaan maken, de regel weghalen, account/postvak/"
+"map; gelogd (tests)"
 
 #: src/app/main.cpp:231
 #, kde-format
@@ -3813,40 +3965,51 @@ msgstr "Met --preview-attachment: het voorbeeld na een moment sluiten (tests)"
 msgid ""
 "With --folder, --select and --screenshot: Delete the selected message, log "
 "what is selected next, Undo (tests)"
-msgstr "Met --folder, --select en --screenshot: het geselecteerde bericht verwijderen, loggen wat daarna is geselecteerd, ongedaan maken (tests)"
+msgstr ""
+"Met --folder, --select en --screenshot: het geselecteerde bericht "
+"verwijderen, loggen wat daarna is geselecteerd, ongedaan maken (tests)"
 
 #: src/app/main.cpp:233
 #, kde-format
 msgid ""
 "With --tasks and --screenshot: show New Task (\"show\"), or save one with "
 "this [TEST Graph Mail] title (tests)"
-msgstr "Met --tasks en --screenshot: Nieuwe taak tonen (\"show\"), of er een opslaan met deze [TEST Graph Mail]-titel (tests)"
+msgstr ""
+"Met --tasks en --screenshot: Nieuwe taak tonen (\"show\"), of er een opslaan "
+"met deze [TEST Graph Mail]-titel (tests)"
 
 #: src/app/main.cpp:234
 #, kde-format
 msgid ""
 "With --screenshot and --select: the files a drag of the selected message "
 "gives, logged (tests)"
-msgstr "Met --screenshot en --select: de bestanden die het slepen van het geselecteerde bericht oplevert, gelogd (tests)"
+msgstr ""
+"Met --screenshot en --select: de bestanden die het slepen van het "
+"geselecteerde bericht oplevert, gelogd (tests)"
 
 #: src/app/main.cpp:235
 #, kde-format
 msgid "With --screenshot: also save the rendered message body as PDF (tests)"
-msgstr "Met --screenshot: ook de weergegeven berichttekst als pdf opslaan (tests)"
+msgstr ""
+"Met --screenshot: ook de weergegeven berichttekst als pdf opslaan (tests)"
 
 #: src/app/main.cpp:236
 #, kde-format
 msgid ""
 "With --screenshot: save all attachments of the shown message into this "
 "folder first (tests)"
-msgstr "Met --screenshot: eerst alle bijlagen van het getoonde bericht in deze map opslaan (tests)"
+msgstr ""
+"Met --screenshot: eerst alle bijlagen van het getoonde bericht in deze map "
+"opslaan (tests)"
 
 #: src/app/main.cpp:237
 #, kde-format
 msgid ""
 "With --screenshot and --select: picture of the message in its own window "
 "(tests)"
-msgstr "Met --screenshot en --select: afbeelding van het bericht in een eigen venster (tests)"
+msgstr ""
+"Met --screenshot en --select: afbeelding van het bericht in een eigen "
+"venster (tests)"
 
 #: src/app/main.cpp:238
 #, kde-format
@@ -3868,14 +4031,18 @@ msgstr "Deze afspraak openen (account/postvak/id)"
 msgid ""
 "Write a new message with this synced OneDrive or SharePoint file as a link "
 "(repeatable; Graph Sync)"
-msgstr "Een nieuw bericht schrijven met dit gesynchroniseerde OneDrive- of SharePoint-bestand als koppeling (herhaalbaar; Graph Sync)"
+msgstr ""
+"Een nieuw bericht schrijven met dit gesynchroniseerde OneDrive- of "
+"SharePoint-bestand als koppeling (herhaalbaar; Graph Sync)"
 
 #: src/app/main.cpp:242
 #, kde-format
 msgid ""
 "With --compose: attach these synced files as OneDrive links, comma-"
 "separated; their state is logged (tests)"
-msgstr "Met --compose: deze gesynchroniseerde bestanden als OneDrive-koppelingen bijvoegen, gescheiden door komma's; hun toestand wordt gelogd (tests)"
+msgstr ""
+"Met --compose: deze gesynchroniseerde bestanden als OneDrive-koppelingen "
+"bijvoegen, gescheiden door komma's; hun toestand wordt gelogd (tests)"
 
 #: src/app/main.cpp:243
 #, kde-format
@@ -3891,7 +4058,9 @@ msgstr "Met --calendar: de te tonen datum (jjjj-MM-dd)"
 #, kde-format
 msgid ""
 "With --calendar and --screenshot: a new event with this title, saved (tests)"
-msgstr "Met --calendar en --screenshot: een nieuwe afspraak met deze titel, opgeslagen (tests)"
+msgstr ""
+"Met --calendar en --screenshot: een nieuwe afspraak met deze titel, "
+"opgeslagen (tests)"
 
 #: src/app/main.cpp:246
 #, kde-format
@@ -3928,7 +4097,9 @@ msgstr "Met --new-event: deze herhaalregel, Graph-JSON (tests)"
 msgid ""
 "With --new-event: the start and end time zones, start|end IANA ids; the "
 "times are in those zones (tests)"
-msgstr "Met --new-event: de tijdzones van begin en einde, begin|einde IANA-namen; de tijden gelden in die zones (tests)"
+msgstr ""
+"Met --new-event: de tijdzones van begin en einde, begin|einde IANA-namen; de "
+"tijden gelden in die zones (tests)"
 
 #: src/app/main.cpp:253
 #, kde-format
@@ -3965,25 +4136,32 @@ msgstr "Met --edit-event: zoveel minuten verschuiven (tests)"
 msgid ""
 "With --tasks or --contacts and --screenshot: give a task or contact a "
 "category or take it away, spec|name|on/off (tests)"
-msgstr "Met --tasks of --contacts en --screenshot: een taak of contactpersoon een categorie geven of die weghalen, spec|naam|on/off (tests)"
+msgstr ""
+"Met --tasks of --contacts en --screenshot: een taak of contactpersoon een "
+"categorie geven of die weghalen, spec|naam|on/off (tests)"
 
 #: src/app/main.cpp:260
 #, kde-format
 msgid ""
 "With --calendar and --screenshot: give an event a category or take it away, "
 "spec|name|on/off (tests)"
-msgstr "Met --calendar en --screenshot: een afspraak een categorie geven of die weghalen, spec|naam|on/off (tests)"
+msgstr ""
+"Met --calendar en --screenshot: een afspraak een categorie geven of die "
+"weghalen, spec|naam|on/off (tests)"
 
 #: src/app/main.cpp:261
 #, kde-format
 msgid "With --screenshot: delete this event as the calendar does (tests)"
-msgstr "Met --screenshot: deze afspraak verwijderen zoals de agenda dat doet (tests)"
+msgstr ""
+"Met --screenshot: deze afspraak verwijderen zoals de agenda dat doet (tests)"
 
 #: src/app/main.cpp:262
 #, kde-format
 msgid ""
 "With --screenshot and --respond: answer this event from the calendar (tests)"
-msgstr "Met --screenshot en --respond: deze afspraak vanuit de agenda beantwoorden (tests)"
+msgstr ""
+"Met --screenshot en --respond: deze afspraak vanuit de agenda beantwoorden "
+"(tests)"
 
 #: src/app/main.cpp:263
 #, kde-format
@@ -4013,7 +4191,8 @@ msgstr "De contactpersonen openen"
 #: src/app/main.cpp:268
 #, kde-format
 msgid "With --screenshot: open the signatures window (never saved) (tests)"
-msgstr "Met --screenshot: open het venster Handtekeningen (nooit opgeslagen) (tests)"
+msgstr ""
+"Met --screenshot: open het venster Handtekeningen (nooit opgeslagen) (tests)"
 
 #: src/app/main.cpp:269
 #, kde-format
@@ -4030,7 +4209,9 @@ msgstr "Deze taak tonen (account/postvak/id)"
 msgid ""
 "With --contacts and --screenshot: a new contact with these fields, JSON, "
 "saved (tests)"
-msgstr "Met --contacts en --screenshot: een nieuwe contactpersoon met deze velden, JSON, opgeslagen (tests)"
+msgstr ""
+"Met --contacts en --screenshot: een nieuwe contactpersoon met deze velden, "
+"JSON, opgeslagen (tests)"
 
 #: src/app/main.cpp:272
 #, kde-format
@@ -4042,7 +4223,9 @@ msgstr "Met --new-contact: in dit postvak, account/postvak (tests)"
 msgid ""
 "With --contacts and --screenshot: change this contact, see --contact-fields "
 "(tests)"
-msgstr "Met --contacts en --screenshot: deze contactpersoon wijzigen, zie --contact-fields (tests)"
+msgstr ""
+"Met --contacts en --screenshot: deze contactpersoon wijzigen, zie --contact-"
+"fields (tests)"
 
 #: src/app/main.cpp:274
 #, kde-format
@@ -4052,7 +4235,8 @@ msgstr "Met --edit-contact: de te wijzigen velden, JSON (tests)"
 #: src/app/main.cpp:275
 #, kde-format
 msgid "With --contacts and --screenshot: delete this contact (tests)"
-msgstr "Met --contacts en --screenshot: deze contactpersoon verwijderen (tests)"
+msgstr ""
+"Met --contacts en --screenshot: deze contactpersoon verwijderen (tests)"
 
 #: src/app/main.cpp:276
 #, kde-format
@@ -4064,41 +4248,52 @@ msgstr "Met --contacts en --screenshot: in de adreslijst zoeken (tests)"
 msgid ""
 "With --calendar and --screenshot: Add a Colleague's Calendar for this "
 "address (tests)"
-msgstr "Met --calendar en --screenshot: Agenda van een collega toevoegen voor dit adres (tests)"
+msgstr ""
+"Met --calendar en --screenshot: Agenda van een collega toevoegen voor dit "
+"adres (tests)"
 
 #: src/app/main.cpp:278
 #, kde-format
 msgid ""
 "With --calendar and --screenshot: remove this colleague's calendar from "
 "Graph Mail (tests)"
-msgstr "Met --calendar en --screenshot: de agenda van deze collega uit Graph Mail verwijderen (tests)"
+msgstr ""
+"Met --calendar en --screenshot: de agenda van deze collega uit Graph Mail "
+"verwijderen (tests)"
 
 #: src/app/main.cpp:279
 #, kde-format
 msgid ""
 "With --calendar and --screenshot: share the default calendar, address|role "
 "(tests)"
-msgstr "Met --calendar en --screenshot: de standaardagenda delen, adres|rol (tests)"
+msgstr ""
+"Met --calendar en --screenshot: de standaardagenda delen, adres|rol (tests)"
 
 #: src/app/main.cpp:280
 #, kde-format
 msgid ""
 "With --calendar and --screenshot: change a person's permission on the "
 "default calendar, address|role (tests)"
-msgstr "Met --calendar en --screenshot: de machtiging van een persoon op de standaardagenda wijzigen, adres|rol (tests)"
+msgstr ""
+"Met --calendar en --screenshot: de machtiging van een persoon op de "
+"standaardagenda wijzigen, adres|rol (tests)"
 
 #: src/app/main.cpp:281
 #, kde-format
 msgid ""
 "With --calendar and --screenshot: stop sharing the default calendar with "
 "this address (tests)"
-msgstr "Met --calendar en --screenshot: de standaardagenda niet meer met dit adres delen (tests)"
+msgstr ""
+"Met --calendar en --screenshot: de standaardagenda niet meer met dit adres "
+"delen (tests)"
 
 #: src/app/main.cpp:282
 #, kde-format
 msgid ""
 "With --calendar and --screenshot: show the default calendar's sharing (tests)"
-msgstr "Met --calendar en --screenshot: het delen van de standaardagenda tonen (tests)"
+msgstr ""
+"Met --calendar en --screenshot: het delen van de standaardagenda tonen "
+"(tests)"
 
 #: src/app/main.cpp:283
 #, kde-format
@@ -4110,14 +4305,18 @@ msgstr "Met --screenshot: naar deze tekst zoeken (tests)"
 msgid ""
 "With --screenshot: set|unset|create|recolor|delete a test category, action|"
 "name|colour (tests)"
-msgstr "Met --screenshot: een testcategorie instellen, weghalen, maken, herkleuren of verwijderen, actie|naam|kleur (tests)"
+msgstr ""
+"Met --screenshot: een testcategorie instellen, weghalen, maken, herkleuren "
+"of verwijderen, actie|naam|kleur (tests)"
 
 #: src/app/main.cpp:285
 #, kde-format
 msgid ""
 "With --screenshot: create, open, change or delete a test search folder, "
 "action|name|filter (tests)"
-msgstr "Met --screenshot: een testzoekmap maken, openen, wijzigen of verwijderen, actie|naam|filter (tests)"
+msgstr ""
+"Met --screenshot: een testzoekmap maken, openen, wijzigen of verwijderen, "
+"actie|naam|filter (tests)"
 
 #: src/app/main.cpp:286
 #, kde-format
@@ -4127,56 +4326,71 @@ msgstr "Met --search: folder, mailbox of all (tests)"
 #: src/app/main.cpp:287
 #, kde-format
 msgid "With --screenshot: tick search filters, comma separated (tests)"
-msgstr "Met --screenshot: zoekfilters aanvinken, gescheiden door komma's (tests)"
+msgstr ""
+"Met --screenshot: zoekfilters aanvinken, gescheiden door komma's (tests)"
 
 #: src/app/main.cpp:288
 #, kde-format
 msgid ""
 "With --screenshot: open Settings > Offline; days|attachments|free to also "
 "save (tests)"
-msgstr "Met --screenshot: Instellingen > Offline openen; dagen|bijlagen|free om ook op te slaan (tests)"
+msgstr ""
+"Met --screenshot: Instellingen > Offline openen; dagen|bijlagen|free om ook "
+"op te slaan (tests)"
 
 #: src/app/main.cpp:289
 #, kde-format
 msgid ""
 "With --screenshot: open Settings > Updates; \"check\" also presses Check "
 "Now; the status is logged (tests)"
-msgstr "Met --screenshot: Instellingen > Updates openen; \"check\" drukt ook op Nu controleren; de status wordt gelogd (tests)"
+msgstr ""
+"Met --screenshot: Instellingen > Updates openen; \"check\" drukt ook op Nu "
+"controleren; de status wordt gelogd (tests)"
 
 #: src/app/main.cpp:291
 #, kde-format
 msgid ""
 "With --screenshot: open Automatic Replies; show, bar, turnoff, off|text, on|"
 "text or scheduled|start|end|text to also save (tests)"
-msgstr "Met --screenshot: Automatische antwoorden openen; show, bar, turnoff, off|tekst, on|tekst of scheduled|begin|eind|tekst om ook op te slaan (tests)"
+msgstr ""
+"Met --screenshot: Automatische antwoorden openen; show, bar, turnoff, off|"
+"tekst, on|tekst of scheduled|begin|eind|tekst om ook op te slaan (tests)"
 
 #: src/app/main.cpp:293
 #, kde-format
 msgid ""
 "With --auto-replies, --rules or --mailbox-settings: the own mailbox, account/"
 "me (tests)"
-msgstr "Met --auto-replies, --rules of --mailbox-settings: het eigen postvak, account/me (tests)"
+msgstr ""
+"Met --auto-replies, --rules of --mailbox-settings: het eigen postvak, "
+"account/me (tests)"
 
 #: src/app/main.cpp:294
 #, kde-format
 msgid ""
 "With --screenshot and --settings-mailbox: set this picture as the mailbox's "
 "photo, or remove it (remove) (tests)"
-msgstr "Met --screenshot en --settings-mailbox: deze afbeelding als foto van het postvak instellen, of die verwijderen (remove) (tests)"
+msgstr ""
+"Met --screenshot en --settings-mailbox: deze afbeelding als foto van het "
+"postvak instellen, of die verwijderen (remove) (tests)"
 
 #: src/app/main.cpp:295
 #, kde-format
 msgid ""
 "With --screenshot: open Mailbox Settings; show, or hours|days|start|end to "
 "save working hours (tests)"
-msgstr "Met --screenshot: Postvakinstellingen openen; show, of hours|dagen|begin|eind om werktijden op te slaan (tests)"
+msgstr ""
+"Met --screenshot: Postvakinstellingen openen; show, of hours|dagen|begin|"
+"eind om werktijden op te slaan (tests)"
 
 #: src/app/main.cpp:296
 #, kde-format
 msgid ""
 "With --screenshot: open Rules; show, editor|name|subject, create|name|"
 "subject, toggle|name, up|name or delete|name (tests)"
-msgstr "Met --screenshot: Regels openen; show, editor|naam|onderwerp, create|naam|onderwerp, toggle|naam, up|naam of delete|naam (tests)"
+msgstr ""
+"Met --screenshot: Regels openen; show, editor|naam|onderwerp, create|naam|"
+"onderwerp, toggle|naam, up|naam of delete|naam (tests)"
 
 #: src/app/main.cpp:297
 #, kde-format
@@ -4208,7 +4422,9 @@ msgstr "Met --mailboxes: dit postvak verwijderen zonder te vragen (tests)"
 msgid ""
 "With --contacts and --screenshot: Add to Contacts for this address from the "
 "directory, marked as a test (tests)"
-msgstr "Met --contacts en --screenshot: Aan contactpersonen toevoegen voor dit adres uit de adreslijst, gemarkeerd als test (tests)"
+msgstr ""
+"Met --contacts en --screenshot: Aan contactpersonen toevoegen voor dit adres "
+"uit de adreslijst, gemarkeerd als test (tests)"
 
 #: src/app/main.cpp:303
 #, kde-format
@@ -4229,7 +4445,8 @@ msgstr "Met --tasks en --screenshot: het vinkje van deze taak weghalen (tests)"
 #, kde-format
 msgid ""
 "With --tasks and --screenshot: change this task, see --task-fields (tests)"
-msgstr "Met --tasks en --screenshot: deze taak wijzigen, zie --task-fields (tests)"
+msgstr ""
+"Met --tasks en --screenshot: deze taak wijzigen, zie --task-fields (tests)"
 
 #: src/app/main.cpp:307
 #, kde-format
@@ -4240,20 +4457,26 @@ msgstr "Met --edit-task: de te wijzigen velden, JSON (tests)"
 #, kde-format
 msgid ""
 "With --tasks and --screenshot: add a step to this task, spec|text (tests)"
-msgstr "Met --tasks en --screenshot: een stap aan deze taak toevoegen, spec|tekst (tests)"
+msgstr ""
+"Met --tasks en --screenshot: een stap aan deze taak toevoegen, spec|tekst "
+"(tests)"
 
 #: src/app/main.cpp:309
 #, kde-format
 msgid ""
 "With --tasks and --screenshot: tick this step of this task, spec|text (tests)"
-msgstr "Met --tasks en --screenshot: deze stap van deze taak afvinken, spec|tekst (tests)"
+msgstr ""
+"Met --tasks en --screenshot: deze stap van deze taak afvinken, spec|tekst "
+"(tests)"
 
 #: src/app/main.cpp:310
 #, kde-format
 msgid ""
 "With --tasks and --screenshot: Open the Mail of this flagged-mail task "
 "(tests)"
-msgstr "Met --tasks en --screenshot: E-mail openen van deze taak voor gemarkeerde e-mail (tests)"
+msgstr ""
+"Met --tasks en --screenshot: E-mail openen van deze taak voor gemarkeerde e-"
+"mail (tests)"
 
 #: src/app/main.cpp:311
 #, kde-format
@@ -4265,20 +4488,25 @@ msgstr "Met --tasks en --screenshot: deze taak verwijderen (tests)"
 msgid ""
 "With --tasks and --screenshot: create, rename or delete a list, action|name|"
 "new name (tests)"
-msgstr "Met --tasks en --screenshot: een lijst maken, hernoemen of verwijderen, actie|naam|nieuwe naam (tests)"
+msgstr ""
+"Met --tasks en --screenshot: een lijst maken, hernoemen of verwijderen, "
+"actie|naam|nieuwe naam (tests)"
 
 #: src/app/main.cpp:313
 #, kde-format
 msgid ""
 "With --screenshot: import this .ics file into the default calendar (tests)"
-msgstr "Met --screenshot: dit .ics-bestand in de standaardagenda importeren (tests)"
+msgstr ""
+"Met --screenshot: dit .ics-bestand in de standaardagenda importeren (tests)"
 
 #: src/app/main.cpp:314
 #, kde-format
 msgid ""
 "With --screenshot: open a composer: new, reply, replyAll or forward (the --"
 "select row) (tests)"
-msgstr "Met --screenshot: een opstelvenster openen: new, reply, replyAll of forward (de rij van --select) (tests)"
+msgstr ""
+"Met --screenshot: een opstelvenster openen: new, reply, replyAll of forward "
+"(de rij van --select) (tests)"
 
 #: src/app/main.cpp:315
 #, kde-format
@@ -4290,19 +4518,25 @@ msgstr "Met --compose: de geadresseerden (tests)"
 msgid ""
 "With --compose: drop these files (comma separated) on the text and log the "
 "result (tests)"
-msgstr "Met --compose: zet deze bestanden (door komma's gescheiden) op de tekst neer en log het resultaat (tests)"
+msgstr ""
+"Met --compose: zet deze bestanden (door komma's gescheiden) op de tekst neer "
+"en log het resultaat (tests)"
 
 #: src/app/main.cpp:317
 #, kde-format
 msgid ""
 "With --compose: insert the HTML of this file as a paste and log its pictures "
 "(tests)"
-msgstr "Met --compose: voeg de HTML van dit bestand in als plakactie en log de afbeeldingen (tests)"
+msgstr ""
+"Met --compose: voeg de HTML van dit bestand in als plakactie en log de "
+"afbeeldingen (tests)"
 
 #: src/app/main.cpp:318
 #, kde-format
 msgid "With --compose: play these keys on the text and log every undo (tests)"
-msgstr "Met --compose: speel deze toetsen af op de tekst en log elke ongedaanmaking (tests)"
+msgstr ""
+"Met --compose: speel deze toetsen af op de tekst en log elke ongedaanmaking "
+"(tests)"
 
 #: src/app/main.cpp:319
 #, kde-format
@@ -4317,7 +4551,9 @@ msgstr "Met --compose: een smal opstelvenster (tests)"
 #: src/app/main.cpp:321
 #, kde-format
 msgid "With --compose: run Check Names on the recipients, logged (tests)"
-msgstr "Met --compose: Namen controleren uitvoeren op de geadresseerden, gelogd (tests)"
+msgstr ""
+"Met --compose: Namen controleren uitvoeren op de geadresseerden, gelogd "
+"(tests)"
 
 #: src/app/main.cpp:322
 #, kde-format
@@ -4349,14 +4585,18 @@ msgstr "Met --compose: verzenden en daarna afsluiten (tests)"
 msgid ""
 "With --compose: press Send as the user does (OneDrive links shared first); "
 "only a [TEST Graph Mail] subject (tests)"
-msgstr "Met --compose: op Verzenden drukken zoals de gebruiker (OneDrive-koppelingen eerst gedeeld); alleen met [TEST Graph Mail] in het onderwerp (tests)"
+msgstr ""
+"Met --compose: op Verzenden drukken zoals de gebruiker (OneDrive-koppelingen "
+"eerst gedeeld); alleen met [TEST Graph Mail] in het onderwerp (tests)"
 
 #: src/app/main.cpp:328
 #, kde-format
 msgid ""
 "With --compose: read, delivery, sensitivity=N, defer=ISO time, comma "
 "separated (tests)"
-msgstr "Met --compose: read, delivery, sensitivity=N, defer=ISO-tijd, gescheiden door komma's (tests)"
+msgstr ""
+"Met --compose: read, delivery, sensitivity=N, defer=ISO-tijd, gescheiden "
+"door komma's (tests)"
 
 #: src/app/main.cpp:329
 #, kde-format
@@ -4371,7 +4611,8 @@ msgstr "Met --compose: invullen vanuit het sjabloon met deze naam (tests)"
 #: src/app/main.cpp:331
 #, kde-format
 msgid "With --compose-send: press Undo after this many seconds (tests)"
-msgstr "Met --compose-send: na zoveel seconden op Ongedaan maken drukken (tests)"
+msgstr ""
+"Met --compose-send: na zoveel seconden op Ongedaan maken drukken (tests)"
 
 #: src/app/main.cpp:332
 #, kde-format
@@ -4383,19 +4624,25 @@ msgstr "Met --select: de snelle stap met deze naam uitvoeren (tests)"
 msgid ""
 "With --select: move the message to Other (other) or Focused (focused), or "
 "always (always-other, always-focused) (tests)"
-msgstr "Met --select: het bericht naar Overige (other) of Prioriteit (focused) verplaatsen, of altijd (always-other, always-focused) (tests)"
+msgstr ""
+"Met --select: het bericht naar Overige (other) of Prioriteit (focused) "
+"verplaatsen, of altijd (always-other, always-focused) (tests)"
 
 #: src/app/main.cpp:334
 #, kde-format
 msgid ""
 "With --select: report the message as junk (junk) or not junk (notjunk) "
 "(tests)"
-msgstr "Met --select: het bericht als ongewenst (junk) of niet ongewenst (notjunk) melden (tests)"
+msgstr ""
+"Met --select: het bericht als ongewenst (junk) of niet ongewenst (notjunk) "
+"melden (tests)"
 
 #: src/app/main.cpp:335
 #, kde-format
 msgid "With --select: ignore the message's conversation, or stop (off) (tests)"
-msgstr "Met --select: het gesprek van het bericht negeren, of daarmee stoppen (off) (tests)"
+msgstr ""
+"Met --select: het gesprek van het bericht negeren, of daarmee stoppen (off) "
+"(tests)"
 
 #: src/app/main.cpp:336
 #, kde-format
@@ -4412,7 +4659,9 @@ msgstr "Met --folder op een Postvak IN: Prioriteit of Overige tonen (tests)"
 msgid ""
 "With --screenshot: save the selected message (--select) or the whole folder "
 "(--export-folder) into this file (tests)"
-msgstr "Met --screenshot: het geselecteerde bericht (--select) of de hele map (--export-folder) in dit bestand opslaan (tests)"
+msgstr ""
+"Met --screenshot: het geselecteerde bericht (--select) of de hele map (--"
+"export-folder) in dit bestand opslaan (tests)"
 
 #: src/app/main.cpp:339
 #, kde-format
@@ -4425,7 +4674,10 @@ msgid ""
 "With --screenshot and --folder: export that folder with its subfolders (or "
 "with --export-pst-mailbox the whole mailbox) to this Outlook data file "
 "(tests)"
-msgstr "Met --screenshot en --folder: die map met haar submappen (of met --export-pst-mailbox het hele postvak) naar dit Outlook-gegevensbestand exporteren (tests)"
+msgstr ""
+"Met --screenshot en --folder: die map met haar submappen (of met --export-"
+"pst-mailbox het hele postvak) naar dit Outlook-gegevensbestand exporteren "
+"(tests)"
 
 #: src/app/main.cpp:341
 #, kde-format
@@ -4437,14 +4689,18 @@ msgstr "Met --export-pst: het hele postvak van --folder (tests)"
 msgid ""
 "With --export-pst: only the contacts, calendars and tasks of the mailbox of "
 "--folder (tests)"
-msgstr "Met --export-pst: alleen de contactpersonen, agenda's en taken van het postvak van --folder (tests)"
+msgstr ""
+"Met --export-pst: alleen de contactpersonen, agenda's en taken van het "
+"postvak van --folder (tests)"
 
 #: src/app/main.cpp:343
 #, kde-format
 msgid ""
 "With --screenshot and --folder: import this Outlook data file into the "
 "mailbox of --folder, in a new folder named after the file (tests)"
-msgstr "Met --screenshot en --folder: dit Outlook-gegevensbestand in het postvak van --folder importeren, in een nieuwe map met de naam van het bestand (tests)"
+msgstr ""
+"Met --screenshot en --folder: dit Outlook-gegevensbestand in het postvak van "
+"--folder importeren, in een nieuwe map met de naam van het bestand (tests)"
 
 #: src/app/main.cpp:344
 #, kde-format
@@ -4456,35 +4712,45 @@ msgstr "Met --import-pst: in de eigen mappen van het postvak (tests)"
 msgid ""
 "With --screenshot and --folder: make this folder id the mailbox's archive "
 "folder (tests)"
-msgstr "Met --screenshot en --folder: de map met deze id de archiefmap van het postvak maken (tests)"
+msgstr ""
+"Met --screenshot en --folder: de map met deze id de archiefmap van het "
+"postvak maken (tests)"
 
 #: src/app/main.cpp:346
 #, kde-format
 msgid ""
 "With --screenshot: show this .msg or .eml in the message viewer, or "
 "this .pst in the import dialog, and take the picture of that (tests)"
-msgstr "Met --screenshot: dit .msg- of .eml-bestand in de berichtweergave tonen, of dit .pst-bestand in het importvenster, en daarvan de afbeelding maken (tests)"
+msgstr ""
+"Met --screenshot: dit .msg- of .eml-bestand in de berichtweergave tonen, of "
+"dit .pst-bestand in het importvenster, en daarvan de afbeelding maken (tests)"
 
 #: src/app/main.cpp:347
 #, kde-format
 msgid ""
 "With --screenshot and --folder: import these .msg or .eml files (comma "
 "separated) into that folder (tests)"
-msgstr "Met --screenshot en --folder: deze .msg- of .eml-bestanden (gescheiden door komma's) in die map importeren (tests)"
+msgstr ""
+"Met --screenshot en --folder: deze .msg- of .eml-bestanden (gescheiden door "
+"komma's) in die map importeren (tests)"
 
 #: src/app/main.cpp:348
 #, kde-format
 msgid ""
 "With --screenshot: print the message shown, or the calendar, contacts or "
 "tasks opened, into this PDF (tests)"
-msgstr "Met --screenshot: het getoonde bericht, of de geopende agenda, contactpersonen of taken, naar deze pdf afdrukken (tests)"
+msgstr ""
+"Met --screenshot: het getoonde bericht, of de geopende agenda, "
+"contactpersonen of taken, naar deze pdf afdrukken (tests)"
 
 #: src/app/main.cpp:349
 #, kde-format
 msgid ""
 "With --select: flag the message today, tomorrow, thisweek, nextweek, none, "
 "complete or clear (tests)"
-msgstr "Met --select: het bericht markeren voor today, tomorrow, thisweek, nextweek, none, complete of clear (tests)"
+msgstr ""
+"Met --select: het bericht markeren voor today, tomorrow, thisweek, nextweek, "
+"none, complete of clear (tests)"
 
 #: src/app/main.cpp:350
 #, kde-format
@@ -4496,767 +4762,779 @@ msgstr "Met --compose: als concept opslaan en daarna afsluiten (tests)"
 msgid ""
 "With --screenshot: load internet content as if \"Load Images\" was clicked "
 "(tests)"
-msgstr "Met --screenshot: internetinhoud laden alsof op \"Afbeeldingen laden\" is geklikt (tests)"
+msgstr ""
+"Met --screenshot: internetinhoud laden alsof op \"Afbeeldingen laden\" is "
+"geklikt (tests)"
 
 #: src/app/main.cpp:352
 #, kde-format
 msgid ""
 "With --screenshot: click the shown message's first link with this text; "
 "links are only logged (tests)"
-msgstr "Met --screenshot: op de eerste koppeling met deze tekst in het getoonde bericht klikken; koppelingen worden alleen gelogd (tests)"
+msgstr ""
+"Met --screenshot: op de eerste koppeling met deze tekst in het getoonde "
+"bericht klikken; koppelingen worden alleen gelogd (tests)"
 
-#: src/app/mainwindow.cpp:254
+#: src/app/mainwindow.cpp:260
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Leave the search and show the folder again (Esc)"
 msgstr "De zoekopdracht verlaten en de map weer tonen (Esc)"
 
-#: src/app/mainwindow.cpp:266
+#: src/app/mainwindow.cpp:272
 #, kde-format
 msgctxt "@title:tab Focused Inbox"
 msgid "Focused"
 msgstr "Prioriteit"
 
-#: src/app/mainwindow.cpp:267
+#: src/app/mainwindow.cpp:273
 #, kde-format
 msgctxt "@title:tab Focused Inbox"
 msgid "Other"
 msgstr "Overige"
 
-#: src/app/mainwindow.cpp:300
+#: src/app/mainwindow.cpp:306
 #, kde-format
 msgctxt "@action:button automatic replies"
 msgid "Turn Off"
 msgstr "Uitschakelen"
 
-#: src/app/mainwindow.cpp:303
+#: src/app/mainwindow.cpp:309
 #, kde-format
 msgctxt "@action:button automatic replies"
 msgid "Change..."
 msgstr "Wijzigen..."
 
-#: src/app/mainwindow.cpp:315
+#: src/app/mainwindow.cpp:321
 #, kde-format
 msgctxt "@action:button undo send"
 msgid "Undo"
 msgstr "Ongedaan maken"
 
-#: src/app/mainwindow.cpp:328
+#: src/app/mainwindow.cpp:334
 #, kde-format
 msgctxt "@info:status"
 msgid "Too late: the message was sent."
 msgstr "Te laat: het bericht is verzonden."
 
-#: src/app/mainwindow.cpp:345
+#: src/app/mainwindow.cpp:351
 #, kde-format
 msgctxt "@action:button"
 msgid "Microsoft 365 Accounts..."
 msgstr "Microsoft 365-accounts..."
 
-#: src/app/mainwindow.cpp:502
+#: src/app/mainwindow.cpp:508
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Check for new mail now"
 msgstr "Nu controleren op nieuwe e-mail"
 
-#: src/app/mainwindow.cpp:511 src/app/mainwindow.cpp:621
-#: src/app/mainwindow.cpp:3918
+#: src/app/mainwindow.cpp:517 src/app/mainwindow.cpp:627
+#: src/app/mainwindow.cpp:3925
 #, kde-format
 msgctxt "@action"
 msgid "Mark as Read"
 msgstr "Markeren als gelezen"
 
-#: src/app/mainwindow.cpp:521 src/app/mainwindow.cpp:3918
+#: src/app/mainwindow.cpp:527 src/app/mainwindow.cpp:3925
 #: src/app/messagewindow.cpp:200
 #, kde-format
 msgctxt "@action"
 msgid "Mark as Unread"
 msgstr "Markeren als ongelezen"
 
-#: src/app/mainwindow.cpp:529 src/app/messagewindow.cpp:208
+#: src/app/mainwindow.cpp:535 src/app/messagewindow.cpp:208
 #, kde-format
 msgctxt "@action follow up on a message"
 msgid "Flag"
 msgstr "Opvolgen"
 
-#: src/app/mainwindow.cpp:534
+#: src/app/mainwindow.cpp:540
 #, kde-format
 msgctxt "@action:inmenu follow up"
 msgid "Today"
 msgstr "Vandaag"
 
-#: src/app/mainwindow.cpp:535
+#: src/app/mainwindow.cpp:541
 #, kde-format
 msgctxt "@action:inmenu follow up"
 msgid "Tomorrow"
 msgstr "Morgen"
 
-#: src/app/mainwindow.cpp:536
+#: src/app/mainwindow.cpp:542
 #, kde-format
 msgctxt "@action:inmenu follow up"
 msgid "This Week"
 msgstr "Deze week"
 
-#: src/app/mainwindow.cpp:537
+#: src/app/mainwindow.cpp:543
 #, kde-format
 msgctxt "@action:inmenu follow up"
 msgid "Next Week"
 msgstr "Volgende week"
 
-#: src/app/mainwindow.cpp:538
+#: src/app/mainwindow.cpp:544
 #, kde-format
 msgctxt "@action:inmenu follow up"
 msgid "No Date"
 msgstr "Geen datum"
 
-#: src/app/mainwindow.cpp:539
+#: src/app/mainwindow.cpp:545
 #, kde-format
 msgctxt "@action:inmenu follow up"
 msgid "Custom..."
 msgstr "Aangepast..."
 
-#: src/app/mainwindow.cpp:547
+#: src/app/mainwindow.cpp:553
 #, kde-format
 msgctxt "@action:inmenu follow up"
 msgid "Mark Complete"
 msgstr "Markeren als voltooid"
 
-#: src/app/mainwindow.cpp:550
+#: src/app/mainwindow.cpp:556
 #, kde-format
 msgctxt "@action:inmenu follow up"
 msgid "Clear Flag"
 msgstr "Markering wissen"
 
-#: src/app/mainwindow.cpp:555
+#: src/app/mainwindow.cpp:561
 #, kde-format
 msgctxt "@action"
 msgid "Categorize"
 msgstr "Categoriseren"
 
-#: src/app/mainwindow.cpp:563
+#: src/app/mainwindow.cpp:569
 #, kde-format
 msgctxt "@action"
 msgid "Quick Steps"
 msgstr "Snelle stappen"
 
-#: src/app/mainwindow.cpp:578
+#: src/app/mainwindow.cpp:584
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Manage Quick Steps..."
 msgstr "Snelle stappen beheren..."
 
-#: src/app/mainwindow.cpp:586 src/app/mainwindow.cpp:3905
+#: src/app/mainwindow.cpp:592 src/app/mainwindow.cpp:3912
 #: src/app/messagewindow.cpp:218
 #, kde-format
 msgctxt "@action"
 msgid "Delete"
 msgstr "Verwijderen"
 
-#: src/app/mainwindow.cpp:593
+#: src/app/mainwindow.cpp:599
 #, kde-format
 msgctxt "@action"
 msgid "Empty Folder"
 msgstr "Map leegmaken"
 
-#: src/app/mainwindow.cpp:602
+#: src/app/mainwindow.cpp:608
 #, kde-format
 msgctxt "@action"
 msgid "New Folder..."
 msgstr "Nieuwe map..."
 
-#: src/app/mainwindow.cpp:613
+#: src/app/mainwindow.cpp:619
 #, kde-format
 msgctxt "@action short toolbar text for Reply with Meeting"
 msgid "Meeting"
 msgstr "Vergadering"
 
-#: src/app/mainwindow.cpp:616
+#: src/app/mainwindow.cpp:622
 #, kde-format
 msgctxt "@action"
 msgid "Report Phishing"
 msgstr "Phishing melden"
 
-#: src/app/mainwindow.cpp:630
+#: src/app/mainwindow.cpp:636
 #, kde-format
 msgctxt "@action"
 msgid "Copy to Folder..."
 msgstr "Naar map kopiëren..."
 
-#: src/app/mainwindow.cpp:634
+#: src/app/mainwindow.cpp:640
 #, kde-format
 msgctxt "@title:window"
 msgid "Copy to Folder"
 msgstr "Naar map kopiëren"
 
-#: src/app/mainwindow.cpp:640
+#: src/app/mainwindow.cpp:646
 #, kde-format
 msgctxt "@action"
 msgid "Create Rule from This Message..."
 msgstr "Regel maken op basis van dit bericht..."
 
-#: src/app/mainwindow.cpp:645 src/app/messagewindow.cpp:230
+#: src/app/mainwindow.cpp:651 src/app/messagewindow.cpp:230
 #, kde-format
 msgctxt "@action"
 msgid "Move to Folder..."
 msgstr "Naar map verplaatsen..."
 
-#: src/app/mainwindow.cpp:646 src/app/messagewindow.cpp:231
+#: src/app/mainwindow.cpp:652 src/app/messagewindow.cpp:231
 #, kde-format
 msgctxt "@action short toolbar text"
 msgid "Move"
 msgstr "Verplaatsen"
 
-#: src/app/mainwindow.cpp:652 src/app/messagewindow.cpp:242
+#: src/app/mainwindow.cpp:658 src/app/messagewindow.cpp:242
 #, kde-format
 msgctxt "@action move to the Archive folder"
 msgid "Archive"
 msgstr "Archiveren"
 
-#: src/app/mainwindow.cpp:657
+#: src/app/mainwindow.cpp:663
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Show All Folders"
 msgstr "Alle mappen tonen"
 
-#: src/app/mainwindow.cpp:658
+#: src/app/mainwindow.cpp:664
 #, kde-format
 msgctxt "@info:tooltip"
 msgid ""
 "Also show the system folders Outlook hides (Sync Issues, RSS, Working "
 "Set, ...)"
-msgstr "Ook de systeemmappen tonen die Outlook verbergt (Synchronisatieproblemen, RSS, Working Set, ...)"
+msgstr ""
+"Ook de systeemmappen tonen die Outlook verbergt (Synchronisatieproblemen, "
+"RSS, Working Set, ...)"
 
-#: src/app/mainwindow.cpp:669
+#: src/app/mainwindow.cpp:675
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Show as Conversations"
 msgstr "Als gesprekken tonen"
 
-#: src/app/mainwindow.cpp:673
+#: src/app/mainwindow.cpp:679
 #, kde-format
 msgctxt "@action"
 msgid "Reading Pane"
 msgstr "Leesvenster"
 
-#: src/app/mainwindow.cpp:674
-#, kde-format
-msgctxt "@item reading pane"
-msgid "Right"
-msgstr "Rechts"
-
-#: src/app/mainwindow.cpp:674
+#: src/app/mainwindow.cpp:680
 #, kde-format
 msgctxt "@item reading pane"
 msgid "Bottom"
 msgstr "Onder"
 
-#: src/app/mainwindow.cpp:674
+#: src/app/mainwindow.cpp:680
 #, kde-format
 msgctxt "@item reading pane"
 msgid "Off"
 msgstr "Uit"
 
-#: src/app/mainwindow.cpp:690
+#: src/app/mainwindow.cpp:680
+#, kde-format
+msgctxt "@item reading pane"
+msgid "Right"
+msgstr "Rechts"
+
+#: src/app/mainwindow.cpp:696
 #, kde-format
 msgctxt "@action"
 msgid "Focused Inbox"
 msgstr "Postvak IN met prioriteit"
 
-#: src/app/mainwindow.cpp:734
+#: src/app/mainwindow.cpp:740
 #, kde-format
 msgctxt "@info:placeholder"
 msgid "Search"
 msgstr "Zoeken"
 
-#: src/app/mainwindow.cpp:739
+#: src/app/mainwindow.cpp:745
 #, kde-format
 msgctxt "@action"
 msgid "Search Mail"
 msgstr "E-mail zoeken"
 
-#: src/app/mainwindow.cpp:769
+#: src/app/mainwindow.cpp:775
 #, kde-format
 msgctxt "@item:inlistbox search scope"
 msgid "Current Folder"
 msgstr "Huidige map"
 
-#: src/app/mainwindow.cpp:770
+#: src/app/mainwindow.cpp:776
 #, kde-format
 msgctxt "@item:inlistbox search scope"
 msgid "Current Mailbox"
 msgstr "Huidig postvak"
 
-#: src/app/mainwindow.cpp:771
+#: src/app/mainwindow.cpp:777
 #, kde-format
 msgctxt "@item:inlistbox search scope"
 msgid "All Mailboxes"
 msgstr "Alle postvakken"
 
-#: src/app/mainwindow.cpp:775
+#: src/app/mainwindow.cpp:781
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Where to search"
 msgstr "Waar zoeken"
 
-#: src/app/mainwindow.cpp:789 src/app/mainwindow.cpp:3056
+#: src/app/mainwindow.cpp:795 src/app/mainwindow.cpp:3063
 #, kde-format
 msgctxt "@action:button"
 msgid "Filters"
 msgstr "Filters"
 
-#: src/app/mainwindow.cpp:800
+#: src/app/mainwindow.cpp:806
 #, kde-format
 msgctxt "@option:check search filter"
 msgid "Has Attachments"
 msgstr "Met bijlagen"
 
-#: src/app/mainwindow.cpp:801
+#: src/app/mainwindow.cpp:807
 #, kde-format
 msgctxt "@option:check search filter"
 msgid "Unread"
 msgstr "Ongelezen"
 
-#: src/app/mainwindow.cpp:802
+#: src/app/mainwindow.cpp:808
 #, kde-format
 msgctxt "@option:check search filter"
 msgid "Read"
 msgstr "Gelezen"
 
-#: src/app/mainwindow.cpp:816
+#: src/app/mainwindow.cpp:822
 #, kde-format
 msgctxt "@option:check search filter"
 msgid "Flagged"
 msgstr "Gemarkeerd"
 
-#: src/app/mainwindow.cpp:817
+#: src/app/mainwindow.cpp:823
 #, kde-format
 msgctxt "@option:check search filter"
 msgid "Important"
 msgstr "Urgent"
 
-#: src/app/mainwindow.cpp:818
+#: src/app/mainwindow.cpp:824
 #, kde-format
 msgctxt "@option:check search filter"
 msgid "Sent to Me"
 msgstr "Aan mij verzonden"
 
-#: src/app/mainwindow.cpp:819
+#: src/app/mainwindow.cpp:825
 #, kde-format
 msgctxt "@option:check search filter"
 msgid "CC to Me"
 msgstr "Mij in CC"
 
-#: src/app/mainwindow.cpp:821
+#: src/app/mainwindow.cpp:827
 #, kde-format
 msgctxt "@title:menu search filter"
 msgid "Received"
 msgstr "Ontvangen"
 
-#: src/app/mainwindow.cpp:823
+#: src/app/mainwindow.cpp:829
 #, kde-format
 msgctxt "@option:radio received"
 msgid "Any Time"
 msgstr "Altijd"
 
-#: src/app/mainwindow.cpp:823
-#, kde-format
-msgctxt "@option:radio received"
-msgid "Today"
-msgstr "Vandaag"
-
-#: src/app/mainwindow.cpp:823
+#: src/app/mainwindow.cpp:829
 #, kde-format
 msgctxt "@option:radio received"
 msgid "This Week"
 msgstr "Deze week"
 
-#: src/app/mainwindow.cpp:824
+#: src/app/mainwindow.cpp:829
 #, kde-format
 msgctxt "@option:radio received"
-msgid "Last 30 Days"
-msgstr "Laatste 30 dagen"
+msgid "Today"
+msgstr "Vandaag"
 
-#: src/app/mainwindow.cpp:824
-#, kde-format
-msgctxt "@option:radio received"
-msgid "This Year"
-msgstr "Dit jaar"
-
-#: src/app/mainwindow.cpp:824
+#: src/app/mainwindow.cpp:830
 #, kde-format
 msgctxt "@option:radio received"
 msgid "Between..."
 msgstr "Tussen..."
 
-#: src/app/mainwindow.cpp:836
+#: src/app/mainwindow.cpp:830
+#, kde-format
+msgctxt "@option:radio received"
+msgid "Last 30 Days"
+msgstr "Laatste 30 dagen"
+
+#: src/app/mainwindow.cpp:830
+#, kde-format
+msgctxt "@option:radio received"
+msgid "This Year"
+msgstr "Dit jaar"
+
+#: src/app/mainwindow.cpp:842
 #, kde-format
 msgctxt "@title:window"
 msgid "Received Between"
 msgstr "Ontvangen tussen"
 
-#: src/app/mainwindow.cpp:844
+#: src/app/mainwindow.cpp:850
 #, kde-format
 msgctxt "@label:chooser"
 msgid "Up to and including:"
 msgstr "Tot en met:"
 
-#: src/app/mainwindow.cpp:858
+#: src/app/mainwindow.cpp:864
 #, kde-format
 msgctxt "@title:menu search filter"
 msgid "Category"
 msgstr "Categorie"
 
-#: src/app/mainwindow.cpp:890
-#, kde-format
-msgctxt "@option:check search filter"
-msgid "From..."
-msgstr "Van..."
-
-#: src/app/mainwindow.cpp:890
+#: src/app/mainwindow.cpp:896
 #, kde-format
 msgctxt "@label:textbox"
 msgid "From (name or address):"
 msgstr "Van (naam of adres):"
 
-#: src/app/mainwindow.cpp:891
+#: src/app/mainwindow.cpp:896
 #, kde-format
 msgctxt "@option:check search filter"
-msgid "To..."
-msgstr "Aan..."
+msgid "From..."
+msgstr "Van..."
 
-#: src/app/mainwindow.cpp:891
+#: src/app/mainwindow.cpp:897
 #, kde-format
 msgctxt "@label:textbox"
 msgid "To (name or address):"
 msgstr "Aan (naam of adres):"
 
-#: src/app/mainwindow.cpp:892
+#: src/app/mainwindow.cpp:897
 #, kde-format
 msgctxt "@option:check search filter"
-msgid "Cc..."
-msgstr "CC..."
+msgid "To..."
+msgstr "Aan..."
 
-#: src/app/mainwindow.cpp:892
+#: src/app/mainwindow.cpp:898
 #, kde-format
 msgctxt "@label:textbox"
 msgid "Cc (name or address):"
 msgstr "CC (naam of adres):"
 
-#: src/app/mainwindow.cpp:893
+#: src/app/mainwindow.cpp:898
+#, kde-format
+msgctxt "@option:check search filter"
+msgid "Cc..."
+msgstr "CC..."
+
+#: src/app/mainwindow.cpp:899
 #, kde-format
 msgctxt "@option:check search filter"
 msgid "Subject Contains..."
 msgstr "Onderwerp bevat..."
 
-#: src/app/mainwindow.cpp:893
+#: src/app/mainwindow.cpp:899
 #, kde-format
 msgctxt "@label:textbox"
 msgid "Subject contains:"
 msgstr "Onderwerp bevat:"
 
-#: src/app/mainwindow.cpp:894
+#: src/app/mainwindow.cpp:900
 #, kde-format
 msgctxt "@option:check search filter"
 msgid "Message Text Contains..."
 msgstr "Berichttekst bevat..."
 
-#: src/app/mainwindow.cpp:894
+#: src/app/mainwindow.cpp:900
 #, kde-format
 msgctxt "@label:textbox"
 msgid "Message text contains:"
 msgstr "Berichttekst bevat:"
 
-#: src/app/mainwindow.cpp:895
+#: src/app/mainwindow.cpp:901
 #, kde-format
 msgctxt "@option:check search filter"
 msgid "Attachment Name..."
 msgstr "Naam van bijlage..."
 
-#: src/app/mainwindow.cpp:895
+#: src/app/mainwindow.cpp:901
 #, kde-format
 msgctxt "@label:textbox"
 msgid "Attachment name contains:"
 msgstr "Naam van bijlage bevat:"
 
-#: src/app/mainwindow.cpp:906
+#: src/app/mainwindow.cpp:912
 #, kde-format
 msgctxt "@title:window"
 msgid "Filter"
 msgstr "Filter"
 
-#: src/app/mainwindow.cpp:922
+#: src/app/mainwindow.cpp:928
 #, kde-format
 msgctxt "@option:check search results order"
 msgid "Best Match First"
 msgstr "Beste overeenkomst eerst"
 
-#: src/app/mainwindow.cpp:924
+#: src/app/mainwindow.cpp:930
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Off: the newest mail first"
 msgstr "Uit: de nieuwste e-mail eerst"
 
-#: src/app/mainwindow.cpp:933
+#: src/app/mainwindow.cpp:939
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Clear Filters"
 msgstr "Filters wissen"
 
-#: src/app/mainwindow.cpp:941
+#: src/app/mainwindow.cpp:947
 #, kde-format
 msgctxt "@info:tooltip"
 msgid ""
 "Words search everything. Narrow it down with from:, to:, cc:, subject:, "
 "body:, hasattachments:yes, isread:no, isflagged:yes, importance:high and "
 "received>=2026-11-01, or use Filters."
-msgstr "Woorden doorzoeken alles. Verfijn met from:, to:, cc:, subject:, body:, hasattachments:yes, isread:no, isflagged:yes, importance:high en received>=2026-11-01, of gebruik Filters."
+msgstr ""
+"Woorden doorzoeken alles. Verfijn met from:, to:, cc:, subject:, body:, "
+"hasattachments:yes, isread:no, isflagged:yes, importance:high en "
+"received>=2026-11-01, of gebruik Filters."
 
-#: src/app/mainwindow.cpp:945
+#: src/app/mainwindow.cpp:951
 #, kde-format
 msgctxt "@action"
 msgid "Search"
 msgstr "Zoeken"
 
-#: src/app/mainwindow.cpp:963
+#: src/app/mainwindow.cpp:969
 #, kde-format
 msgctxt "@action"
 msgid "New Message"
 msgstr "Nieuw bericht"
 
-#: src/app/mainwindow.cpp:992 src/app/messagewindow.cpp:275
+#: src/app/mainwindow.cpp:998 src/app/messagewindow.cpp:275
 #, kde-format
 msgctxt "@action"
 msgid "Reply"
 msgstr "Beantwoorden"
 
-#: src/app/mainwindow.cpp:993 src/app/messagewindow.cpp:276
+#: src/app/mainwindow.cpp:999 src/app/messagewindow.cpp:276
 #, kde-format
 msgctxt "@action"
 msgid "Reply All"
 msgstr "Allen beantwoorden"
 
-#: src/app/mainwindow.cpp:994 src/app/messagewindow.cpp:277
+#: src/app/mainwindow.cpp:1000 src/app/messagewindow.cpp:277
 #, kde-format
 msgctxt "@action"
 msgid "Forward"
 msgstr "Doorsturen"
 
-#: src/app/mainwindow.cpp:1000 src/app/messagewindow.cpp:278
+#: src/app/mainwindow.cpp:1006 src/app/messagewindow.cpp:278
 #, kde-format
 msgctxt "@action"
 msgid "Forward as Attachment"
 msgstr "Doorsturen als bijlage"
 
-#: src/app/mainwindow.cpp:1001 src/app/messagewindow.cpp:279
+#: src/app/mainwindow.cpp:1007 src/app/messagewindow.cpp:279
 #, kde-format
 msgctxt "@action Outlook's Resend"
 msgid "Edit as New Message"
 msgstr "Bewerken als nieuw bericht"
 
-#: src/app/mainwindow.cpp:1003 src/app/messagewindow.cpp:281
+#: src/app/mainwindow.cpp:1009 src/app/messagewindow.cpp:281
 #, kde-format
 msgctxt "@action"
 msgid "Reply with Meeting"
 msgstr "Beantwoorden met vergadering"
 
-#: src/app/mainwindow.cpp:1035 src/app/messagewindow.cpp:136
+#: src/app/mainwindow.cpp:1041 src/app/messagewindow.cpp:136
 #, kde-format
 msgctxt "@action"
 msgid "Dark Background for Messages"
 msgstr "Donkere achtergrond voor berichten"
 
-#: src/app/mainwindow.cpp:1044
+#: src/app/mainwindow.cpp:1050
 #, kde-format
 msgctxt "@action"
 msgid "Preview Office Documents with LibreOffice"
 msgstr "Voorbeeld van Office-documenten met LibreOffice"
 
-#: src/app/mainwindow.cpp:1048
+#: src/app/mainwindow.cpp:1054
 #, kde-format
 msgctxt "@action"
 msgid "Preview Office Documents with LibreOffice (not installed)"
 msgstr "Voorbeeld van Office-documenten met LibreOffice (niet geïnstalleerd)"
 
-#: src/app/mainwindow.cpp:1054
+#: src/app/mainwindow.cpp:1060
 #, kde-format
 msgctxt "@action"
 msgid "Hardware Acceleration for Mail"
 msgstr "Hardwareversnelling voor e-mail"
 
-#: src/app/mainwindow.cpp:1057
+#: src/app/mainwindow.cpp:1063
 #, kde-format
 msgctxt "@info:tooltip"
 msgid ""
 "Draw mails with the graphics card. Off by default: mail does not need it, "
 "and some graphics drivers crash with it. Takes effect after a restart of "
 "Graph Mail."
-msgstr "E-mails tekenen met de grafische kaart. Standaard uit: e-mail heeft het niet nodig, en sommige grafische stuurprogramma's crashen ermee. Werkt na een herstart van Graph Mail."
+msgstr ""
+"E-mails tekenen met de grafische kaart. Standaard uit: e-mail heeft het niet "
+"nodig, en sommige grafische stuurprogramma's crashen ermee. Werkt na een "
+"herstart van Graph Mail."
 
-#: src/app/mainwindow.cpp:1062
+#: src/app/mainwindow.cpp:1068
 #, kde-format
 msgctxt "@info:status"
 msgid "Takes effect after a restart of Graph Mail."
 msgstr "Werkt na een herstart van Graph Mail."
 
-#: src/app/mainwindow.cpp:1065
+#: src/app/mainwindow.cpp:1071
 #, kde-format
 msgctxt "@action Outlook's Sweep"
 msgid "Sweep..."
 msgstr "Opruimen..."
 
-#: src/app/mainwindow.cpp:1069
+#: src/app/mainwindow.cpp:1075
 #, kde-format
 msgctxt "@action"
 msgid "Conditional Formatting..."
 msgstr "Voorwaardelijke opmaak..."
 
-#: src/app/mainwindow.cpp:1079
+#: src/app/mainwindow.cpp:1085
 #, kde-format
 msgctxt "@action"
 msgid "Read Receipts"
 msgstr "Leesbevestigingen"
 
-#: src/app/mainwindow.cpp:1081
-#, kde-format
-msgctxt "@item:inmenu read receipts"
-msgid "Ask Each Time"
-msgstr "Elke keer vragen"
-
-#: src/app/mainwindow.cpp:1081
+#: src/app/mainwindow.cpp:1087
 #, kde-format
 msgctxt "@item:inmenu read receipts"
 msgid "Always Send"
 msgstr "Altijd verzenden"
 
-#: src/app/mainwindow.cpp:1082
+#: src/app/mainwindow.cpp:1087
+#, kde-format
+msgctxt "@item:inmenu read receipts"
+msgid "Ask Each Time"
+msgstr "Elke keer vragen"
+
+#: src/app/mainwindow.cpp:1088
 #, kde-format
 msgctxt "@item:inmenu read receipts"
 msgid "Never Send"
 msgstr "Nooit verzenden"
 
-#: src/app/mainwindow.cpp:1089
+#: src/app/mainwindow.cpp:1095
 #, kde-format
 msgctxt "@action"
 msgid "Clean Up Old Mail..."
 msgstr "Oude e-mail opruimen..."
 
-#: src/app/mainwindow.cpp:1104
+#: src/app/mainwindow.cpp:1110
 #, kde-format
 msgctxt "@action"
 msgid "Open Online Archive in Browser"
 msgstr "Onlinearchief openen in browser"
 
-#: src/app/mainwindow.cpp:1111
+#: src/app/mainwindow.cpp:1117
 #, kde-format
 msgctxt "@action"
 msgid "Reply and Forward..."
 msgstr "Beantwoorden en doorsturen..."
 
-#: src/app/mainwindow.cpp:1117
+#: src/app/mainwindow.cpp:1123
 #, kde-format
 msgctxt "@action"
 msgid "Signatures..."
 msgstr "Handtekeningen..."
 
-#: src/app/mainwindow.cpp:1125
+#: src/app/mainwindow.cpp:1131
 #, kde-format
 msgctxt "@action"
 msgid "Waiting to Be Sent..."
 msgstr "Wacht op verzending..."
 
-#: src/app/mainwindow.cpp:1130
+#: src/app/mainwindow.cpp:1136
 #, kde-format
 msgctxt "@action"
 msgid "Offline..."
 msgstr "Offline..."
 
-#: src/app/mainwindow.cpp:1135
+#: src/app/mainwindow.cpp:1141
 #, kde-format
 msgctxt "@action"
 msgid "Microsoft 365 Accounts..."
 msgstr "Microsoft 365-accounts..."
 
-#: src/app/mainwindow.cpp:1142
+#: src/app/mainwindow.cpp:1148
 #, kde-format
 msgctxt "@action"
 msgid "Updates..."
 msgstr "Updates..."
 
-#: src/app/mainwindow.cpp:1149
+#: src/app/mainwindow.cpp:1155
 #, kde-format
 msgctxt "@action"
 msgid "Import Outlook Data File..."
 msgstr "Outlook-gegevensbestand importeren..."
 
-#: src/app/mainwindow.cpp:1155
+#: src/app/mainwindow.cpp:1161
 #, kde-format
 msgctxt "@action"
 msgid "Export to Outlook Data File..."
 msgstr "Exporteren naar Outlook-gegevensbestand..."
 
-#: src/app/mainwindow.cpp:1163 src/app/messagewindow.cpp:175
+#: src/app/mainwindow.cpp:1169 src/app/messagewindow.cpp:175
 #, kde-format
 msgctxt "@action"
 msgid "Save as PDF..."
 msgstr "Opslaan als PDF..."
 
-#: src/app/mainwindow.cpp:1174
-#, kde-format
-msgctxt "@info:status %1 a file"
-msgid "Saved as %1."
-msgstr "Opgeslagen als %1."
-
-#: src/app/mainwindow.cpp:1174 src/app/mainwindow.cpp:1586
-#: src/app/mainwindow.cpp:1892 src/app/messagewindow.cpp:168
+#: src/app/mainwindow.cpp:1180 src/app/mainwindow.cpp:1592
+#: src/app/mainwindow.cpp:1898 src/app/messagewindow.cpp:168
 #: src/app/messagewindow.cpp:188
 #, kde-format
 msgctxt "@info:status %1 a file"
 msgid "Could not save %1."
 msgstr "%1 kon niet worden opgeslagen."
 
-#: src/app/mainwindow.cpp:1179 src/app/messagewindow.cpp:193
+#: src/app/mainwindow.cpp:1180
+#, kde-format
+msgctxt "@info:status %1 a file"
+msgid "Saved as %1."
+msgstr "Opgeslagen als %1."
+
+#: src/app/mainwindow.cpp:1185 src/app/messagewindow.cpp:193
 #, kde-format
 msgctxt "@action"
 msgid "Message Details..."
 msgstr "Berichtdetails..."
 
-#: src/app/mainwindow.cpp:1184
+#: src/app/mainwindow.cpp:1190
 #, kde-format
 msgctxt "@action"
 msgid "Open Message File..."
 msgstr "Berichtbestand openen..."
 
-#: src/app/mainwindow.cpp:1190
+#: src/app/mainwindow.cpp:1196
 #, kde-format
 msgctxt "@action"
 msgid "Import Message Files..."
 msgstr "Berichtbestanden importeren..."
 
-#: src/app/mainwindow.cpp:1197
+#: src/app/mainwindow.cpp:1203
 #, kde-format
 msgctxt "@action"
 msgid "Automatic Replies..."
 msgstr "Automatische antwoorden..."
 
-#: src/app/mainwindow.cpp:1217
+#: src/app/mainwindow.cpp:1223
 #, kde-format
 msgctxt "@action"
 msgid "New from Template..."
 msgstr "Nieuw vanuit sjabloon..."
 
-#: src/app/mainwindow.cpp:1222
+#: src/app/mainwindow.cpp:1228
 #, kde-format
 msgctxt "@action"
 msgid "Undo Send"
 msgstr "Verzenden ongedaan maken"
 
-#: src/app/mainwindow.cpp:1224
+#: src/app/mainwindow.cpp:1230
 #, kde-format
 msgctxt "@item undo send"
 msgid "Off"
 msgstr "Uit"
 
-#: src/app/mainwindow.cpp:1226
+#: src/app/mainwindow.cpp:1232
 #, kde-format
 msgctxt "@item undo send"
 msgid "%1 second"
@@ -5264,72 +5542,75 @@ msgid_plural "%1 seconds"
 msgstr[0] "%1 seconde"
 msgstr[1] "%1 seconden"
 
-#: src/app/mainwindow.cpp:1240
+#: src/app/mainwindow.cpp:1246
 #, kde-format
 msgctxt "@action"
 msgid "Mailbox Settings..."
 msgstr "Postvakinstellingen..."
 
-#: src/app/mainwindow.cpp:1247
+#: src/app/mainwindow.cpp:1253
 #, kde-format
 msgctxt "@action"
 msgid "Archive Folder..."
 msgstr "Archiefmap..."
 
-#: src/app/mainwindow.cpp:1254
+#: src/app/mainwindow.cpp:1260
 #, kde-format
 msgctxt "@action"
 msgid "Rules..."
 msgstr "Regels..."
 
-#: src/app/mainwindow.cpp:1261
+#: src/app/mainwindow.cpp:1267
 #, kde-format
 msgctxt "@action"
 msgid "Mailboxes..."
 msgstr "Postvakken..."
 
-#: src/app/mainwindow.cpp:1304
+#: src/app/mainwindow.cpp:1310
 #, kde-format
 msgctxt "@info"
 msgid ""
 "No work account yet. Add one under Microsoft 365 Accounts to see your mail, "
 "calendar and contacts."
-msgstr "Nog geen werkaccount. Voeg er een toe onder Microsoft 365-accounts om je e-mail, agenda en contactpersonen te zien."
+msgstr ""
+"Nog geen werkaccount. Voeg er een toe onder Microsoft 365-accounts om je e-"
+"mail, agenda en contactpersonen te zien."
 
-#: src/app/mainwindow.cpp:1307
+#: src/app/mainwindow.cpp:1313
 #, kde-format
 msgctxt "@info %2 accounts"
 msgid "%2 has to sign in again: its mail waits until then."
 msgid_plural ""
 "These accounts have to sign in again: %2. Their mail waits until then."
 msgstr[0] "%2 moet zich opnieuw aanmelden: de e-mail wacht tot dan."
-msgstr[1] "Deze accounts moeten zich opnieuw aanmelden: %2. Hun e-mail wacht tot dan."
+msgstr[1] ""
+"Deze accounts moeten zich opnieuw aanmelden: %2. Hun e-mail wacht tot dan."
 
-#: src/app/mainwindow.cpp:1478
+#: src/app/mainwindow.cpp:1484
 #, kde-format
 msgctxt "@info:status %1 a subject"
 msgid "Task \"%1\" added to Tasks."
 msgstr "Taak \"%1\" toegevoegd aan Taken."
 
-#: src/app/mainwindow.cpp:1575
+#: src/app/mainwindow.cpp:1581
 #, kde-format
 msgctxt "@title:window"
 msgid "Export to Outlook Data File"
 msgstr "Exporteren naar Outlook-gegevensbestand"
 
-#: src/app/mainwindow.cpp:1577
+#: src/app/mainwindow.cpp:1583
 #, kde-format
 msgctxt "@item:inlistbox file type"
 msgid "Outlook data file (*.pst)"
 msgstr "Outlook-gegevensbestand (*.pst)"
 
-#: src/app/mainwindow.cpp:1587
+#: src/app/mainwindow.cpp:1593
 #, kde-format
 msgctxt "@info:status %1 a file, %2 the reason"
 msgid "Could not save %1: %2"
 msgstr "%1 kon niet worden opgeslagen: %2"
 
-#: src/app/mainwindow.cpp:1590 src/app/mainwindow.cpp:1895
+#: src/app/mainwindow.cpp:1596 src/app/mainwindow.cpp:1901
 #, kde-format
 msgctxt "@info:status %2 a file"
 msgid ""
@@ -5338,10 +5619,14 @@ msgid ""
 msgid_plural ""
 "Saved in %2; %1 messages were rebuilt from this computer's copy (Microsoft "
 "365 did not answer)."
-msgstr[0] "Opgeslagen in %2; %1 bericht is opnieuw opgebouwd uit de kopie op deze computer (Microsoft 365 gaf geen antwoord)."
-msgstr[1] "Opgeslagen in %2; %1 berichten zijn opnieuw opgebouwd uit de kopie op deze computer (Microsoft 365 gaf geen antwoord)."
+msgstr[0] ""
+"Opgeslagen in %2; %1 bericht is opnieuw opgebouwd uit de kopie op deze "
+"computer (Microsoft 365 gaf geen antwoord)."
+msgstr[1] ""
+"Opgeslagen in %2; %1 berichten zijn opnieuw opgebouwd uit de kopie op deze "
+"computer (Microsoft 365 gaf geen antwoord)."
 
-#: src/app/mainwindow.cpp:1594 src/app/mainwindow.cpp:1900
+#: src/app/mainwindow.cpp:1600 src/app/mainwindow.cpp:1906
 #, kde-format
 msgctxt "@info:status %2 a file"
 msgid "%1 message saved in %2."
@@ -5349,7 +5634,7 @@ msgid_plural "%1 messages saved in %2."
 msgstr[0] "%1 bericht opgeslagen in %2."
 msgstr[1] "%1 berichten opgeslagen in %2."
 
-#: src/app/mainwindow.cpp:1598
+#: src/app/mainwindow.cpp:1604
 #, kde-format
 msgctxt "@info:status"
 msgid ""
@@ -5358,47 +5643,51 @@ msgid ""
 msgid_plural ""
 "Also %1 contacts, calendar items and tasks (calendar: the events this "
 "computer has)."
-msgstr[0] "Ook %1 contactpersoon, agenda-item of taak (agenda: de afspraken die op deze computer staan)."
-msgstr[1] "Ook %1 contactpersonen, agenda-items en taken (agenda: de afspraken die op deze computer staan)."
+msgstr[0] ""
+"Ook %1 contactpersoon, agenda-item of taak (agenda: de afspraken die op deze "
+"computer staan)."
+msgstr[1] ""
+"Ook %1 contactpersonen, agenda-items en taken (agenda: de afspraken die op "
+"deze computer staan)."
 
-#: src/app/mainwindow.cpp:1625 src/app/mainwindow.cpp:1677
-#: src/app/mainwindow.cpp:1679 src/app/pstimport.cpp:131
+#: src/app/mainwindow.cpp:1631 src/app/mainwindow.cpp:1683
+#: src/app/mainwindow.cpp:1685 src/app/pstimport.cpp:131
 #, kde-format
 msgctxt "@title:window"
 msgid "Import Outlook Data File"
 msgstr "Outlook-gegevensbestand importeren"
 
-#: src/app/mainwindow.cpp:1627
+#: src/app/mainwindow.cpp:1633
 #, kde-format
 msgctxt "@item:inlistbox file type"
 msgid "Outlook data file (*.pst *.ost)"
 msgstr "Outlook-gegevensbestand (*.pst *.ost)"
 
-#: src/app/mainwindow.cpp:1636
+#: src/app/mainwindow.cpp:1642
 #, kde-format
 msgctxt "@info %1 a file, %2 the reason"
 msgid "%1 could not be opened as an Outlook data file: %2"
 msgstr "%1 kon niet worden geopend als Outlook-gegevensbestand: %2"
 
-#: src/app/mainwindow.cpp:1644
+#: src/app/mainwindow.cpp:1650
 #, kde-format
 msgctxt "@title:window"
 msgid "Outlook Data File Password"
 msgstr "Wachtwoord van Outlook-gegevensbestand"
 
-#: src/app/mainwindow.cpp:1645
+#: src/app/mainwindow.cpp:1651
 #, kde-format
 msgctxt "@label:textbox %1 a file"
 msgid "The password of %1:"
 msgstr "Het wachtwoord van %1:"
 
-#: src/app/mainwindow.cpp:1649
+#: src/app/mainwindow.cpp:1655
 #, kde-format
 msgctxt "@info"
 msgid "The password is not correct."
 msgstr "Het wachtwoord is niet juist."
 
-#: src/app/mainwindow.cpp:1672 src/app/mainwindow.cpp:1865
+#: src/app/mainwindow.cpp:1678 src/app/mainwindow.cpp:1871
 #, kde-format
 msgctxt "@info %2 skipped, %3 failed"
 msgid "%1 message imported; %2 left out, %3 failed."
@@ -5406,73 +5695,75 @@ msgid_plural "%1 messages imported; %2 left out, %3 failed."
 msgstr[0] "%1 bericht geïmporteerd; %2 overgeslagen, %3 mislukt."
 msgstr[1] "%1 berichten geïmporteerd; %2 overgeslagen, %3 mislukt."
 
-#: src/app/mainwindow.cpp:1697
+#: src/app/mainwindow.cpp:1703
 #, kde-format
 msgctxt "@title:window"
 msgid "Open Message File"
 msgstr "Berichtbestand openen"
 
-#: src/app/mainwindow.cpp:1699 src/app/mainwindow.cpp:1856
+#: src/app/mainwindow.cpp:1705 src/app/mainwindow.cpp:1862
 #, kde-format
 msgctxt "@item:inlistbox file type"
 msgid "Messages (*.msg *.eml)"
 msgstr "Berichten (*.msg *.eml)"
 
-#: src/app/mainwindow.cpp:1713
+#: src/app/mainwindow.cpp:1719
 #, kde-format
 msgctxt "@info %1 a file, %2 the reason"
 msgid "%1 could not be opened: %2"
 msgstr "%1 kon niet worden geopend: %2"
 
-#: src/app/mainwindow.cpp:1775
+#: src/app/mainwindow.cpp:1781
 #, kde-format
 msgctxt "@info"
 msgid "Another program asks to attach these files to the new message:"
-msgstr "Een ander programma vraagt deze bestanden bij te voegen aan het nieuwe bericht:"
+msgstr ""
+"Een ander programma vraagt deze bestanden bij te voegen aan het nieuwe "
+"bericht:"
 
-#: src/app/mainwindow.cpp:1778
+#: src/app/mainwindow.cpp:1784
 #, kde-format
 msgctxt "@action:button"
 msgid "Attach"
 msgstr "Bijvoegen"
 
-#: src/app/mainwindow.cpp:1779
+#: src/app/mainwindow.cpp:1785
 #, kde-format
 msgctxt "@action:button"
 msgid "Leave Out"
 msgstr "Weglaten"
 
-#: src/app/mainwindow.cpp:1854
+#: src/app/mainwindow.cpp:1860
 #, kde-format
 msgctxt "@title:window %1 a folder"
 msgid "Import Message Files into %1"
 msgstr "Berichtbestanden importeren in %1"
 
-#: src/app/mainwindow.cpp:1869
+#: src/app/mainwindow.cpp:1875
 #, kde-format
 msgctxt "@title:window"
 msgid "Import Message Files"
 msgstr "Berichtbestanden importeren"
 
-#: src/app/mainwindow.cpp:2154 src/app/mainwindow.cpp:3543
+#: src/app/mainwindow.cpp:2160 src/app/mainwindow.cpp:3550
 #, kde-format
 msgctxt "@title:window folder - mailbox"
 msgid "%1 - %2"
 msgstr "%1 - %2"
 
-#: src/app/mainwindow.cpp:2164
+#: src/app/mainwindow.cpp:2170
 #, kde-format
 msgctxt "@info:status"
 msgid "Asking Microsoft 365 what %1 holds..."
 msgstr "Microsoft 365 vragen wat %1 bevat..."
 
-#: src/app/mainwindow.cpp:2174
+#: src/app/mainwindow.cpp:2180
 #, kde-format
 msgctxt "@info:status"
 msgid "%1 could not be read from Microsoft 365 (offline?)"
 msgstr "%1 kon niet uit Microsoft 365 worden gelezen (offline?)"
 
-#: src/app/mainwindow.cpp:2204
+#: src/app/mainwindow.cpp:2210
 #, kde-format
 msgctxt "@info:status"
 msgid "%1 message"
@@ -5480,25 +5771,25 @@ msgid_plural "%1 messages"
 msgstr[0] "%1 bericht"
 msgstr[1] "%1 berichten"
 
-#: src/app/mainwindow.cpp:2216 src/app/mainwindow.cpp:2293
+#: src/app/mainwindow.cpp:2222 src/app/mainwindow.cpp:2299
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "New Search Folder..."
 msgstr "Nieuwe zoekmap..."
 
-#: src/app/mainwindow.cpp:2222
+#: src/app/mainwindow.cpp:2228
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Change Search Folder..."
 msgstr "Zoekmap wijzigen..."
 
-#: src/app/mainwindow.cpp:2225
+#: src/app/mainwindow.cpp:2231
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Delete Search Folder"
 msgstr "Zoekmap verwijderen"
 
-#: src/app/mainwindow.cpp:2237
+#: src/app/mainwindow.cpp:2243
 #, kde-format
 msgctxt "@info folder menu, %2 unread"
 msgid "%1 item (%2 unread)"
@@ -5506,160 +5797,164 @@ msgid_plural "%1 items (%2 unread)"
 msgstr[0] "%1 item (%2 ongelezen)"
 msgstr[1] "%1 items (%2 ongelezen)"
 
-#: src/app/mainwindow.cpp:2240 src/app/mainwindow.cpp:2313
-#: src/app/mainwindow.cpp:2317
+#: src/app/mainwindow.cpp:2246 src/app/mainwindow.cpp:2319
+#: src/app/mainwindow.cpp:2323
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "New Folder..."
 msgstr "Nieuwe map..."
 
-#: src/app/mainwindow.cpp:2244
+#: src/app/mainwindow.cpp:2250
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Rename Folder..."
 msgstr "Naam van map wijzigen..."
 
-#: src/app/mainwindow.cpp:2248
+#: src/app/mainwindow.cpp:2254
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Change Folder Count"
 msgstr "Aantal bij map wijzigen"
 
-#: src/app/mainwindow.cpp:2251
+#: src/app/mainwindow.cpp:2257
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Show Unread Count"
 msgstr "Aantal ongelezen tonen"
 
-#: src/app/mainwindow.cpp:2255
+#: src/app/mainwindow.cpp:2261
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Show Total Count"
 msgstr "Totaal aantal tonen"
 
-#: src/app/mainwindow.cpp:2266
+#: src/app/mainwindow.cpp:2272
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Move Folder..."
 msgstr "Map verplaatsen..."
 
-#: src/app/mainwindow.cpp:2269
+#: src/app/mainwindow.cpp:2275
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Delete Folder"
 msgstr "Map verwijderen"
 
-#: src/app/mainwindow.cpp:2273
+#: src/app/mainwindow.cpp:2279
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Empty Folder"
 msgstr "Map leegmaken"
 
-#: src/app/mainwindow.cpp:2278
+#: src/app/mainwindow.cpp:2284
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Mark All as Read"
 msgstr "Alles als gelezen markeren"
 
-#: src/app/mainwindow.cpp:2288
+#: src/app/mainwindow.cpp:2294
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Sharing and Permissions (Outlook on the web)..."
 msgstr "Delen en machtigingen (Outlook op het web)..."
 
-#: src/app/mainwindow.cpp:2290
+#: src/app/mainwindow.cpp:2296
 #, kde-format
 msgctxt "@info:status"
 msgid "In Outlook on the web: right-click the folder, Sharing and permissions"
-msgstr "In Outlook op het web: klik met de rechtermuisknop op de map, Delen en machtigingen"
+msgstr ""
+"In Outlook op het web: klik met de rechtermuisknop op de map, Delen en "
+"machtigingen"
 
-#: src/app/mainwindow.cpp:2296
+#: src/app/mainwindow.cpp:2302
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Export to mbox..."
 msgstr "Exporteren naar mbox..."
 
-#: src/app/mainwindow.cpp:2301 src/app/mainwindow.cpp:2324
+#: src/app/mainwindow.cpp:2307 src/app/mainwindow.cpp:2330
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Export to Outlook Data File..."
 msgstr "Exporteren naar Outlook-gegevensbestand..."
 
-#: src/app/mainwindow.cpp:2306
+#: src/app/mainwindow.cpp:2312
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Clean Up Settings..."
 msgstr "Opruiminstellingen..."
 
-#: src/app/mainwindow.cpp:2321
+#: src/app/mainwindow.cpp:2327
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Import Outlook Data File..."
 msgstr "Outlook-gegevensbestand importeren..."
 
-#: src/app/mainwindow.cpp:2329 src/app/shell.cpp:216
+#: src/app/mainwindow.cpp:2335 src/app/shell.cpp:220
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Change Photo..."
 msgstr "Foto wijzigen..."
 
-#: src/app/mainwindow.cpp:2333 src/app/shell.cpp:220
+#: src/app/mainwindow.cpp:2339 src/app/shell.cpp:224
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Remove Photo"
 msgstr "Foto verwijderen"
 
-#: src/app/mainwindow.cpp:2348
-#, kde-format
-msgctxt "@action:inmenu"
-msgid "Remove from Favorites"
-msgstr "Verwijderen uit Favorieten"
-
-#: src/app/mainwindow.cpp:2348
+#: src/app/mainwindow.cpp:2354
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Add to Favorites"
 msgstr "Toevoegen aan Favorieten"
 
-#: src/app/mainwindow.cpp:2360
+#: src/app/mainwindow.cpp:2354
+#, kde-format
+msgctxt "@action:inmenu"
+msgid "Remove from Favorites"
+msgstr "Verwijderen uit Favorieten"
+
+#: src/app/mainwindow.cpp:2366
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Open Online Archive in Browser"
 msgstr "Onlinearchief openen in browser"
 
-#: src/app/mainwindow.cpp:2379
+#: src/app/mainwindow.cpp:2385
 #, kde-format
 msgctxt "@info:status"
 msgid ""
 "Outlook on the web shows the online archive as \"In-Place Archive\" in its "
 "folder list"
-msgstr "Outlook op het web toont het onlinearchief als \"In-Place Archive\" in de mappenlijst"
+msgstr ""
+"Outlook op het web toont het onlinearchief als \"In-Place Archive\" in de "
+"mappenlijst"
 
-#: src/app/mainwindow.cpp:2403
+#: src/app/mainwindow.cpp:2409
 #, kde-format
 msgctxt "@info:status"
 msgid "Search folder saved; Exchange fills it in a few seconds"
 msgstr "Zoekmap opgeslagen; Exchange vult hem binnen enkele seconden"
 
-#: src/app/mainwindow.cpp:2404
+#: src/app/mainwindow.cpp:2410
 #, kde-format
 msgctxt "@info:status"
 msgid "Exchange did not accept the search folder: %1"
 msgstr "Exchange heeft de zoekmap niet geaccepteerd: %1"
 
-#: src/app/mainwindow.cpp:2414
+#: src/app/mainwindow.cpp:2420
 #, kde-format
 msgctxt "@info %1 a search folder"
 msgid "Delete the search folder %1? The messages in it stay where they are."
 msgstr "De zoekmap %1 verwijderen? De berichten erin blijven waar ze zijn."
 
-#: src/app/mainwindow.cpp:2415
+#: src/app/mainwindow.cpp:2421
 #, kde-format
 msgctxt "@title:window"
 msgid "Delete Search Folder"
 msgstr "Zoekmap verwijderen"
 
-#: src/app/mainwindow.cpp:2524
+#: src/app/mainwindow.cpp:2530
 #, kde-format
 msgctxt "@info %2 one or more mailboxes"
 msgid "Automatic replies are being sent for %2."
@@ -5667,133 +5962,133 @@ msgid_plural "Automatic replies are being sent for %2."
 msgstr[0] "Er worden automatische antwoorden verzonden voor %2."
 msgstr[1] "Er worden automatische antwoorden verzonden voor %2."
 
-#: src/app/mainwindow.cpp:2592
-#, kde-format
-msgctxt "@info"
-msgid "Sending the message..."
-msgstr "Het bericht wordt verzonden..."
-
-#: src/app/mainwindow.cpp:2592
+#: src/app/mainwindow.cpp:2598
 #, kde-format
 msgctxt "@info %1 a subject"
 msgid "Sending \"%1\"..."
 msgstr "\"%1\" wordt verzonden..."
 
-#: src/app/mainwindow.cpp:2638
+#: src/app/mainwindow.cpp:2598
+#, kde-format
+msgctxt "@info"
+msgid "Sending the message..."
+msgstr "Het bericht wordt verzonden..."
+
+#: src/app/mainwindow.cpp:2644
 #, kde-format
 msgctxt "@title:window"
 msgid "Custom Follow-Up"
 msgstr "Aangepaste opvolging"
 
-#: src/app/mainwindow.cpp:2645
+#: src/app/mainwindow.cpp:2651
 #, kde-format
 msgctxt "@label"
 msgid "Start date:"
 msgstr "Begindatum:"
 
-#: src/app/mainwindow.cpp:2646
+#: src/app/mainwindow.cpp:2652
 #, kde-format
 msgctxt "@label"
 msgid "Due date:"
 msgstr "Vervaldatum:"
 
-#: src/app/mainwindow.cpp:2665
+#: src/app/mainwindow.cpp:2671
 #, kde-format
 msgctxt "@title:window"
 msgid "New from Template"
 msgstr "Nieuw vanuit sjabloon"
 
-#: src/app/mainwindow.cpp:2683
+#: src/app/mainwindow.cpp:2689
 #, kde-format
 msgctxt "@info %1 a template"
 msgid "Delete the template %1?"
 msgstr "Het sjabloon %1 verwijderen?"
 
-#: src/app/mainwindow.cpp:2684
+#: src/app/mainwindow.cpp:2690
 #, kde-format
 msgctxt "@title:window"
 msgid "Delete Template"
 msgstr "Sjabloon verwijderen"
 
-#: src/app/mainwindow.cpp:2694
+#: src/app/mainwindow.cpp:2700
 #, kde-format
 msgctxt "@info"
 msgid "Save a message as a template from its Message menu."
 msgstr "Sla een bericht als sjabloon op via het menu Bericht."
 
-#: src/app/mainwindow.cpp:2758
+#: src/app/mainwindow.cpp:2764
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Clear All Categories"
 msgstr "Alle categorieën wissen"
 
-#: src/app/mainwindow.cpp:2760
+#: src/app/mainwindow.cpp:2766
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "All Categories..."
 msgstr "Alle categorieën..."
 
-#: src/app/mainwindow.cpp:2836
+#: src/app/mainwindow.cpp:2843
 #, kde-format
 msgctxt "@title:menu"
 msgid "Move"
 msgstr "Verplaatsen"
 
-#: src/app/mainwindow.cpp:2838
+#: src/app/mainwindow.cpp:2845
 #, kde-format
 msgctxt "@title:menu"
 msgid "Copy"
 msgstr "Kopiëren"
 
-#: src/app/mainwindow.cpp:2845
+#: src/app/mainwindow.cpp:2852
 #, kde-format
 msgctxt "@title:menu"
 msgid "Rules"
 msgstr "Regels"
 
-#: src/app/mainwindow.cpp:2854
+#: src/app/mainwindow.cpp:2861
 #, kde-format
 msgctxt "@title:menu"
 msgid "Find Related"
 msgstr "Gerelateerde zoeken"
 
-#: src/app/mainwindow.cpp:2855
+#: src/app/mainwindow.cpp:2862
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Messages from This Sender"
 msgstr "Berichten van deze afzender"
 
-#: src/app/mainwindow.cpp:2858
+#: src/app/mainwindow.cpp:2865
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Messages in This Conversation"
 msgstr "Berichten in dit gesprek"
 
-#: src/app/mainwindow.cpp:2861
+#: src/app/mainwindow.cpp:2868
 #, kde-format
 msgctxt "@title:menu"
 msgid "View"
 msgstr "Weergave"
 
-#: src/app/mainwindow.cpp:2862
+#: src/app/mainwindow.cpp:2869
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Open in a New Window"
 msgstr "In een nieuw venster openen"
 
-#: src/app/mainwindow.cpp:2866
+#: src/app/mainwindow.cpp:2873
 #, kde-format
 msgctxt "@title:menu"
 msgid "More Actions"
 msgstr "Meer acties"
 
-#: src/app/mainwindow.cpp:2889
+#: src/app/mainwindow.cpp:2896
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Other Folder..."
 msgstr "Andere map..."
 
-#: src/app/mainwindow.cpp:2924
+#: src/app/mainwindow.cpp:2931
 #, kde-format
 msgctxt "@info:status"
 msgid "%1 message copied."
@@ -5801,7 +6096,7 @@ msgid_plural "%1 messages copied."
 msgstr[0] "%1 bericht gekopieerd."
 msgstr[1] "%1 berichten gekopieerd."
 
-#: src/app/mainwindow.cpp:2925
+#: src/app/mainwindow.cpp:2932
 #, kde-format
 msgctxt "@info:status"
 msgid "%1 message could not be copied."
@@ -5809,7 +6104,7 @@ msgid_plural "%1 messages could not be copied."
 msgstr[0] "%1 bericht kon niet worden gekopieerd."
 msgstr[1] "%1 berichten konden niet worden gekopieerd."
 
-#: src/app/mainwindow.cpp:2937
+#: src/app/mainwindow.cpp:2944
 #, kde-format
 msgctxt "@info"
 msgid ""
@@ -5817,52 +6112,57 @@ msgid ""
 msgid_plural ""
 "Report these %1 messages to Microsoft as phishing? They move to Deleted "
 "Items."
-msgstr[0] "Dit bericht als phishing aan Microsoft melden? Het gaat naar Verwijderde items."
-msgstr[1] "Deze %1 berichten als phishing aan Microsoft melden? Ze gaan naar Verwijderde items."
+msgstr[0] ""
+"Dit bericht als phishing aan Microsoft melden? Het gaat naar Verwijderde "
+"items."
+msgstr[1] ""
+"Deze %1 berichten als phishing aan Microsoft melden? Ze gaan naar "
+"Verwijderde items."
 
-#: src/app/mainwindow.cpp:2940
+#: src/app/mainwindow.cpp:2947
 #, kde-format
 msgctxt "@title:window"
 msgid "Report Phishing"
 msgstr "Phishing melden"
 
-#: src/app/mainwindow.cpp:2941
+#: src/app/mainwindow.cpp:2948
 #, kde-format
 msgctxt "@action:button"
 msgid "Report"
 msgstr "Melden"
 
-#: src/app/mainwindow.cpp:2952
+#: src/app/mainwindow.cpp:2959
 #, kde-format
 msgctxt "@info:status"
 msgid "Reported as phishing to Microsoft; the message moved to Deleted Items."
-msgstr "Als phishing aan Microsoft gemeld; het bericht staat nu in Verwijderde items."
+msgstr ""
+"Als phishing aan Microsoft gemeld; het bericht staat nu in Verwijderde items."
 
-#: src/app/mainwindow.cpp:2994
+#: src/app/mainwindow.cpp:3001
 #, kde-format
 msgctxt "@info"
 msgid "the conversation, in every folder"
 msgstr "het gesprek, in alle mappen"
 
-#: src/app/mainwindow.cpp:3056
+#: src/app/mainwindow.cpp:3063
 #, kde-format
 msgctxt "@action:button %1 filters on"
 msgid "Filters (%1)"
 msgstr "Filters (%1)"
 
-#: src/app/mainwindow.cpp:3066
+#: src/app/mainwindow.cpp:3073
 #, kde-format
 msgctxt "@info %1 the words, %2 the filters"
 msgid "%1 with %2"
 msgstr "%1 met %2"
 
-#: src/app/mainwindow.cpp:3068
+#: src/app/mainwindow.cpp:3075
 #, kde-format
 msgctxt "@info %1 the search, %2 the scope"
 msgid "No results for %1 in %2."
 msgstr "Geen resultaten voor %1 in %2."
 
-#: src/app/mainwindow.cpp:3069
+#: src/app/mainwindow.cpp:3076
 #, kde-format
 msgctxt "@info %2 the search, %3 the scope"
 msgid "%1 result for %2 in %3"
@@ -5870,168 +6170,177 @@ msgid_plural "%1 results for %2 in %3"
 msgstr[0] "%1 resultaat voor %2 in %3"
 msgstr[1] "%1 resultaten voor %2 in %3"
 
-#: src/app/mainwindow.cpp:3071
+#: src/app/mainwindow.cpp:3078
 #, kde-format
 msgctxt "@info"
 msgid "(searching Microsoft 365 too...)"
 msgstr "(ook bezig met zoeken in Microsoft 365...)"
 
-#: src/app/mainwindow.cpp:3177
+#: src/app/mainwindow.cpp:3184
 #, kde-format
 msgctxt "@item search filter, %1 and %2 dates"
 msgid "Received: %1 to %2"
 msgstr "Ontvangen: %1 tot en met %2"
 
-#: src/app/mainwindow.cpp:3179
+#: src/app/mainwindow.cpp:3186
 #, kde-format
 msgctxt "@item search filter, %1 a period"
 msgid "Received: %1"
 msgstr "Ontvangen: %1"
 
-#: src/app/mainwindow.cpp:3182
+#: src/app/mainwindow.cpp:3189
 #, kde-format
 msgctxt "@item search filter"
 msgid "From: %1"
 msgstr "Van: %1"
 
-#: src/app/mainwindow.cpp:3183
+#: src/app/mainwindow.cpp:3190
 #, kde-format
 msgctxt "@item search filter"
 msgid "To: %1"
 msgstr "Aan: %1"
 
-#: src/app/mainwindow.cpp:3184
+#: src/app/mainwindow.cpp:3191
 #, kde-format
 msgctxt "@item search filter"
 msgid "Cc: %1"
 msgstr "CC: %1"
 
-#: src/app/mainwindow.cpp:3185
+#: src/app/mainwindow.cpp:3192
 #, kde-format
 msgctxt "@item search filter"
 msgid "Subject: %1"
 msgstr "Onderwerp: %1"
 
-#: src/app/mainwindow.cpp:3186
+#: src/app/mainwindow.cpp:3193
 #, kde-format
 msgctxt "@item search filter"
 msgid "Text: %1"
 msgstr "Tekst: %1"
 
-#: src/app/mainwindow.cpp:3187
+#: src/app/mainwindow.cpp:3194
 #, kde-format
 msgctxt "@item search filter"
 msgid "Attachment: %1"
 msgstr "Bijlage: %1"
 
-#: src/app/mainwindow.cpp:3194
+#: src/app/mainwindow.cpp:3201
 #, kde-format
 msgctxt "@item search filter"
 msgid "Category: %1"
 msgstr "Categorie: %1"
 
-#: src/app/mainwindow.cpp:3292
+#: src/app/mainwindow.cpp:3299
 #, kde-format
 msgctxt "@info"
 msgid "(only this computer's copy: Microsoft 365 could not be searched)"
-msgstr "(alleen de kopie op deze computer: in Microsoft 365 kon niet worden gezocht)"
+msgstr ""
+"(alleen de kopie op deze computer: in Microsoft 365 kon niet worden gezocht)"
 
-#: src/app/mainwindow.cpp:3334
+#: src/app/mainwindow.cpp:3341
 #, kde-format
 msgctxt "@title:window"
 msgid "Archive Folder"
 msgstr "Archiefmap"
 
-#: src/app/mainwindow.cpp:3358
+#: src/app/mainwindow.cpp:3365
 #, kde-format
 msgctxt "@info:status %1 a folder"
 msgid "Archive moves messages to %1."
 msgstr "Archiveren verplaatst berichten naar %1."
 
-#: src/app/mainwindow.cpp:3361
+#: src/app/mainwindow.cpp:3368
 #, kde-format
 msgctxt "@info:status %1 a folder"
 msgid ""
 "Archive moves messages to %1 (on this computer: Microsoft 365 did not take "
 "the setting)."
-msgstr "Archiveren verplaatst berichten naar %1 (op deze computer: Microsoft 365 nam de instelling niet over)."
+msgstr ""
+"Archiveren verplaatst berichten naar %1 (op deze computer: Microsoft 365 nam "
+"de instelling niet over)."
 
-#: src/app/mainwindow.cpp:3376
+#: src/app/mainwindow.cpp:3383
 #, kde-format
 msgctxt "@info"
 msgid ""
 "This mailbox has no archive folder yet. Create a folder named Archive for it?"
-msgstr "Dit postvak heeft nog geen archiefmap. Een map met de naam Archief ervoor maken?"
+msgstr ""
+"Dit postvak heeft nog geen archiefmap. Een map met de naam Archief ervoor "
+"maken?"
 
-#: src/app/mainwindow.cpp:3377
+#: src/app/mainwindow.cpp:3384
 #, kde-format
 msgctxt "@title:window"
 msgid "Archive"
 msgstr "Archiveren"
 
-#: src/app/mainwindow.cpp:3378
+#: src/app/mainwindow.cpp:3385
 #, kde-format
 msgctxt "@action:button"
 msgid "Create Archive Folder"
 msgstr "Archiefmap maken"
 
-#: src/app/mainwindow.cpp:3384
+#: src/app/mainwindow.cpp:3391
 #, kde-format
 msgctxt "@item folder name"
 msgid "Archive"
 msgstr "Archief"
 
-#: src/app/mainwindow.cpp:3389
+#: src/app/mainwindow.cpp:3396
 #, kde-format
 msgctxt "@info:status %1 the reason"
 msgid "The Archive folder could not be made: %1"
 msgstr "De map Archief kon niet worden gemaakt: %1"
 
-#: src/app/mainwindow.cpp:3399
+#: src/app/mainwindow.cpp:3406
 #, kde-format
 msgctxt "@info:status"
 msgid ""
 "The Archive folder was made; Archive works as soon as it appears in the "
 "folder list."
-msgstr "De map Archief is gemaakt; Archiveren werkt zodra de map in de mappenlijst staat."
+msgstr ""
+"De map Archief is gemaakt; Archiveren werkt zodra de map in de mappenlijst "
+"staat."
 
-#: src/app/mainwindow.cpp:3697
+#: src/app/mainwindow.cpp:3704
 #, kde-format
 msgctxt "@info:status"
 msgid "The sync service is not running: showing the mail downloaded so far"
-msgstr "De synchronisatieservice draait niet: de tot nu toe gedownloade e-mail wordt getoond"
+msgstr ""
+"De synchronisatieservice draait niet: de tot nu toe gedownloade e-mail wordt "
+"getoond"
 
-#: src/app/mainwindow.cpp:3727
+#: src/app/mainwindow.cpp:3734
 #, kde-format
 msgctxt "@info:status"
 msgid "Offline: changes are sent when the connection is back"
 msgstr "Offline: wijzigingen worden verzonden zodra de verbinding terug is"
 
-#: src/app/mainwindow.cpp:3729
+#: src/app/mainwindow.cpp:3736
 #, kde-format
 msgctxt "@info:status"
 msgid "Downloading mail..."
 msgstr "E-mail downloaden..."
 
-#: src/app/mainwindow.cpp:3731
+#: src/app/mainwindow.cpp:3738
 #, kde-format
 msgctxt "@info:status"
 msgid "Checking for new mail..."
 msgstr "Controleren op nieuwe e-mail..."
 
-#: src/app/mainwindow.cpp:3733
+#: src/app/mainwindow.cpp:3740
 #, kde-format
 msgctxt "@info:status time of the last sync"
 msgid "Up to date (%1)"
 msgstr "Bijgewerkt (%1)"
 
-#: src/app/mainwindow.cpp:3735
+#: src/app/mainwindow.cpp:3742
 #, kde-format
 msgctxt "@info:status"
 msgid "Connected"
 msgstr "Verbonden"
 
-#: src/app/mainwindow.cpp:3738
+#: src/app/mainwindow.cpp:3745
 #, kde-format
 msgctxt "@info:status"
 msgid "%1 change waiting to be sent"
@@ -6039,7 +6348,7 @@ msgid_plural "%1 changes waiting to be sent"
 msgstr[0] "%1 wijziging wacht op verzending"
 msgstr[1] "%1 wijzigingen wachten op verzending"
 
-#: src/app/mainwindow.cpp:3741
+#: src/app/mainwindow.cpp:3748
 #, kde-format
 msgctxt "@info:status"
 msgid "%1 message being sent"
@@ -6047,7 +6356,7 @@ msgid_plural "%1 messages being sent"
 msgstr[0] "%1 bericht wordt verzonden"
 msgstr[1] "%1 berichten worden verzonden"
 
-#: src/app/mainwindow.cpp:3744
+#: src/app/mainwindow.cpp:3751
 #, kde-format
 msgctxt "@info:status"
 msgid "%1 message not sent (in Drafts)"
@@ -6055,7 +6364,7 @@ msgid_plural "%1 messages not sent (in Drafts)"
 msgstr[0] "%1 bericht niet verzonden (in Concepten)"
 msgstr[1] "%1 berichten niet verzonden (in Concepten)"
 
-#: src/app/mainwindow.cpp:3748
+#: src/app/mainwindow.cpp:3755
 #, kde-format
 msgctxt "@info:status"
 msgid "No access to %1 mailbox"
@@ -6063,31 +6372,31 @@ msgid_plural "No access to %1 mailboxes"
 msgstr[0] "Geen toegang tot %1 postvak"
 msgstr[1] "Geen toegang tot %1 postvakken"
 
-#: src/app/mainwindow.cpp:3755
+#: src/app/mainwindow.cpp:3762
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Connected to Microsoft 365"
 msgstr "Verbonden met Microsoft 365"
 
-#: src/app/mainwindow.cpp:3758
+#: src/app/mainwindow.cpp:3765
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Offline: working with the copy on this computer"
 msgstr "Offline: er wordt gewerkt met de kopie op deze computer"
 
-#: src/app/mainwindow.cpp:3761
+#: src/app/mainwindow.cpp:3768
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Some messages were not sent"
 msgstr "Sommige berichten zijn niet verzonden"
 
-#: src/app/mainwindow.cpp:3764
+#: src/app/mainwindow.cpp:3771
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Synchronising with Microsoft 365"
 msgstr "Bezig met synchroniseren met Microsoft 365"
 
-#: src/app/mainwindow.cpp:3767
+#: src/app/mainwindow.cpp:3774
 #, kde-format
 msgctxt "@action:button"
 msgid "%1 waiting"
@@ -6095,118 +6404,125 @@ msgid_plural "%1 waiting"
 msgstr[0] "%1 wachtend"
 msgstr[1] "%1 wachtend"
 
-#: src/app/mainwindow.cpp:3768
+#: src/app/mainwindow.cpp:3775
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Click for what is waiting to be sent"
 msgstr "Klik voor wat op verzending wacht"
 
-#: src/app/mainwindow.cpp:3905
+#: src/app/mainwindow.cpp:3912
 #, kde-format
 msgctxt "@action"
 msgid "Discard Draft"
 msgstr "Concept verwijderen"
 
-#: src/app/mainwindow.cpp:3953
-#, kde-format
-msgctxt "@action"
-msgid "Move to Other"
-msgstr "Verplaatsen naar Overige"
-
-#: src/app/mainwindow.cpp:3953
+#: src/app/mainwindow.cpp:3960
 #, kde-format
 msgctxt "@action"
 msgid "Move to Focused"
 msgstr "Verplaatsen naar Prioriteit"
 
-#: src/app/mainwindow.cpp:3958
+#: src/app/mainwindow.cpp:3960
 #, kde-format
 msgctxt "@action"
-msgid "Always Move to Other"
-msgstr "Altijd verplaatsen naar Overige"
+msgid "Move to Other"
+msgstr "Verplaatsen naar Overige"
 
-#: src/app/mainwindow.cpp:3958
+#: src/app/mainwindow.cpp:3965
 #, kde-format
 msgctxt "@action"
 msgid "Always Move to Focused"
 msgstr "Altijd verplaatsen naar Prioriteit"
 
-#: src/app/mainwindow.cpp:3963
+#: src/app/mainwindow.cpp:3965
+#, kde-format
+msgctxt "@action"
+msgid "Always Move to Other"
+msgstr "Altijd verplaatsen naar Overige"
+
+#: src/app/mainwindow.cpp:3970
 #, kde-format
 msgctxt "@action"
 msgid "Not Junk"
 msgstr "Geen ongewenste e-mail"
 
-#: src/app/mainwindow.cpp:3963
+#: src/app/mainwindow.cpp:3970
 #, kde-format
 msgctxt "@action"
 msgid "Report Junk"
 msgstr "Melden als ongewenst"
 
-#: src/app/mainwindow.cpp:3971
-#, kde-format
-msgctxt "@action"
-msgid "Stop Ignoring Conversation"
-msgstr "Gesprek niet meer negeren"
-
-#: src/app/mainwindow.cpp:3971
+#: src/app/mainwindow.cpp:3978
 #, kde-format
 msgctxt "@action"
 msgid "Ignore Conversation"
 msgstr "Gesprek negeren"
 
-#: src/app/mainwindow.cpp:4060
+#: src/app/mainwindow.cpp:3978
+#, kde-format
+msgctxt "@action"
+msgid "Stop Ignoring Conversation"
+msgstr "Gesprek niet meer negeren"
+
+#: src/app/mainwindow.cpp:4067
 #, kde-format
 msgctxt "@info:status %1 a folder"
 msgid "This Quick Step moves to %1, a folder of another mailbox."
 msgstr "Deze snelle stap verplaatst naar %1, een map van een ander postvak."
 
-#: src/app/mainwindow.cpp:4140
+#: src/app/mainwindow.cpp:4147
 #, kde-format
 msgctxt "@info:status %1 an address"
 msgid "Mail from %1 now always goes to Focused."
 msgstr "E-mail van %1 gaat nu altijd naar Prioriteit."
 
-#: src/app/mainwindow.cpp:4141
+#: src/app/mainwindow.cpp:4148
 #, kde-format
 msgctxt "@info:status %1 an address"
 msgid "Mail from %1 now always goes to Other."
 msgstr "E-mail van %1 gaat nu altijd naar Overige."
 
-#: src/app/mainwindow.cpp:4158
+#: src/app/mainwindow.cpp:4165
 #, kde-format
 msgctxt "@info:status"
 msgid "Reported as junk: moved to Junk Email, the sender is blocked."
-msgstr "Gemeld als ongewenst: verplaatst naar Ongewenste e-mail, de afzender is geblokkeerd."
+msgstr ""
+"Gemeld als ongewenst: verplaatst naar Ongewenste e-mail, de afzender is "
+"geblokkeerd."
 
-#: src/app/mainwindow.cpp:4159
+#: src/app/mainwindow.cpp:4166
 #, kde-format
 msgctxt "@info:status"
 msgid "Not junk: moved to the Inbox, the sender is trusted."
-msgstr "Geen ongewenste e-mail: verplaatst naar het Postvak IN, de afzender wordt vertrouwd."
+msgstr ""
+"Geen ongewenste e-mail: verplaatst naar het Postvak IN, de afzender wordt "
+"vertrouwd."
 
-#: src/app/mainwindow.cpp:4194
+#: src/app/mainwindow.cpp:4201
 #, kde-format
 msgctxt "@info"
 msgid ""
 "The selected conversation and all its future messages will be moved to "
 "Deleted Items. Graph Mail does this while it runs: Microsoft 365 does not "
 "offer it to other apps."
-msgstr "Het geselecteerde gesprek en alle toekomstige berichten daarin worden verplaatst naar Verwijderde items. Graph Mail doet dit zolang het draait: Microsoft 365 biedt dit niet aan andere apps."
+msgstr ""
+"Het geselecteerde gesprek en alle toekomstige berichten daarin worden "
+"verplaatst naar Verwijderde items. Graph Mail doet dit zolang het draait: "
+"Microsoft 365 biedt dit niet aan andere apps."
 
-#: src/app/mainwindow.cpp:4196
+#: src/app/mainwindow.cpp:4203
 #, kde-format
 msgctxt "@title:window"
 msgid "Ignore Conversation"
 msgstr "Gesprek negeren"
 
-#: src/app/mainwindow.cpp:4197
+#: src/app/mainwindow.cpp:4204
 #, kde-format
 msgctxt "@action:button"
 msgid "Ignore Conversation"
 msgstr "Gesprek negeren"
 
-#: src/app/mainwindow.cpp:4207
+#: src/app/mainwindow.cpp:4214
 #, kde-format
 msgctxt "@info:status"
 msgid "Conversation ignored: %1 message moved to Deleted Items."
@@ -6214,13 +6530,13 @@ msgid_plural "Conversation ignored: %1 messages moved to Deleted Items."
 msgstr[0] "Gesprek genegeerd: %1 bericht verplaatst naar Verwijderde items."
 msgstr[1] "Gesprek genegeerd: %1 berichten verplaatst naar Verwijderde items."
 
-#: src/app/mainwindow.cpp:4209
+#: src/app/mainwindow.cpp:4216
 #, kde-format
 msgctxt "@info:status"
 msgid "The conversation is no longer ignored."
 msgstr "Het gesprek wordt niet meer genegeerd."
 
-#: src/app/mainwindow.cpp:4258
+#: src/app/mainwindow.cpp:4265
 #, kde-format
 msgctxt "@info"
 msgid "Permanently delete this message?"
@@ -6228,13 +6544,13 @@ msgid_plural "Permanently delete these %1 messages?"
 msgstr[0] "Dit bericht definitief verwijderen?"
 msgstr[1] "Deze %1 berichten definitief verwijderen?"
 
-#: src/app/mainwindow.cpp:4259
+#: src/app/mainwindow.cpp:4266
 #, kde-format
 msgctxt "@title:window"
 msgid "Delete Permanently"
 msgstr "Definitief verwijderen"
 
-#: src/app/mainwindow.cpp:4308
+#: src/app/mainwindow.cpp:4315
 #, kde-format
 msgctxt "@info:status"
 msgid "Swept %1 message."
@@ -6242,25 +6558,26 @@ msgid_plural "Swept %1 messages."
 msgstr[0] "%1 bericht opgeruimd."
 msgstr[1] "%1 berichten opgeruimd."
 
-#: src/app/mainwindow.cpp:4325
+#: src/app/mainwindow.cpp:4332
 #, kde-format
 msgctxt "@info:status"
 msgid "Future messages from %1 will be swept too (a rule in Rules)."
-msgstr "Toekomstige berichten van %1 worden ook opgeruimd (een regel in Regels)."
+msgstr ""
+"Toekomstige berichten van %1 worden ook opgeruimd (een regel in Regels)."
 
-#: src/app/mainwindow.cpp:4326
+#: src/app/mainwindow.cpp:4333
 #, kde-format
 msgctxt "@info:status"
 msgid "The rule for future messages from %1 could not be made."
 msgstr "De regel voor toekomstige berichten van %1 kon niet worden gemaakt."
 
-#: src/app/mainwindow.cpp:4355
+#: src/app/mainwindow.cpp:4362
 #, kde-format
 msgctxt "@info %1 a folder"
 msgid "%1: no Archive folder to move to"
 msgstr "%1: geen Archief-map om naartoe te verplaatsen"
 
-#: src/app/mainwindow.cpp:4382
+#: src/app/mainwindow.cpp:4389
 #, kde-format
 msgctxt "@info"
 msgid "%1 message moved to the Archive folder."
@@ -6268,7 +6585,7 @@ msgid_plural "%1 messages moved to the Archive folder."
 msgstr[0] "%1 bericht naar de map Archief verplaatst."
 msgstr[1] "%1 berichten naar de map Archief verplaatst."
 
-#: src/app/mainwindow.cpp:4385
+#: src/app/mainwindow.cpp:4392
 #, kde-format
 msgctxt "@info"
 msgid "%1 message deleted."
@@ -6276,43 +6593,49 @@ msgid_plural "%1 messages deleted."
 msgstr[0] "%1 bericht verwijderd."
 msgstr[1] "%1 berichten verwijderd."
 
-#: src/app/mainwindow.cpp:4388
+#: src/app/mainwindow.cpp:4395
 #, kde-format
 msgctxt "@info"
 msgid "%1 old message could be cleaned up (Settings > Clean Up Old Mail)."
 msgid_plural ""
 "%1 old messages could be cleaned up (Settings > Clean Up Old Mail)."
-msgstr[0] "%1 oud bericht kan worden opgeruimd (Instellingen > Oude e-mail opruimen)."
-msgstr[1] "%1 oude berichten kunnen worden opgeruimd (Instellingen > Oude e-mail opruimen)."
+msgstr[0] ""
+"%1 oud bericht kan worden opgeruimd (Instellingen > Oude e-mail opruimen)."
+msgstr[1] ""
+"%1 oude berichten kunnen worden opgeruimd (Instellingen > Oude e-mail "
+"opruimen)."
 
-#: src/app/mainwindow.cpp:4396
+#: src/app/mainwindow.cpp:4403
 #, kde-format
 msgctxt "@title notification"
 msgid "Old mail cleaned up"
 msgstr "Oude e-mail opgeruimd"
 
-#: src/app/mainwindow.cpp:4417
+#: src/app/mainwindow.cpp:4424
 #, kde-format
 msgctxt "@info file name, %1 a mailbox, %2 a date"
 msgid "Old mail %1 %2"
 msgstr "Oude e-mail %1 %2"
 
-#: src/app/mainwindow.cpp:4428
+#: src/app/mainwindow.cpp:4435
 #, kde-format
 msgctxt "@info %1 a file, %2 the reason"
 msgid "Old mail was not removed: %1 could not be written (%2)."
 msgstr "Oude e-mail is niet verwijderd: %1 kon niet worden geschreven (%2)."
 
-#: src/app/mainwindow.cpp:4435
+#: src/app/mainwindow.cpp:4442
 #, kde-format
 msgctxt "@info"
 msgid "%1 old message could not be saved completely and stays in the mailbox."
 msgid_plural ""
 "%1 old messages could not be saved completely and stay in the mailbox."
-msgstr[0] "%1 oud bericht kon niet volledig worden opgeslagen en blijft in het postvak."
-msgstr[1] "%1 oude berichten konden niet volledig worden opgeslagen en blijven in het postvak."
+msgstr[0] ""
+"%1 oud bericht kon niet volledig worden opgeslagen en blijft in het postvak."
+msgstr[1] ""
+"%1 oude berichten konden niet volledig worden opgeslagen en blijven in het "
+"postvak."
 
-#: src/app/mainwindow.cpp:4445
+#: src/app/mainwindow.cpp:4452
 #, kde-format
 msgctxt "@info %2 a file"
 msgid "%1 old message saved in %2 and removed from the mailbox."
@@ -6320,7 +6643,7 @@ msgid_plural "%1 old messages saved in %2 and removed from the mailbox."
 msgstr[0] "%1 oud bericht bewaard in %2 en uit het postvak verwijderd."
 msgstr[1] "%1 oude berichten bewaard in %2 en uit het postvak verwijderd."
 
-#: src/app/mainwindow.cpp:4476
+#: src/app/mainwindow.cpp:4483
 #, kde-format
 msgctxt "@info %2 a folder"
 msgid ""
@@ -6331,28 +6654,34 @@ msgid_plural ""
 "%2 still holds %1 items that Graph Mail cannot see or remove (calendar "
 "items, tasks, contacts or other kinds Microsoft Graph does not show). Empty "
 "the folder in Outlook on the web to remove them."
-msgstr[0] "%2 bevat nog %1 item dat Graph Mail niet kan zien of verwijderen (een agenda-item, taak, contactpersoon of een ander soort dat Microsoft Graph niet toont). Leeg de map in Outlook op het web om het te verwijderen."
-msgstr[1] "%2 bevat nog %1 items die Graph Mail niet kan zien of verwijderen (agenda-items, taken, contactpersonen of andere soorten die Microsoft Graph niet toont). Leeg de map in Outlook op het web om ze te verwijderen."
+msgstr[0] ""
+"%2 bevat nog %1 item dat Graph Mail niet kan zien of verwijderen (een agenda-"
+"item, taak, contactpersoon of een ander soort dat Microsoft Graph niet "
+"toont). Leeg de map in Outlook op het web om het te verwijderen."
+msgstr[1] ""
+"%2 bevat nog %1 items die Graph Mail niet kan zien of verwijderen (agenda-"
+"items, taken, contactpersonen of andere soorten die Microsoft Graph niet "
+"toont). Leeg de map in Outlook op het web om ze te verwijderen."
 
-#: src/app/mainwindow.cpp:4480 src/app/mainwindow.cpp:4502
+#: src/app/mainwindow.cpp:4487 src/app/mainwindow.cpp:4509
 #, kde-format
 msgctxt "@title:window"
 msgid "Empty Folder"
 msgstr "Map leegmaken"
 
-#: src/app/mainwindow.cpp:4480
+#: src/app/mainwindow.cpp:4487
 #, kde-format
 msgctxt "@action:button"
 msgid "Open Outlook on the web"
 msgstr "Outlook op het web openen"
 
-#: src/app/mainwindow.cpp:4490
+#: src/app/mainwindow.cpp:4497
 #, kde-format
 msgctxt "@info:status %1 a folder"
 msgid "%1 is empty."
 msgstr "%1 is leeg."
 
-#: src/app/mainwindow.cpp:4500
+#: src/app/mainwindow.cpp:4507
 #, kde-format
 msgctxt "@info %2 a folder"
 msgid "Permanently delete the %1 message in %2?"
@@ -6360,7 +6689,7 @@ msgid_plural "Permanently delete all %1 messages in %2?"
 msgstr[0] "Het %1 bericht in %2 definitief verwijderen?"
 msgstr[1] "Alle %1 berichten in %2 definitief verwijderen?"
 
-#: src/app/mainwindow.cpp:4501
+#: src/app/mainwindow.cpp:4508
 #, kde-format
 msgctxt "@info %2 a folder"
 msgid "Move the %1 message in %2 to Deleted Items?"
@@ -6368,13 +6697,13 @@ msgid_plural "Move all %1 messages in %2 to Deleted Items?"
 msgstr[0] "Het %1 bericht in %2 naar Verwijderde items verplaatsen?"
 msgstr[1] "Alle %1 berichten in %2 naar Verwijderde items verplaatsen?"
 
-#: src/app/mainwindow.cpp:4502
+#: src/app/mainwindow.cpp:4509
 #, kde-format
 msgctxt "@action:button"
 msgid "Empty Folder"
 msgstr "Map leegmaken"
 
-#: src/app/mainwindow.cpp:4512
+#: src/app/mainwindow.cpp:4519
 #, kde-format
 msgctxt "@info:status"
 msgid "%1 message deleted for good."
@@ -6382,7 +6711,7 @@ msgid_plural "%1 messages deleted for good."
 msgstr[0] "%1 bericht definitief verwijderd."
 msgstr[1] "%1 berichten definitief verwijderd."
 
-#: src/app/mainwindow.cpp:4513
+#: src/app/mainwindow.cpp:4520
 #, kde-format
 msgctxt "@info:status"
 msgid "%1 message moved to Deleted Items."
@@ -6390,43 +6719,37 @@ msgid_plural "%1 messages moved to Deleted Items."
 msgstr[0] "%1 bericht naar Verwijderde items verplaatst."
 msgstr[1] "%1 berichten naar Verwijderde items verplaatst."
 
-#: src/app/mainwindow.cpp:4533
+#: src/app/mainwindow.cpp:4540
 #, kde-format
 msgctxt "@title:window"
 msgid "Folder"
 msgstr "Map"
 
-#: src/app/mainwindow.cpp:4546
+#: src/app/mainwindow.cpp:4553
 #, kde-format
 msgctxt "@title:window"
 msgid "New Folder"
 msgstr "Nieuwe map"
 
-#: src/app/mainwindow.cpp:4547
+#: src/app/mainwindow.cpp:4554
 #, kde-format
 msgctxt "@label:textbox %1 a folder"
 msgid "Name of the new folder in %1:"
 msgstr "Naam van de nieuwe map in %1:"
 
-#: src/app/mainwindow.cpp:4548
+#: src/app/mainwindow.cpp:4555
 #, kde-format
 msgctxt "@label:textbox"
 msgid "Name of the new folder:"
 msgstr "Naam van de nieuwe map:"
 
-#: src/app/mainwindow.cpp:4559
+#: src/app/mainwindow.cpp:4566
 #, kde-format
 msgctxt "@info:status %1 a folder"
 msgid "Folder %1 created."
 msgstr "Map %1 aangemaakt."
 
-#: src/app/mainwindow.cpp:4570
-#, kde-format
-msgctxt "@title:window"
-msgid "Rename Folder"
-msgstr "Naam van map wijzigen"
-
-#: src/app/mainwindow.cpp:4570
+#: src/app/mainwindow.cpp:4577
 #, kde-format
 msgctxt "@label:textbox"
 msgid "New name:"
@@ -6434,65 +6757,71 @@ msgstr "Nieuwe naam:"
 
 #: src/app/mainwindow.cpp:4577
 #, kde-format
+msgctxt "@title:window"
+msgid "Rename Folder"
+msgstr "Naam van map wijzigen"
+
+#: src/app/mainwindow.cpp:4584
+#, kde-format
 msgctxt "@info:status %1 a folder"
 msgid "Folder renamed to %1."
 msgstr "Naam van map gewijzigd in %1."
 
-#: src/app/mainwindow.cpp:4588
+#: src/app/mainwindow.cpp:4595
 #, kde-format
 msgctxt "@title:window %1 a folder"
 msgid "Move Folder %1"
 msgstr "Map %1 verplaatsen"
 
-#: src/app/mainwindow.cpp:4596
+#: src/app/mainwindow.cpp:4603
 #, kde-format
 msgctxt "@info:status %1 a folder, %2 another"
 msgid "Folder %1 moved to %2."
 msgstr "Map %1 verplaatst naar %2."
 
-#: src/app/mainwindow.cpp:4597
+#: src/app/mainwindow.cpp:4604
 #, kde-format
 msgctxt "@info:status %1 a folder"
 msgid "Folder %1 moved to the top of the mailbox."
 msgstr "Map %1 verplaatst naar het hoogste niveau van het postvak."
 
-#: src/app/mainwindow.cpp:4612
+#: src/app/mainwindow.cpp:4619
 #, kde-format
 msgctxt "@info %1 a folder"
 msgid "Permanently delete the folder %1 and everything in it?"
 msgstr "De map %1 en alles erin definitief verwijderen?"
 
-#: src/app/mainwindow.cpp:4613
+#: src/app/mainwindow.cpp:4620
 #, kde-format
 msgctxt "@info %1 a folder"
 msgid "Move the folder %1 and everything in it to Deleted Items?"
 msgstr "De map %1 en alles erin naar Verwijderde items verplaatsen?"
 
-#: src/app/mainwindow.cpp:4614
+#: src/app/mainwindow.cpp:4621
 #, kde-format
 msgctxt "@title:window"
 msgid "Delete Folder"
 msgstr "Map verwijderen"
 
-#: src/app/mainwindow.cpp:4620
+#: src/app/mainwindow.cpp:4627
 #, kde-format
 msgctxt "@info:status %1 a folder"
 msgid "Folder %1 deleted for good."
 msgstr "Map %1 definitief verwijderd."
 
-#: src/app/mainwindow.cpp:4621
+#: src/app/mainwindow.cpp:4628
 #, kde-format
 msgctxt "@info:status %1 a folder"
 msgid "Folder %1 moved to Deleted Items."
 msgstr "Map %1 verplaatst naar Verwijderde items."
 
-#: src/app/mainwindow.cpp:4634
+#: src/app/mainwindow.cpp:4641
 #, kde-format
 msgctxt "@info:status %1 a folder"
 msgid "Everything in %1 is marked as read."
 msgstr "Alles in %1 is als gelezen gemarkeerd."
 
-#: src/app/mainwindow.cpp:4679
+#: src/app/mainwindow.cpp:4686
 #, kde-format
 msgctxt "@info:status"
 msgid "Undone: %1 message moved back."
@@ -6500,7 +6829,7 @@ msgid_plural "Undone: %1 messages moved back."
 msgstr[0] "Ongedaan gemaakt: %1 bericht teruggezet."
 msgstr[1] "Ongedaan gemaakt: %1 berichten teruggezet."
 
-#: src/app/mainwindow.cpp:4680
+#: src/app/mainwindow.cpp:4687
 #, kde-format
 msgctxt "@info:status"
 msgid "Nothing to undo: the messages are no longer there."
@@ -6584,7 +6913,9 @@ msgctxt "@info"
 msgid ""
 "Microsoft 365 did not answer: these are not the message's own headers but "
 "the ones of this computer's copy."
-msgstr "Microsoft 365 gaf geen antwoord: dit zijn niet de kopregels van het bericht zelf, maar die van de kopie op deze computer."
+msgstr ""
+"Microsoft 365 gaf geen antwoord: dit zijn niet de kopregels van het bericht "
+"zelf, maar die van de kopie op deze computer."
 
 #: src/app/messagewindow.cpp:315 src/app/readingpane.cpp:780
 #: src/graphmaild/mailrunner.cpp:120
@@ -6647,18 +6978,18 @@ msgctxt "@info in an exported message"
 msgid "The message text was not on this computer."
 msgstr "De tekst van het bericht stond niet op deze computer."
 
-#: src/app/mimeexport.cpp:286
-#, kde-format
-msgctxt "@info:progress"
-msgid "Exporting messages..."
-msgstr "Berichten exporteren..."
-
 #: src/app/mimeexport.cpp:286 src/app/pstexport.cpp:174
 #: src/app/pstimport.cpp:252 src/app/pstimport.cpp:525
 #, kde-format
 msgctxt "@action:button"
 msgid "Cancel"
 msgstr "Annuleren"
+
+#: src/app/mimeexport.cpp:286
+#, kde-format
+msgctxt "@info:progress"
+msgid "Exporting messages..."
+msgstr "Berichten exporteren..."
 
 #: src/app/movedialog.cpp:25
 #, kde-format
@@ -6740,7 +7071,9 @@ msgctxt "@info:tooltip"
 msgid ""
 "Off: on a metered connection only the messages you open are downloaded; the "
 "rest follows on another connection."
-msgstr "Uit: via een verbinding met datalimiet worden alleen de berichten gedownload die je opent; de rest volgt via een andere verbinding."
+msgstr ""
+"Uit: via een verbinding met datalimiet worden alleen de berichten gedownload "
+"die je opent; de rest volgt via een andere verbinding."
 
 #: src/app/offlinedialog.cpp:81
 #, kde-format
@@ -6749,7 +7082,10 @@ msgid ""
 "Every message is downloaded once; for a large mailbox that takes hours and "
 "several gigabytes. Search then finds the text of all mail without Microsoft "
 "365."
-msgstr "Elk bericht wordt één keer gedownload; voor een groot postvak kost dat uren en enkele gigabytes. Zoeken vindt dan de tekst van alle e-mail zonder Microsoft 365."
+msgstr ""
+"Elk bericht wordt één keer gedownload; voor een groot postvak kost dat uren "
+"en enkele gigabytes. Zoeken vindt dan de tekst van alle e-mail zonder "
+"Microsoft 365."
 
 #: src/app/offlinedialog.cpp:82
 #, kde-format
@@ -6757,7 +7093,9 @@ msgctxt "@info"
 msgid ""
 "Only the list of messages is kept; a message is downloaded when you open it "
 "and cannot be read offline."
-msgstr "Alleen de lijst met berichten wordt bewaard; een bericht wordt gedownload wanneer u het opent en kan offline niet worden gelezen."
+msgstr ""
+"Alleen de lijst met berichten wordt bewaard; een bericht wordt gedownload "
+"wanneer u het opent en kan offline niet worden gelezen."
 
 #: src/app/offlinedialog.cpp:83
 #, kde-format
@@ -6765,7 +7103,10 @@ msgctxt "@info"
 msgid ""
 "Newer mail can be read and searched offline; older mail is downloaded when "
 "opened, and Microsoft 365 searches its text."
-msgstr "Nieuwere e-mail kan offline worden gelezen en doorzocht; oudere e-mail wordt gedownload wanneer hij wordt geopend, en Microsoft 365 doorzoekt de tekst ervan."
+msgstr ""
+"Nieuwere e-mail kan offline worden gelezen en doorzocht; oudere e-mail wordt "
+"gedownload wanneer hij wordt geopend, en Microsoft 365 doorzoekt de tekst "
+"ervan."
 
 #: src/app/offlinedialog.cpp:88
 #, kde-format
@@ -6785,7 +7126,9 @@ msgctxt "@info:tooltip"
 msgid ""
 "Removes the copies of mail outside the period chosen now and shrinks the "
 "files"
-msgstr "Verwijdert de kopieën van e-mail buiten de nu gekozen periode en verkleint de bestanden"
+msgstr ""
+"Verwijdert de kopieën van e-mail buiten de nu gekozen periode en verkleint "
+"de bestanden"
 
 #: src/app/offlinedialog.cpp:98
 #, kde-format
@@ -6864,7 +7207,8 @@ msgstr "%1 is geen afbeelding die Graph Mail kan lezen."
 msgctxt "@info"
 msgid ""
 "Remove your photo? Outlook, Teams and Microsoft 365 then show your initials."
-msgstr "Uw foto verwijderen? Outlook, Teams en Microsoft 365 tonen dan uw initialen."
+msgstr ""
+"Uw foto verwijderen? Outlook, Teams en Microsoft 365 tonen dan uw initialen."
 
 #: src/app/profilephotos.cpp:91
 #, kde-format
@@ -6875,14 +7219,14 @@ msgstr "Foto verwijderen"
 #: src/app/profilephotos.cpp:109
 #, kde-format
 msgctxt "@info:status"
-msgid "Photo removed."
-msgstr "Foto verwijderd."
+msgid "Photo changed. Outlook and Teams show it within a few hours."
+msgstr "Foto gewijzigd. Outlook en Teams tonen die binnen enkele uren."
 
 #: src/app/profilephotos.cpp:109
 #, kde-format
 msgctxt "@info:status"
-msgid "Photo changed. Outlook and Teams show it within a few hours."
-msgstr "Foto gewijzigd. Outlook en Teams tonen die binnen enkele uren."
+msgid "Photo removed."
+msgstr "Foto verwijderd."
 
 #: src/app/profilephotos.cpp:112
 #, kde-format
@@ -6891,7 +7235,10 @@ msgid ""
 "Microsoft 365 does not let Graph Mail change this photo: its sign-in does "
 "not include changing your profile. Change it on your <a href=\"https://"
 "myaccount.microsoft.com\">Microsoft account page</a> instead."
-msgstr "Microsoft 365 laat Graph Mail deze foto niet wijzigen: de aanmelding omvat het wijzigen van uw profiel niet. Wijzig de foto op uw <a href=\"https://myaccount.microsoft.com\">Microsoft-accountpagina</a>."
+msgstr ""
+"Microsoft 365 laat Graph Mail deze foto niet wijzigen: de aanmelding omvat "
+"het wijzigen van uw profiel niet. Wijzig de foto op uw <a href=\"https://"
+"myaccount.microsoft.com\">Microsoft-accountpagina</a>."
 
 #: src/app/profilephotos.cpp:117
 #, kde-format
@@ -6941,7 +7288,9 @@ msgctxt "@item:inlistbox"
 msgid ""
 "The mailbox's own folders (same names are used; contacts, calendar items and "
 "tasks go to the defaults)"
-msgstr "De eigen mappen van het postvak (dezelfde namen worden gebruikt; contactpersonen, agenda-items en taken gaan naar de standaardmappen)"
+msgstr ""
+"De eigen mappen van het postvak (dezelfde namen worden gebruikt; "
+"contactpersonen, agenda-items en taken gaan naar de standaardmappen)"
 
 #: src/app/pstimport.cpp:139
 #, kde-format
@@ -6955,7 +7304,9 @@ msgctxt "@label"
 msgid ""
 "Folders to import (mail, contacts, calendar items and tasks; notes and "
 "journal entries are left out):"
-msgstr "Te importeren mappen (e-mail, contactpersonen, agenda-items en taken; notities en journaalitems worden overgeslagen):"
+msgstr ""
+"Te importeren mappen (e-mail, contactpersonen, agenda-items en taken; "
+"notities en journaalitems worden overgeslagen):"
 
 #: src/app/pstimport.cpp:144
 #, kde-format
@@ -6994,7 +7345,8 @@ msgstr[1] "%2: %1 items overgeslagen (%3 kan niet worden geïmporteerd)"
 #, kde-format
 msgctxt "@info %1 a folder"
 msgid "The folder %1 was left out: its parent could not be made."
-msgstr "De map %1 is overgeslagen: de bovenliggende map kon niet worden gemaakt."
+msgstr ""
+"De map %1 is overgeslagen: de bovenliggende map kon niet worden gemaakt."
 
 #: src/app/pstimport.cpp:342 src/app/pstimport.cpp:356
 #, kde-format
@@ -7200,19 +7552,21 @@ msgctxt "@info"
 msgid ""
 "Quick Steps are kept on this computer: Microsoft 365 does not share "
 "Outlook's with other apps."
-msgstr "Snelle stappen worden op deze computer bewaard: Microsoft 365 deelt die van Outlook niet met andere apps."
-
-#: src/app/quicksteps.cpp:209
-#, kde-format
-msgctxt "@title:window"
-msgid "New Quick Step"
-msgstr "Nieuwe snelle stap"
+msgstr ""
+"Snelle stappen worden op deze computer bewaard: Microsoft 365 deelt die van "
+"Outlook niet met andere apps."
 
 #: src/app/quicksteps.cpp:209
 #, kde-format
 msgctxt "@title:window"
 msgid "Change Quick Step"
 msgstr "Snelle stap wijzigen"
+
+#: src/app/quicksteps.cpp:209
+#, kde-format
+msgctxt "@title:window"
+msgid "New Quick Step"
+msgstr "Nieuwe snelle stap"
 
 #: src/app/quicksteps.cpp:220
 #, kde-format
@@ -7306,15 +7660,15 @@ msgstr "Doorsturen naar..."
 
 #: src/app/quicksteps.cpp:267
 #, kde-format
-msgctxt "@title:window"
-msgid "Forward To"
-msgstr "Doorsturen naar"
-
-#: src/app/quicksteps.cpp:267
-#, kde-format
 msgctxt "@label:textbox"
 msgid "Addresses (empty: choose when it runs):"
 msgstr "Adressen (leeg: kiezen bij het uitvoeren):"
+
+#: src/app/quicksteps.cpp:267
+#, kde-format
+msgctxt "@title:window"
+msgid "Forward To"
+msgstr "Doorsturen naar"
 
 #: src/app/quicksteps.cpp:275
 #, kde-format
@@ -7388,7 +7742,9 @@ msgctxt "@info"
 msgid ""
 "Pictures and other content from the internet were blocked to protect your "
 "privacy."
-msgstr "Afbeeldingen en andere inhoud van internet zijn geblokkeerd om uw privacy te beschermen."
+msgstr ""
+"Afbeeldingen en andere inhoud van internet zijn geblokkeerd om uw privacy te "
+"beschermen."
 
 #: src/app/readingpane.cpp:189
 #, kde-format
@@ -7435,14 +7791,14 @@ msgstr "%1 - %2"
 #: src/app/readingpane.cpp:348
 #, kde-format
 msgctxt "@info %1 the meeting's time"
-msgid "This meeting was cancelled: %1"
-msgstr "Deze vergadering is geannuleerd: %1"
+msgid "Meeting: %1"
+msgstr "Vergadering: %1"
 
 #: src/app/readingpane.cpp:348
 #, kde-format
 msgctxt "@info %1 the meeting's time"
-msgid "Meeting: %1"
-msgstr "Vergadering: %1"
+msgid "This meeting was cancelled: %1"
+msgstr "Deze vergadering is geannuleerd: %1"
 
 #: src/app/readingpane.cpp:353
 #, kde-format
@@ -7489,6 +7845,12 @@ msgstr "Nieuwe tijd voorstellen..."
 #: src/app/readingpane.cpp:435
 #, kde-format
 msgctxt "@info"
+msgid "Accepted tentatively."
+msgstr "Voorlopig geaccepteerd."
+
+#: src/app/readingpane.cpp:435
+#, kde-format
+msgctxt "@info"
 msgid "Accepted."
 msgstr "Geaccepteerd."
 
@@ -7497,12 +7859,6 @@ msgstr "Geaccepteerd."
 msgctxt "@info"
 msgid "Declined."
 msgstr "Geweigerd."
-
-#: src/app/readingpane.cpp:435
-#, kde-format
-msgctxt "@info"
-msgid "Accepted tentatively."
-msgstr "Voorlopig geaccepteerd."
 
 #: src/app/readingpane.cpp:446
 #, kde-format
@@ -7527,7 +7883,9 @@ msgstr "Alle bijlagen opslaan"
 msgctxt "@info"
 msgid ""
 "The attachment could not be downloaded. Check the connection and try again."
-msgstr "De bijlage kan niet worden gedownload. Controleer de verbinding en probeer het opnieuw."
+msgstr ""
+"De bijlage kan niet worden gedownload. Controleer de verbinding en probeer "
+"het opnieuw."
 
 #: src/app/readingpane.cpp:710
 #, kde-format
@@ -7565,7 +7923,9 @@ msgctxt "@info %1 a web site"
 msgid ""
 "Unsubscribe from this mailing list? Graph Mail sends the list's own "
 "unsubscribe request to %1."
-msgstr "Afmelden voor deze mailinglijst? Graph Mail stuurt het afmeldverzoek van de lijst zelf naar %1."
+msgstr ""
+"Afmelden voor deze mailinglijst? Graph Mail stuurt het afmeldverzoek van de "
+"lijst zelf naar %1."
 
 #: src/app/readingpane.cpp:885
 #, kde-format
@@ -7573,7 +7933,9 @@ msgctxt "@info %1 an e-mail address"
 msgid ""
 "Unsubscribe from this mailing list? A message to %1 opens; send it to "
 "unsubscribe."
-msgstr "Afmelden voor deze mailinglijst? Er opent een bericht aan %1; verstuur het om u af te melden."
+msgstr ""
+"Afmelden voor deze mailinglijst? Er opent een bericht aan %1; verstuur het "
+"om u af te melden."
 
 #: src/app/readingpane.cpp:888
 #, kde-format
@@ -7581,7 +7943,9 @@ msgctxt "@info %1 a web site"
 msgid ""
 "Unsubscribe from this mailing list? The list's page on %1 opens in your "
 "browser."
-msgstr "Afmelden voor deze mailinglijst? De pagina van de lijst op %1 opent in uw browser."
+msgstr ""
+"Afmelden voor deze mailinglijst? De pagina van de lijst op %1 opent in uw "
+"browser."
 
 #: src/app/readingpane.cpp:895
 #, kde-format
@@ -7746,14 +8110,14 @@ msgstr "Dagelijks"
 #: src/app/recurrence.cpp:181
 #, kde-format
 msgctxt "@item:inlistbox recurrence"
-msgid "Weekly"
-msgstr "Wekelijks"
+msgid "Monthly"
+msgstr "Maandelijks"
 
 #: src/app/recurrence.cpp:181
 #, kde-format
 msgctxt "@item:inlistbox recurrence"
-msgid "Monthly"
-msgstr "Maandelijks"
+msgid "Weekly"
+msgstr "Wekelijks"
 
 #: src/app/recurrence.cpp:182
 #, kde-format
@@ -7875,7 +8239,9 @@ msgctxt "@info"
 msgid ""
 "Forward as Attachment and Edit as New Message work as before, whatever is "
 "chosen here."
-msgstr "Doorsturen als bijlage en Bewerken als nieuw bericht werken zoals voorheen, wat hier ook gekozen is."
+msgstr ""
+"Doorsturen als bijlage en Bewerken als nieuw bericht werken zoals voorheen, "
+"wat hier ook gekozen is."
 
 #: src/app/rulesdialog.cpp:97
 #, kde-format
@@ -7910,14 +8276,14 @@ msgstr "Deze regel inschakelen"
 #: src/app/rulesdialog.cpp:148
 #, kde-format
 msgctxt "@title:window"
-msgid "New Rule"
-msgstr "Nieuwe regel"
+msgid "Change Rule"
+msgstr "Regel wijzigen"
 
 #: src/app/rulesdialog.cpp:148
 #, kde-format
 msgctxt "@title:window"
-msgid "Change Rule"
-msgstr "Regel wijzigen"
+msgid "New Rule"
+msgstr "Nieuwe regel"
 
 #: src/app/rulesdialog.cpp:152
 #, kde-format
@@ -8057,7 +8423,9 @@ msgctxt "@info"
 msgid ""
 "This rule also has conditions, exceptions or actions that are not shown "
 "here; they are kept."
-msgstr "Deze regel heeft ook voorwaarden, uitzonderingen of acties die hier niet worden getoond; die blijven behouden."
+msgstr ""
+"Deze regel heeft ook voorwaarden, uitzonderingen of acties die hier niet "
+"worden getoond; die blijven behouden."
 
 #: src/app/rulesdialog.cpp:286
 #, kde-format
@@ -8113,7 +8481,9 @@ msgctxt "@info"
 msgid ""
 "Microsoft 365 applies these rules to new mail in the Inbox, in this order, "
 "also while Graph Mail is closed."
-msgstr "Microsoft 365 past deze regels in deze volgorde toe op nieuwe e-mail in het Postvak IN, ook als Graph Mail gesloten is."
+msgstr ""
+"Microsoft 365 past deze regels in deze volgorde toe op nieuwe e-mail in het "
+"Postvak IN, ook als Graph Mail gesloten is."
 
 #: src/app/rulesdialog.cpp:503
 #, kde-format
@@ -8235,7 +8605,9 @@ msgctxt "@info:tooltip"
 msgid ""
 "Exchange reports an error in this rule (for example a folder that no longer "
 "exists)"
-msgstr "Exchange meldt een fout in deze regel (bijvoorbeeld een map die niet meer bestaat)"
+msgstr ""
+"Exchange meldt een fout in deze regel (bijvoorbeeld een map die niet meer "
+"bestaat)"
 
 #: src/app/rulesdialog.cpp:655
 #, kde-format
@@ -8399,7 +8771,7 @@ msgctxt "@info:tooltip"
 msgid "Tasks (Ctrl+4)"
 msgstr "Taken (Ctrl+4)"
 
-#: src/app/shell.cpp:93
+#: src/app/shell.cpp:97
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Open in New Window"
@@ -8452,6 +8824,43 @@ msgstr "Antwoorden en doorgestuurde berichten:"
 msgctxt "@item:inlistbox no signature"
 msgid "(none)"
 msgstr "(geen)"
+
+#: src/app/spelllanguage.cpp:100
+#, kde-format
+msgctxt "@info:tooltip"
+msgid "Spelling language. Automatic: follows the language you write in."
+msgstr "Spellingstaal. Automatisch: volgt de taal waarin je schrijft."
+
+#: src/app/spelllanguage.cpp:133
+#, kde-format
+msgctxt "@item:inlistbox"
+msgid "No spelling dictionaries"
+msgstr "Geen spellingwoordenboeken"
+
+#: src/app/spelllanguage.cpp:135
+#, kde-format
+msgctxt "@info:tooltip"
+msgid ""
+"No spelling dictionaries are installed. Install the hunspell dictionaries of "
+"your languages (for example hunspell-nl and hunspell-en-us) and the hunspell "
+"plugin of KDE's spell checker (Sonnet)."
+msgstr ""
+"Er zijn geen spellingwoordenboeken geïnstalleerd. Installeer de hunspell-"
+"woordenboeken van je talen (bijvoorbeeld hunspell-nl en hunspell-en-us) en "
+"de hunspell-plug-in van de spellingcontrole van KDE (Sonnet)."
+
+#: src/app/spelllanguage.cpp:138 src/app/spelllanguage.cpp:218
+#: src/app/spelllanguage.cpp:221
+#, kde-format
+msgctxt "@item:inlistbox spelling language"
+msgid "Automatic"
+msgstr "Automatisch"
+
+#: src/app/spelllanguage.cpp:218
+#, kde-format
+msgctxt "@item:inlistbox %1 the language found"
+msgid "Automatic (%1)"
+msgstr "Automatisch (%1)"
 
 #: src/app/sweepdialog.cpp:26
 #, kde-format
@@ -8560,14 +8969,14 @@ msgstr "Taken"
 #: src/app/taskswindow.cpp:123
 #, kde-format
 msgctxt "@title:column"
-msgid "Task"
-msgstr "Taak"
+msgid "Due"
+msgstr "Einddatum"
 
 #: src/app/taskswindow.cpp:123
 #, kde-format
 msgctxt "@title:column"
-msgid "Due"
-msgstr "Einddatum"
+msgid "Task"
+msgstr "Taak"
 
 #: src/app/taskswindow.cpp:132
 #, kde-format
@@ -8601,15 +9010,15 @@ msgstr "Lijst verwijderen"
 
 #: src/app/taskswindow.cpp:240
 #, kde-format
-msgctxt "@info"
-msgid "Delete the task \"%1\"?"
-msgstr "De taak \"%1\" verwijderen?"
-
-#: src/app/taskswindow.cpp:240
-#, kde-format
 msgctxt "@title:window"
 msgid "Delete Task"
 msgstr "Taak verwijderen"
+
+#: src/app/taskswindow.cpp:240
+#, kde-format
+msgctxt "@info"
+msgid "Delete the task \"%1\"?"
+msgstr "De taak \"%1\" verwijderen?"
 
 #: src/app/taskswindow.cpp:279
 #, kde-format
@@ -8746,7 +9155,9 @@ msgstr "Bestanden in winmail.dat"
 msgctxt "@info"
 msgid ""
 "This attachment is a container from Microsoft Outlook. It holds these files:"
-msgstr "Deze bijlage is een container van Microsoft Outlook. Deze bestanden zitten erin:"
+msgstr ""
+"Deze bijlage is een container van Microsoft Outlook. Deze bestanden zitten "
+"erin:"
 
 #: src/app/tnefdialog.cpp:84
 #, kde-format
@@ -8779,7 +9190,10 @@ msgid ""
 "Graph Mail packages from GitHub come from no repository, so no package "
 "manager tells you about a new version. Graph Mail can ask GitHub once a day "
 "for its newest release; nothing but that request is sent."
-msgstr "Graph Mail-pakketten van GitHub komen niet uit een pakketbron, dus geen pakketbeheerder meldt een nieuwe versie. Graph Mail kan GitHub eens per dag om de nieuwste release vragen; behalve die vraag wordt er niets verstuurd."
+msgstr ""
+"Graph Mail-pakketten van GitHub komen niet uit een pakketbron, dus geen "
+"pakketbeheerder meldt een nieuwe versie. Graph Mail kan GitHub eens per dag "
+"om de nieuwste release vragen; behalve die vraag wordt er niets verstuurd."
 
 #: src/app/updatesdialog.cpp:37
 #, kde-format
@@ -8823,7 +9237,10 @@ msgctxt "@info"
 msgid ""
 "Graph Mail's releases are not public yet, so it cannot look for new versions "
 "itself. You hear about new versions from whoever gave you Graph Mail."
-msgstr "De uitgaven van Graph Mail zijn nog niet openbaar, dus het kan zelf niet naar nieuwe versies zoeken. Over nieuwe versies hoor je van degene van wie je Graph Mail hebt gekregen."
+msgstr ""
+"De uitgaven van Graph Mail zijn nog niet openbaar, dus het kan zelf niet "
+"naar nieuwe versies zoeken. Over nieuwe versies hoor je van degene van wie "
+"je Graph Mail hebt gekregen."
 
 #: src/app/updatesdialog.cpp:104
 #, kde-format
@@ -8972,14 +9389,14 @@ msgstr "Bericht"
 #: src/app/waitingwindow.cpp:85
 #, kde-format
 msgctxt "@title:column"
-msgid "To"
-msgstr "Aan"
+msgid "State"
+msgstr "Status"
 
 #: src/app/waitingwindow.cpp:85
 #, kde-format
 msgctxt "@title:column"
-msgid "State"
-msgstr "Status"
+msgid "To"
+msgstr "Aan"
 
 #: src/app/waitingwindow.cpp:86
 #, kde-format
@@ -8996,14 +9413,14 @@ msgstr "Item"
 #: src/app/waitingwindow.cpp:86
 #, kde-format
 msgctxt "@title:column"
-msgid "Tries"
-msgstr "Pogingen"
+msgid "Next try"
+msgstr "Volgende poging"
 
 #: src/app/waitingwindow.cpp:86
 #, kde-format
 msgctxt "@title:column"
-msgid "Next try"
-msgstr "Volgende poging"
+msgid "Tries"
+msgstr "Pogingen"
 
 #: src/app/waitingwindow.cpp:90
 #, kde-format
@@ -9056,14 +9473,14 @@ msgstr "Niet verzonden: %1"
 #: src/app/waitingwindow.cpp:174
 #, kde-format
 msgctxt "@item message state"
-msgid "Waiting for the connection"
-msgstr "Wacht op de verbinding"
+msgid "Being sent"
+msgstr "Wordt verzonden"
 
 #: src/app/waitingwindow.cpp:174
 #, kde-format
 msgctxt "@item message state"
-msgid "Being sent"
-msgstr "Wordt verzonden"
+msgid "Waiting for the connection"
+msgstr "Wacht op de verbinding"
 
 #: src/app/waitingwindow.cpp:201
 #, kde-format
@@ -9080,18 +9497,18 @@ msgstr "Alles staat in Microsoft 365."
 #: src/app/waitingwindow.cpp:217
 #, kde-format
 msgctxt "@info"
-msgid "%1 message"
-msgid_plural "%1 messages"
-msgstr[0] "%1 bericht"
-msgstr[1] "%1 berichten"
-
-#: src/app/waitingwindow.cpp:217
-#, kde-format
-msgctxt "@info"
 msgid "%1 change"
 msgid_plural "%1 changes"
 msgstr[0] "%1 wijziging"
 msgstr[1] "%1 wijzigingen"
+
+#: src/app/waitingwindow.cpp:217
+#, kde-format
+msgctxt "@info"
+msgid "%1 message"
+msgid_plural "%1 messages"
+msgstr[0] "%1 bericht"
+msgstr[1] "%1 berichten"
 
 #: src/app/waitingwindow.cpp:218
 #, kde-format
@@ -9125,47 +9542,14 @@ msgctxt "@info"
 msgid "Undo this change here? It will not reach Microsoft 365."
 msgid_plural "Undo these %1 changes here? They will not reach Microsoft 365."
 msgstr[0] "Deze wijziging hier ongedaan maken? Ze bereikt Microsoft 365 niet."
-msgstr[1] "Deze %1 wijzigingen hier ongedaan maken? Ze bereiken Microsoft 365 niet."
+msgstr[1] ""
+"Deze %1 wijzigingen hier ongedaan maken? Ze bereiken Microsoft 365 niet."
 
 #: src/app/waitingwindow.cpp:282
 #, kde-format
 msgctxt "@title:window"
 msgid "Discard Changes"
 msgstr "Wijzigingen verwerpen"
-
-#: src/app/spelllanguage.cpp:100
-#, kde-format
-msgctxt "@info:tooltip"
-msgid "Spelling language. Automatic: follows the language you write in."
-msgstr "Spellingstaal. Automatisch: volgt de taal waarin je schrijft."
-
-#: src/app/spelllanguage.cpp:133
-#, kde-format
-msgctxt "@item:inlistbox"
-msgid "No spelling dictionaries"
-msgstr "Geen spellingwoordenboeken"
-
-#: src/app/spelllanguage.cpp:135
-#, kde-format
-msgctxt "@info:tooltip"
-msgid ""
-"No spelling dictionaries are installed. Install the hunspell dictionaries of "
-"your languages (for example hunspell-nl and hunspell-en-us) and the hunspell "
-"plugin of KDE's spell checker (Sonnet)."
-msgstr "Er zijn geen spellingwoordenboeken geïnstalleerd. Installeer de hunspell-woordenboeken van je talen (bijvoorbeeld hunspell-nl en hunspell-en-us) en de hunspell-plug-in van de spellingcontrole van KDE (Sonnet)."
-
-#: src/app/spelllanguage.cpp:138 src/app/spelllanguage.cpp:218
-#: src/app/spelllanguage.cpp:221
-#, kde-format
-msgctxt "@item:inlistbox spelling language"
-msgid "Automatic"
-msgstr "Automatisch"
-
-#: src/app/spelllanguage.cpp:218
-#, kde-format
-msgctxt "@item:inlistbox %1 the language found"
-msgid "Automatic (%1)"
-msgstr "Automatisch (%1)"
 
 #: src/graphmaild/daemon.cpp:241
 #, kde-format
@@ -9179,7 +9563,9 @@ msgctxt "@info %1 a version"
 msgid ""
 "This computer has version %1. The release page has the packages and what "
 "changed."
-msgstr "Deze computer heeft versie %1. Op de releasepagina staan de pakketten en wat er veranderd is."
+msgstr ""
+"Deze computer heeft versie %1. Op de releasepagina staan de pakketten en wat "
+"er veranderd is."
 
 #: src/graphmaild/daemon.cpp:546
 #, kde-format
@@ -9212,7 +9598,9 @@ msgctxt "@info notification, %1 an address"
 msgid ""
 "You may not send as %1. Ask your administrator for Send As or Send on Behalf "
 "permission."
-msgstr "U mag niet verzenden als %1. Vraag uw beheerder om de machtiging Verzenden als of Verzenden namens."
+msgstr ""
+"U mag niet verzenden als %1. Vraag uw beheerder om de machtiging Verzenden "
+"als of Verzenden namens."
 
 #: src/graphmaild/daemon.cpp:571
 #, kde-format
@@ -9259,16 +9647,16 @@ msgstr "Openen"
 #: src/graphmaild/daemon.cpp:637
 #, kde-format
 msgctxt "@title notification"
-msgid "More than %1 overdue reminders"
-msgstr "Meer dan %1 verlopen herinneringen"
-
-#: src/graphmaild/daemon.cpp:637
-#, kde-format
-msgctxt "@title notification"
 msgid "%1 overdue reminder"
 msgid_plural "%1 overdue reminders"
 msgstr[0] "%1 verlopen herinnering"
 msgstr[1] "%1 verlopen herinneringen"
+
+#: src/graphmaild/daemon.cpp:637
+#, kde-format
+msgctxt "@title notification"
+msgid "More than %1 overdue reminders"
+msgstr "Meer dan %1 verlopen herinneringen"
 
 #: src/graphmaild/daemon.cpp:639
 #, kde-format
@@ -9276,7 +9664,9 @@ msgctxt "@info notification"
 msgid ""
 "Reminders of events that are over and were never dismissed, the oldest from "
 "%1."
-msgstr "Herinneringen van afspraken die voorbij zijn en nooit zijn genegeerd, de oudste van %1."
+msgstr ""
+"Herinneringen van afspraken die voorbij zijn en nooit zijn genegeerd, de "
+"oudste van %1."
 
 #: src/graphmaild/daemon.cpp:641
 #, kde-format
@@ -9325,7 +9715,9 @@ msgstr "Concept op twee plaatsen gewijzigd"
 msgctxt "@info notification, %1 a subject"
 msgid ""
 "The draft \"%1\" was also changed in Outlook. Both versions are in Drafts."
-msgstr "Het concept \"%1\" is ook in Outlook gewijzigd. Beide versies staan in Concepten."
+msgstr ""
+"Het concept \"%1\" is ook in Outlook gewijzigd. Beide versies staan in "
+"Concepten."
 
 #: src/graphmaild/daemon.cpp:888
 #, kde-format
@@ -9336,14 +9728,14 @@ msgstr "Ook elders gewijzigd"
 #: src/graphmaild/daemon.cpp:889
 #, kde-format
 msgctxt "@item"
-msgid "event"
-msgstr "afspraak"
+msgid "contact"
+msgstr "contactpersoon"
 
 #: src/graphmaild/daemon.cpp:889
 #, kde-format
 msgctxt "@item"
-msgid "contact"
-msgstr "contactpersoon"
+msgid "event"
+msgstr "afspraak"
 
 #: src/graphmaild/daemon.cpp:889
 #, kde-format
@@ -9357,7 +9749,9 @@ msgctxt "@info notification, %1 event/contact/task, %2 its name, %3 the fields"
 msgid ""
 "Your change to the %1 \"%2\" (%3) was not applied: it was changed in the "
 "same place in Outlook or on another device."
-msgstr "Uw wijziging aan de %1 \"%2\" (%3) is niet doorgevoerd: die is op dezelfde plek in Outlook of op een ander apparaat gewijzigd."
+msgstr ""
+"Uw wijziging aan de %1 \"%2\" (%3) is niet doorgevoerd: die is op dezelfde "
+"plek in Outlook of op een ander apparaat gewijzigd."
 
 #: src/graphmaild/daemon.cpp:895
 #, kde-format

@@ -4,6 +4,7 @@
 #pragma once
 
 #include <QDateTime>
+#include <QJsonObject>
 
 #include <optional>
 
@@ -53,6 +54,9 @@ struct EventEditRequest {
     bool series = false;
 };
 
+// Graph's dateTimeTimeZone for a time of this computer (a drag in the calendar, 0.14.5)
+QJsonObject graphLocalTime(const QDateTime &local);
+
 // Creating, changing or looking at an event. The organizer (or anyone who may edit the calendar)
 // edits; an attendee sees it and answers (Accept, Tentative, Decline); other people's calendars
 // are read only. Saving sends only what changed, so a Teams meeting's text is not rewritten when
@@ -93,6 +97,10 @@ public:
     void selectCalendarForTests(const QString &mailboxKey);
     void saveNow();
 
+    // Showing a dialog gives its focus widget a Tab focus, which selects a line edit's text: a
+    // title typed in the calendar goes on after its first letter instead (0.14.5)
+    void setVisible(bool visible) override;
+
 Q_SIGNALS:
     // The user chose Delete (the calendar window asks the questions that go with it)
     void deleteRequested();
@@ -128,6 +136,8 @@ private:
     bool m_descriptionChanged = false;
     // Tests: never ask (an invisible dialog blocks an off-screen run)
     bool m_testMode = false;
+    // A new event typed straight into the calendar, until the dialog is first shown
+    bool m_goOnTyping = false;
 
     AddressBook *m_book;
     QComboBox *m_calendar;

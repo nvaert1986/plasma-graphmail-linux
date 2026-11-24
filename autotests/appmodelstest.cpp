@@ -50,6 +50,8 @@
 #include <QFontDatabase>
 #include <QLineEdit>
 #include <QMainWindow>
+#include <QMouseEvent>
+#include <QScrollArea>
 #include <QToolBar>
 #include <QStandardPaths>
 #include <QTcpServer>
@@ -136,6 +138,152 @@ private Q_SLOTS:
     // 0.14.4: typing a font name in the font box with the whole text selected. Before, the first
     // letter was applied as a font and put the focus back in the text, so the second letter
     // replaced the text. Now the box keeps the focus and Enter applies the font
+    // Dragging in the calendar (0.14.5): mouse events as a user sends them, and the times that
+    // come out
+    void calendarDrag()
+    {
+        const QDate monday(2026, 11, 16);
+        DisplayEvent mine;
+        mine.id = 1;
+        mine.mailboxKey = QStringLiteral("account/me");
+        mine.subject = QStringLiteral("Planning");
+        mine.start = QDateTime(monday, QTime(9, 0));
+        mine.end = QDateTime(monday, QTime(10, 0));
+        mine.firstDay = mine.lastDay = monday;
+        mine.canEdit = true;
+        mine.color = Qt::blue;
+        // Someone else's meeting: the window says it may not be moved
+        DisplayEvent theirs = mine;
+        theirs.id = 2;
+        theirs.start = theirs.start.addDays(1);
+        theirs.end = theirs.end.addDays(1);
+        theirs.firstDay = theirs.lastDay = monday.addDays(1);
+        DisplayEvent holiday = mine;
+        holiday.id = 3;
+        holiday.allDay = true;
+        holiday.start = QDateTime(monday, QTime(0, 0));
+        holiday.end = QDateTime(monday.addDays(1), QTime(0, 0));
+
+        TimeGridView view;
+        view.setMovable([](const DisplayEvent &e) {
+            return e.id != 2;
+        });
+        view.resize(900, 700);
+        view.setEvents(monday, monday.addDays(4), {mine, theirs, holiday});
+        view.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&view));
+        QWidget *grid = view.gridForTests();
+        QWidget *viewport = grid->parentWidget();
+        QWidget *header = nullptr;
+        for (QWidget *child : view.findChildren<QWidget *>(Qt::FindDirectChildrenOnly)) {
+            if (!qobject_cast<QScrollArea *>(child)) {
+                header = child;
+            }
+        }
+        QVERIFY(header);
+        header->repaint();
+        QSignalSpy moved(&view, &CalendarView::eventMoveRequested);
+        const auto x = [grid](int day) {
+            return int(56 + (day + 0.5) * (grid->width() - 56) / 5.0);
+        };
+        const auto y = [](QTime time) {
+            return int(QTime(0, 0).secsTo(time) / 3600.0 * 48);
+        };
+        const auto send = [](QWidget *to, QEvent::Type type, QPoint local, Qt::MouseButtons buttons) {
+            QMouseEvent e(type, QPointF(local), QPointF(to->mapToGlobal(local)), type == QEvent::MouseMove ? Qt::NoButton : Qt::LeftButton, buttons, Qt::NoModifier);
+            QApplication::sendEvent(to, &e);
+        };
+        // Pressed in one widget, let go over a point of another: the pressed one gets every event
+        const auto drag = [&](QWidget *pressed, QPoint from, QWidget *over, QPoint to) {
+            send(pressed, QEvent::MouseButtonPress, from, Qt::LeftButton);
+            send(pressed, QEvent::MouseMove, from + QPoint(0, 1), Qt::LeftButton);
+            send(pressed, QEvent::MouseMove, from + QPoint(12, 1), Qt::LeftButton);
+            const QPoint target = pressed->mapFromGlobal(over->mapToGlobal(to));
+            send(pressed, QEvent::MouseMove, target, Qt::LeftButton);
+            send(pressed, QEvent::MouseButtonRelease, target, Qt::NoButton);
+        };
+        // What the window does after a change: the events from the cache again (here: as before)
+        const auto reload = [&] {
+            view.setEvents(monday, monday.addDays(4), {mine, theirs, holiday});
+            header->repaint();
+        };
+        const auto last = [&moved] {
+            const QList<QVariant> args = moved.constLast();
+            return std::make_tuple(args.at(0).value<DisplayEvent>().id, args.at(1).toDateTime(), args.at(2).toDateTime(), args.at(3).toBool());
+        };
+
+        // Grabbed at half past nine, let go at half past two on Wednesday: 14:00 - 15:00 there
+        drag(grid, QPoint(x(0), y(QTime(9, 30))), grid, QPoint(x(2), y(QTime(14, 30))));
+        QCOMPARE(moved.size(), 1);
+        QCOMPARE(last(), std::make_tuple(qint64(1), QDateTime(monday.addDays(2), QTime(14, 0)), QDateTime(monday.addDays(2), QTime(15, 0)), false));
+        // Shown where it was dropped at once, before the cache has it: grabbed there, it moves on
+        drag(grid, QPoint(x(2), y(QTime(14, 30))), grid, QPoint(x(2), y(QTime(15, 30))));
+        QCOMPARE(moved.size(), 2);
+        QCOMPARE(last(), std::make_tuple(qint64(1), QDateTime(monday.addDays(2), QTime(15, 0)), QDateTime(monday.addDays(2), QTime(16, 0)), false));
+        reload();
+        // The bottom edge down to half past eleven: longer
+        drag(grid, QPoint(x(0), y(QTime(10, 0)) - 2), grid, QPoint(x(0), y(QTime(11, 30))));
+        QCOMPARE(moved.size(), 3);
+        QCOMPARE(last(), std::make_tuple(qint64(1), QDateTime(monday, QTime(9, 0)), QDateTime(monday, QTime(11, 30)), false));
+        reload();
+        // The top edge up to eight: starts earlier, ends as before
+        drag(grid, QPoint(x(0), y(QTime(9, 0)) + 2), grid, QPoint(x(0), y(QTime(8, 0))));
+        QCOMPARE(moved.size(), 4);
+        QCOMPARE(last(), std::make_tuple(qint64(1), QDateTime(monday, QTime(8, 0)), QDateTime(monday, QTime(10, 0)), false));
+        reload();
+        // Into the all-day strip above the hours: all day on Thursday
+        drag(grid, QPoint(x(0), y(QTime(9, 30))), viewport, QPoint(x(3), -10));
+        QCOMPARE(moved.size(), 5);
+        QCOMPARE(last(), std::make_tuple(qint64(1), QDateTime(monday.addDays(3), QTime(0, 0)), QDateTime(monday.addDays(4), QTime(0, 0)), true));
+        reload();
+        // Someone else's meeting does not move
+        drag(grid, QPoint(x(1), y(QTime(9, 30))), grid, QPoint(x(3), y(QTime(12, 0))));
+        QCOMPARE(moved.size(), 5);
+        // Esc during a drag: nothing moves
+        send(grid, QEvent::MouseButtonPress, QPoint(x(0), y(QTime(9, 30))), Qt::LeftButton);
+        send(grid, QEvent::MouseMove, QPoint(x(2), y(QTime(13, 0))), Qt::LeftButton);
+        QTest::keyClick(grid, Qt::Key_Escape);
+        send(grid, QEvent::MouseButtonRelease, QPoint(x(2), y(QTime(13, 0))), Qt::NoButton);
+        QCOMPARE(moved.size(), 5);
+        // The all-day event into the hours on Tuesday at ten past one: 13:00 - 13:30
+        drag(header, QPoint(x(0), 38 + 10), grid, QPoint(x(1), y(QTime(13, 10))));
+        QCOMPARE(moved.size(), 6);
+        QCOMPARE(last(), std::make_tuple(qint64(3), QDateTime(monday.addDays(1), QTime(13, 0)), QDateTime(monday.addDays(1), QTime(13, 30)), false));
+        reload();
+        // Its right edge to Wednesday: three days
+        const int rightEdge = int(56 + (grid->width() - 56) / 5.0) - 3;
+        drag(header, QPoint(rightEdge, 38 + 10), header, QPoint(x(2), 38 + 10));
+        QCOMPARE(moved.size(), 7);
+        QCOMPARE(last(), std::make_tuple(qint64(3), QDateTime(monday, QTime(0, 0)), QDateTime(monday.addDays(3), QTime(0, 0)), true));
+
+        // The month: Wednesday 4 November to Saturday 7 November, the same times
+        MonthView month;
+        month.setMovable([](const DisplayEvent &) {
+            return true;
+        });
+        month.resize(700, 600);
+        DisplayEvent inMonth = mine;
+        inMonth.start = QDateTime(QDate(2026, 11, 4), QTime(9, 0));
+        inMonth.end = QDateTime(QDate(2026, 11, 4), QTime(10, 0));
+        inMonth.firstDay = inMonth.lastDay = QDate(2026, 11, 4);
+        const QDate first(2026, 10, 26);
+        month.setEvents(first, first.addDays(41), {inMonth});
+        month.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&month));
+        month.repaint();
+        QSignalSpy monthMoved(&month, &CalendarView::eventMoveRequested);
+        const qreal top = 38 / 1.5;
+        const qreal rowHeight = (month.height() - top) / 6.0;
+        const qreal line = QFontMetricsF(QApplication::font()).height() + 3;
+        const int eventY = int(top + rowHeight + line + line / 2);
+        drag(&month, QPoint(250, eventY), &month, QPoint(550, eventY));
+        QCOMPARE(monthMoved.size(), 1);
+        const QList<QVariant> args = monthMoved.constFirst();
+        QCOMPARE(args.at(1).toDateTime(), QDateTime(QDate(2026, 11, 7), QTime(9, 0)));
+        QCOMPARE(args.at(2).toDateTime(), QDateTime(QDate(2026, 11, 7), QTime(10, 0)));
+        QCOMPARE(args.at(3).toBool(), false);
+    }
+
     void fontBoxKeepsTheText()
     {
         using GraphMail::FontFamilyBox;

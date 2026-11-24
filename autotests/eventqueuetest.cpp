@@ -160,6 +160,149 @@ private Q_SLOTS:
         QCOMPARE(QJsonDocument::fromJson(server->requests.first().body).object().keys(), QStringList{QStringLiteral("subject")});
     }
 
+    // Fast drags in the calendar (0.14.5): changes of one event go one at a time, each onto the
+    // version the one before made, so none is refused or taken for a change made elsewhere
+    void quickChangesGoOneAtATime()
+    {
+        QJsonObject event = makeEvent(QStringLiteral("E"), QStringLiteral("singleInstance"), QStringLiteral("Planning"));
+        event.insert(QStringLiteral("@odata.etag"), QStringLiteral("v1"));
+        store->upsertItem(ItemKind::Event, calendar, Mapper::event(event));
+        // Exchange: a change only onto the current version; the answer in UTC, with a new tag
+        auto current = std::make_shared<QJsonObject>(event);
+        auto version = std::make_shared<int>(1);
+        server->handler = [current, version](const FakeRequest &r) -> FakeReply {
+            if (pathOf(r) != "/v1.0/me/calendars/CAL/events/E") {
+                return jsonReply(404, "{}");
+            }
+            if (r.verb == "PATCH") {
+                if (r.headers.value("if-match") != QStringLiteral("v%1").arg(*version).toUtf8()) {
+                    return jsonReply(412, "{}");
+                }
+                const QJsonObject changes = QJsonDocument::fromJson(r.body).object();
+                for (auto it = changes.constBegin(); it != changes.constEnd(); ++it) {
+                    // Graph's own form: UTC, seven digits
+                    const qint64 at = Mapper::parseDateTimeTimeZone(it.value().toObject());
+                    current->insert(it.key(), at ? QJsonValue(time(QDateTime::fromMSecsSinceEpoch(at, QTimeZone::UTC).toString(QStringLiteral("yyyy-MM-ddTHH:mm:ss.0000000")))) : QJsonValue(it.value()));
+                }
+                current->insert(QStringLiteral("@odata.etag"), QStringLiteral("v%1").arg(++*version));
+            }
+            return jsonReply(200, QJsonDocument(*current).toJson(QJsonDocument::Compact));
+        };
+        EventQueue queue(&ctx);
+        QSignalSpy conflicts(&queue, &EventQueue::conflict);
+        const qint64 id = store->eventByGraphId(QStringLiteral("E"))->id;
+        const auto local = [](int hour) {
+            return QJsonObject{{QStringLiteral("dateTime"), QStringLiteral("2026-11-16T%1:00:00").arg(hour, 2, 10, QLatin1Char('0'))},
+                               {QStringLiteral("timeZone"), QStringLiteral("W. Europe Standard Time")}};
+        };
+        QVERIFY(queue.update(id, {{QStringLiteral("start"), local(11)}, {QStringLiteral("end"), local(12)}}));
+        QVERIFY(queue.update(id, {{QStringLiteral("start"), local(13)}, {QStringLiteral("end"), local(14)}}));
+        // The second waits for the first
+        run(queue);
+        QCOMPARE(server->requests.size(), 1);
+        run(queue);
+        QCOMPARE(server->requests.size(), 2);
+        QCOMPARE(server->requests.at(0).headers.value("if-match"), QByteArray("v1"));
+        QCOMPARE(server->requests.at(1).headers.value("if-match"), QByteArray("v2"));
+        QCOMPARE(conflicts.size(), 0);
+        QCOMPARE(store->pendingOperationCount(), 0);
+        // The cache holds Exchange's version: 13:00 in Amsterdam is 12:00 UTC, and the next change
+        // goes onto its tag
+        const QJsonObject cached = QJsonDocument::fromJson(store->eventByGraphId(QStringLiteral("E"))->json.toUtf8()).object();
+        QCOMPARE(cached.value(QLatin1String("@odata.etag")).toString(), QStringLiteral("v3"));
+        QCOMPARE(Mapper::parseDateTimeTimeZone(cached.value(QLatin1String("start")).toObject()), QDateTime(QDate(2026, 11, 16), QTime(12, 0), QTimeZone::UTC).toMSecsSinceEpoch());
+        QVERIFY(queue.update(id, {{QStringLiteral("subject"), QStringLiteral("Planning, moved")}}));
+        run(queue);
+        QCOMPARE(server->requests.at(2).headers.value("if-match"), QByteArray("v3"));
+        QCOMPARE(conflicts.size(), 0);
+    }
+
+    // Deleted while moves still waited (0.14.5): the moves go, the delete does not wait behind them,
+    // and an event a sync brought back meanwhile leaves once the delete is done
+    void deleteTakesWaitingChangesAlong()
+    {
+        store->upsertItem(ItemKind::Event, calendar, Mapper::event(makeEvent(QStringLiteral("E"), QStringLiteral("singleInstance"), QStringLiteral("Planning"))));
+        server->handler = [](const FakeRequest &r) -> FakeReply {
+            return r.verb == "DELETE" && pathOf(r) == "/v1.0/me/calendars/CAL/events/E" ? FakeReply{204, {}, {}} : jsonReply(404, "{}");
+        };
+        EventQueue queue(&ctx);
+        const qint64 id = store->eventByGraphId(QStringLiteral("E"))->id;
+        QVERIFY(queue.update(id, {{QStringLiteral("subject"), QStringLiteral("Planning, moved")}}));
+        QVERIFY(queue.update(id, {{QStringLiteral("subject"), QStringLiteral("Planning, moved again")}}));
+        QVERIFY(queue.remove(id, false, {}));
+        const QList<OperationRow> ops = store->allOperations();
+        QCOMPARE(ops.size(), 1);
+        QCOMPARE(ops.first().kind, QStringLiteral("eventDelete"));
+        // A sync before the delete reached Exchange
+        store->upsertItem(ItemKind::Event, calendar, Mapper::event(makeEvent(QStringLiteral("E"), QStringLiteral("singleInstance"), QStringLiteral("Planning"))));
+        run(queue);
+        QCOMPARE(server->requests.size(), 1);
+        QVERIFY(!store->eventByGraphId(QStringLiteral("E")));
+    }
+
+    // A change of an event Exchange has in Deleted Items: refused with 400 "non-calendar folder".
+    // The event is gone, not put back (0.14.5: it came back and could not be moved)
+    void changeOfAnEventInDeletedItems()
+    {
+        store->upsertItem(ItemKind::Event, calendar, Mapper::event(makeEvent(QStringLiteral("E"), QStringLiteral("singleInstance"), QStringLiteral("Planning"))));
+        server->handler = [](const FakeRequest &) -> FakeReply {
+            return jsonReply(400, R"({"error":{"code":"ErrorInvalidRequest","message":"Your request cannot be completed. This operation does not support binding to a non-calendar folder."}})");
+        };
+        EventQueue queue(&ctx);
+        QSignalSpy failed(&queue, &EventQueue::failed);
+        QVERIFY(queue.update(store->eventByGraphId(QStringLiteral("E"))->id, {{QStringLiteral("subject"), QStringLiteral("Planning, moved")}}));
+        run(queue);
+        QVERIFY(!store->eventByGraphId(QStringLiteral("E")));
+        QCOMPARE(store->pendingOperationCount(), 0);
+        QCOMPARE(failed.size(), 0);
+        // Any other refusal still puts the event back as it was
+        store->upsertItem(ItemKind::Event, calendar, Mapper::event(makeEvent(QStringLiteral("F"), QStringLiteral("singleInstance"), QStringLiteral("Review"))));
+        server->handler = [](const FakeRequest &) -> FakeReply {
+            return jsonReply(400, R"({"error":{"code":"ErrorInvalidRequest","message":"Invalid value."}})");
+        };
+        QVERIFY(queue.update(store->eventByGraphId(QStringLiteral("F"))->id, {{QStringLiteral("subject"), QStringLiteral("Review, moved")}}));
+        run(queue);
+        QCOMPARE(store->eventByGraphId(QStringLiteral("F"))->subject, QStringLiteral("Review"));
+        QCOMPARE(failed.size(), 1);
+    }
+
+    // Moved right after creating it (0.14.5): the change waits for the create, then goes to the
+    // event Exchange made, onto its version, and the calendar shows the move all along
+    void changeRightAfterCreate()
+    {
+        server->handler = [](const FakeRequest &r) -> FakeReply {
+            if (r.verb == "POST" && pathOf(r) == "/v1.0/me/calendars/CAL/events") {
+                QJsonObject made = makeEvent(QStringLiteral("NEW"), QStringLiteral("singleInstance"), QStringLiteral("Planning"));
+                made.insert(QStringLiteral("@odata.etag"), QStringLiteral("v1"));
+                return jsonReply(201, QJsonDocument(made).toJson(QJsonDocument::Compact));
+            }
+            if (r.verb == "PATCH" && pathOf(r) == "/v1.0/me/calendars/CAL/events/NEW") {
+                return r.headers.value("if-match") == "v1" ? jsonReply(200, "{}") : jsonReply(412, "{}");
+            }
+            return jsonReply(404, "{}");
+        };
+        EventQueue queue(&ctx);
+        QJsonObject e = makeEvent({}, {}, QStringLiteral("Planning"));
+        e.remove(QStringLiteral("id"));
+        e.remove(QStringLiteral("type"));
+        QVERIFY(queue.create(calendar, e));
+        const EventRow standIn = store->eventsBetween({calendar}, 0, std::numeric_limits<qint64>::max()).first();
+        QVERIFY(queue.update(standIn.id, {{QStringLiteral("start"), time(QStringLiteral("2026-11-16T11:00:00"))}, {QStringLiteral("end"), time(QStringLiteral("2026-11-16T12:00:00"))}}));
+        run(queue);
+        QCOMPARE(server->requests.size(), 1);
+        // Created; the move waits, now for the real event, and is shown meanwhile
+        const std::optional<EventRow> made = store->eventByGraphId(QStringLiteral("NEW"));
+        QVERIFY(made);
+        QCOMPARE(QDateTime::fromMSecsSinceEpoch(made->start, QTimeZone::UTC).time(), QTime(11, 0));
+        QCOMPARE(store->allOperations().size(), 1);
+        QCOMPARE(store->allOperations().first().target, QStringLiteral("NEW"));
+        run(queue);
+        QCOMPARE(server->requests.size(), 2);
+        QCOMPARE(pathOf(server->requests.at(1)), QByteArray("/v1.0/me/calendars/CAL/events/NEW"));
+        QCOMPARE(server->requests.at(1).headers.value("if-match"), QByteArray("v1"));
+        QCOMPARE(store->pendingOperationCount(), 0);
+    }
+
     void declineRemovesAndRefusalRestores()
     {
         store->upsertItem(ItemKind::Event, calendar, Mapper::event(makeEvent(QStringLiteral("INV"), QStringLiteral("singleInstance"), QStringLiteral("Invitation"))));

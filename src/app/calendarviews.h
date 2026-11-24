@@ -11,6 +11,9 @@
 
 #include <QWidget>
 
+#include <functional>
+#include <optional>
+
 class QPainter;
 class QScrollArea;
 class QTreeWidget;
@@ -46,8 +49,24 @@ public:
         m_selected.reset();
         repaintSelection();
     }
+    // Which events may be dragged to another time or day, or made longer or shorter (0.14.5): the
+    // calendar window decides (editable, and no meeting of someone else)
+    void setMovable(std::function<bool(const DisplayEvent &)> movable)
+    {
+        m_movable = std::move(movable);
+    }
 
 protected:
+    // A dropped event shown where it was dropped, before the cache has it (0.14.5)
+    void showMoved(const DisplayEvent &event, const QDateTime &start, const QDateTime &end, bool allDay);
+    virtual void eventsMoved()
+    {
+        update();
+    }
+    bool movable(const DisplayEvent &event) const
+    {
+        return m_movable && m_movable(event);
+    }
     virtual void repaintSelection()
     {
         update();
@@ -66,10 +85,15 @@ Q_SIGNALS:
     void dayActivated(QDate day);
     // The selected event changed (a click), for actions such as Join
     void selectionChanged();
+    // An event dragged to another time or day, or by an edge to another length (0.14.5)
+    void eventMoveRequested(const GraphMail::DisplayEvent &event, const QDateTime &start, const QDateTime &end, bool allDay);
 
 protected:
     std::optional<DisplayEvent> m_selected;
     std::optional<Slot> m_slot;
+    std::function<bool(const DisplayEvent &)> m_movable;
+    // The events shown (the agenda keeps its own list)
+    QList<DisplayEvent> m_events;
 };
 
 // Day, work week and week: a column per day, the hours down, all-day events on top
@@ -99,6 +123,7 @@ protected:
     {
         repaintAll();
     }
+    void eventsMoved() override;
 
 private:
     class Header;
@@ -110,6 +135,31 @@ private:
         QRectF rect;
         DisplayEvent event;
     };
+    // An event being dragged, in the hours or the all-day strip (0.14.5)
+    struct Drag {
+        enum class Mode { Move, ResizeStart, ResizeEnd };
+        DisplayEvent event;
+        Mode mode = Mode::Move;
+        // Taken in the all-day strip rather than the hours
+        bool fromHeader = false;
+        QPoint pressGlobal;
+        int pressColumn = 0;
+        int pressSeconds = 0;
+        bool started = false;
+        // Where it lands
+        QDateTime start;
+        QDateTime end;
+        bool allDay = false;
+    };
+    void beginDrag(const DisplayEvent &event, Drag::Mode mode, bool fromHeader, const QPoint &global);
+    void dragMoved(const QPoint &global);
+    void dragReleased();
+    void cancelDrag();
+    bool isDragged(const DisplayEvent &event) const;
+    // The day column under a point, kept within the days shown
+    int columnAt(const QPoint &global) const;
+    // The time of day under a point in the hours, in seconds
+    int secondsAt(const QPoint &global) const;
     int days() const;
     void repaintAll();
     // Column geometry, shared by the header and the grid
@@ -121,7 +171,6 @@ private:
 
     QDate m_first;
     QDate m_last;
-    QList<DisplayEvent> m_events;
     WorkingHours m_workingHours;
     QTimeZone m_secondZone;
     QString m_secondLabel;
@@ -129,6 +178,7 @@ private:
     Header *m_header;
     QScrollArea *m_scroll;
     Grid *m_grid;
+    std::optional<Drag> m_drag;
 };
 
 // A month: six weeks of days with their events
@@ -147,9 +197,20 @@ protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:
+    // An event dragged to another day (0.14.5)
+    struct Drag {
+        DisplayEvent event;
+        QPoint pressGlobal;
+        QDate pressDay;
+        QDate day;
+        bool started = false;
+    };
     // The rows shown: six for a month, fewer for a span of weeks
     int weeks() const;
     QRectF cellRect(int index) const;
@@ -160,9 +221,9 @@ private:
     QDate m_last;
     int m_month = 0;
     bool m_weekNumbers = false;
-    QList<DisplayEvent> m_events;
     QList<QPair<QRectF, DisplayEvent>> m_placed;
     QList<QPair<QRectF, QDate>> m_more;
+    std::optional<Drag> m_drag;
 };
 
 // A list of the coming days with their events
@@ -176,7 +237,6 @@ public:
 
 private:
     QTreeWidget *m_tree;
-    QList<DisplayEvent> m_events;
 };
 
 // "09:00 - 10:30", or "All day"

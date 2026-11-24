@@ -289,6 +289,8 @@ private:
     bool m_sharing = false;
     // Send pressed while files were uploading: sends itself once they are online
     bool m_sendWhenReady = false;
+    // Send's checks passed and were answered; it waits for the OneDrive step (0.14.5)
+    bool m_sendChecked = false;
     QString accountId() const;
     void attachFromCloud();
     void addCloudFile(const QString &path, bool uploading);

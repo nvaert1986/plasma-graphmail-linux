@@ -4,7 +4,7 @@
 # (with plasma-graphmail-linux-<version>.tar.gz next to it)
 
 Name:           plasma-graphmail-linux
-Version:        0.14.4
+Version:        0.14.5
 Release:        1%{?dist}
 Summary:        Mail, calendar, contacts and tasks of Microsoft 365 for KDE Plasma
 License:        GPL-3.0-or-later
@@ -121,6 +121,10 @@ affiliated with Microsoft.
 %{_userunitdir}/plasma-graphmail-linux.service
 
 %changelog
+* Tue Nov 24 2026 nvaert1986 <25772781+nvaert1986@users.noreply.github.com> - 0.14.5-1
+- Calendar: appointments dragged to another time, day or length; quick changes of one event
+  no longer come back as changed elsewhere; fixes for Send, the left bar, Mark as Read, typing
+
 * Mon Nov 23 2026 nvaert1986 <25772781+nvaert1986@users.noreply.github.com> - 0.14.4-1
 - Search: every word a prefix, Microsoft 365's hits for mail not stored locally, Best Match First;
   spelling language box with automatic detection; colleagues' calendars and free/busy refreshed

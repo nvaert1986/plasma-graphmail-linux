@@ -86,6 +86,10 @@ Shell::Shell(MailboxSet *mailboxes, DaemonClient *daemon)
         // At least as wide as its own label: a narrow window squeezed the bar to 64 pixels and cut
         // longer translations ("Contactpersonen")
         button->setMinimumWidth(std::max(64, button->sizeHint().width()));
+        // Every button as wide as the bar (the widest label sets it): the icons and labels in one
+        // centred column under the account picture, as in Outlook (0.14.5: each was as wide as its
+        // own label, on the left)
+        button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         button->setContextMenuPolicy(Qt::CustomContextMenu);
         // Right-click: the module in a window of its own, as Outlook's "Open in New Window"
         connect(button, &QWidget::customContextMenuRequested, this, [this, button, i](const QPoint &pos) {

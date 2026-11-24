@@ -15,6 +15,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimer>
+#include <QTimeZone>
 
 using namespace GraphMail;
 
@@ -490,6 +491,70 @@ private Q_SLOTS:
         result = runSync(sync);
         QCOMPARE(store->itemCount(ItemKind::Event), 2);
         QCOMPARE(result.changes, 1);
+    }
+
+    // Quick drags in the calendar (0.14.5): while changes of an event wait in the queue, a sync
+    // brings Exchange's version so far; the cache keeps the waiting changes on top of it
+    void calendarSyncKeepsQueuedChanges()
+    {
+        auto at = std::make_shared<QString>(QStringLiteral("2026-11-11T14:00:00.0000000"));
+        server->handler = [&, at](const FakeRequest &r) -> FakeReply {
+            const QString target = QString::fromUtf8(r.target);
+            const QJsonObject event{{QStringLiteral("id"), QStringLiteral("e1")},
+                                    {QStringLiteral("subject"), QStringLiteral("Planning")},
+                                    {QStringLiteral("start"), QJsonObject{{QStringLiteral("dateTime"), *at}, {QStringLiteral("timeZone"), QStringLiteral("UTC")}}},
+                                    {QStringLiteral("end"), QJsonObject{{QStringLiteral("dateTime"), *at}, {QStringLiteral("timeZone"), QStringLiteral("UTC")}}},
+                                    {QStringLiteral("type"), QStringLiteral("singleInstance")}};
+            if (target.startsWith(QLatin1String("/v1.0/me/calendars?"))) {
+                return jsonReply(200, R"({"value":[{"id":"CAL","name":"Calendar","isDefaultCalendar":true,"canEdit":true,"owner":{"address":"me@example.com"}}]})");
+            }
+            if (target.startsWith(QLatin1String("/v1.0/me/calendarView/delta")) || target == QLatin1String("/v1.0/cal1")) {
+                return page({event}, {}, url(QStringLiteral("/cal1")));
+            }
+            return jsonReply(404, "{}");
+        };
+        ParentItemSync sync(&ctx, ParentItemSync::Kind::Calendar);
+        QCOMPARE(int(runSync(sync).outcome), int(SyncResult::Outcome::Done));
+        const auto startOf = [this] {
+            return QDateTime::fromMSecsSinceEpoch(store->eventByGraphId(QStringLiteral("e1"))->start, QTimeZone::UTC).time();
+        };
+        QCOMPARE(startOf(), QTime(14, 0));
+        // Moved here twice; neither change has reached Exchange yet
+        const auto moved = [](const QString &iso) {
+            const QJsonObject time{{QStringLiteral("dateTime"), iso}, {QStringLiteral("timeZone"), QStringLiteral("UTC")}};
+            return QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("changes"), QJsonObject{{QStringLiteral("start"), time}, {QStringLiteral("end"), time}}}}).toJson(QJsonDocument::Compact));
+        };
+        OperationRow first;
+        first.kind = QStringLiteral("eventUpdate");
+        first.target = QStringLiteral("e1");
+        first.payload = moved(QStringLiteral("2026-11-11T15:00:00"));
+        const qint64 firstId = store->addOperation(first);
+        OperationRow second = first;
+        second.payload = moved(QStringLiteral("2026-11-11T16:00:00"));
+        store->addOperation(second);
+        runSync(sync);
+        QCOMPARE(startOf(), QTime(16, 0));
+        // The first has arrived: still the last one on top
+        store->removeOperation(firstId);
+        *at = QStringLiteral("2026-11-11T15:00:00.0000000");
+        runSync(sync);
+        QCOMPARE(startOf(), QTime(16, 0));
+        // Nothing waiting any more: Exchange's version as it is
+        for (const OperationRow &op : store->allOperations()) {
+            store->removeOperation(op.id);
+        }
+        *at = QStringLiteral("2026-11-11T17:00:00.0000000");
+        runSync(sync);
+        QCOMPARE(startOf(), QTime(17, 0));
+        // Deleted here, the delete still on its way: the sync does not bring it back
+        store->removeItem(ItemKind::Event, QStringLiteral("e1"));
+        OperationRow deleting;
+        deleting.kind = QStringLiteral("eventDelete");
+        deleting.target = QStringLiteral("e1");
+        deleting.payload = QStringLiteral("{}");
+        store->addOperation(deleting);
+        runSync(sync);
+        QVERIFY(!store->eventByGraphId(QStringLiteral("e1")));
     }
 
     void occurrencesTakeTheirMastersDetails()

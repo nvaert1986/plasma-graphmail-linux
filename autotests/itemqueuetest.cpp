@@ -206,6 +206,21 @@ private Q_SLOTS:
         // The same field to another value: a conflict
         QCOMPARE(conflictingFields(changes, previous, {{QStringLiteral("importance"), QStringLiteral("low")}}), QStringList{QStringLiteral("importance")});
         QCOMPARE(ifMatch({{QStringLiteral("@odata.etag"), QStringLiteral("v1")}}), QByteArray("v1"));
+
+        // Times are moments: Graph answers in UTC what was sent in the local zone (0.14.5, a second
+        // drag of an event right after the first)
+        const auto time = [](const char *dateTime, const char *zone) {
+            return QJsonObject{{QStringLiteral("dateTime"), QLatin1String(dateTime)}, {QStringLiteral("timeZone"), QLatin1String(zone)}};
+        };
+        const QJsonObject movedHere{{QStringLiteral("start"), time("2026-11-24T14:00:00", "W. Europe Standard Time")}};
+        const QJsonObject serverNow{{QStringLiteral("start"), time("2026-11-24T13:00:00.0000000", "UTC")}};
+        const QJsonObject moveAgain{{QStringLiteral("start"), time("2026-11-24T16:00:00", "W. Europe Standard Time")}};
+        QVERIFY(conflictingFields(moveAgain, movedHere, serverNow).isEmpty());
+        // Moved elsewhere to another time meanwhile: still a conflict
+        const QJsonObject movedElsewhere{{QStringLiteral("start"), time("2026-11-24T09:00:00.0000000", "UTC")}};
+        QCOMPARE(conflictingFields(moveAgain, movedHere, movedElsewhere), QStringList{QStringLiteral("start")});
+        // Elsewhere to the very time wanted here, written in UTC: no conflict
+        QVERIFY(conflictingFields(moveAgain, movedHere, {{QStringLiteral("start"), time("2026-11-24T15:00:00.0000000", "UTC")}}).isEmpty());
     }
 
     // Changed elsewhere meanwhile (412): other fields = merge onto the new version

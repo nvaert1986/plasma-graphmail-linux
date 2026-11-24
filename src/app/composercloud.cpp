@@ -247,6 +247,7 @@ bool ComposerWindow::cloudReadyToSend()
             if (!errors->isEmpty()) {
                 if (m_testMode) {
                     qCWarning(GRAPHMAIL).noquote() << "cloud test: sharing failed" << errors->size();
+                    m_sendChecked = false;
                     return;
                 }
                 const auto answer = KMessageBox::warningTwoActions(this,
@@ -255,6 +256,8 @@ bool ComposerWindow::cloudReadyToSend()
                                                                    KGuiItem(i18nc("@action:button", "Send Anyway"), QStringLiteral("mail-send")),
                                                                    KStandardGuiItem::cancel());
                 if (answer != KMessageBox::PrimaryAction) {
+                    // Not sent: the next Send asks its questions again
+                    m_sendChecked = false;
                     return;
                 }
             }

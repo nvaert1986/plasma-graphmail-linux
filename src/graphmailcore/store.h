@@ -402,6 +402,9 @@ public:
     // Operation queue
     qint64 addOperation(const OperationRow &operation);
     bool updateOperationPayload(qint64 id, const QString &payload);
+    // Waiting operations of one target go to another (an event created meanwhile: its local stand-in's
+    // changes to the id Exchange gave it)
+    bool retargetOperations(const QString &from, const QString &to);
     std::optional<OperationRow> pendingOperation(const QString &target, const QString &kind) const;
     QList<OperationRow> operationsFor(const QString &target) const;
     // family: "event" (calendar, kinds event*), "item" (contacts and tasks, kinds item*), empty for

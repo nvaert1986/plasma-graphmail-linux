@@ -491,10 +491,9 @@ EventDialog::EventDialog(MailboxSet *mailboxes, DaemonClient *daemon, CalendarDa
             setWindowTitle(i18nc("@title:window", "New Meeting"));
             m_required->setFocus();
         } else if (!m_request.subject.isEmpty()) {
-            // Typed straight into the calendar: go on typing after it
+            // Typed straight into the calendar: go on typing after it (setVisible)
             m_subject->setFocus();
-            m_subject->deselect();
-            m_subject->setCursorPosition(int(m_subject->text().size()));
+            m_goOnTyping = true;
         }
         if (!m_request.description.isEmpty()) {
             m_description->setHtml(plainWithLinks(m_request.description));
@@ -639,6 +638,16 @@ void EventDialog::setReadOnly(bool readOnly)
     if (auto *save = findChild<QDialogButtonBox *>()) {
         save->button(QDialogButtonBox::Save)->setVisible(!readOnly || m_attendee);
         save->button(QDialogButtonBox::Cancel)->setText(readOnly && !m_attendee ? i18nc("@action:button", "Close") : save->button(QDialogButtonBox::Cancel)->text());
+    }
+}
+
+void EventDialog::setVisible(bool visible)
+{
+    QDialog::setVisible(visible);
+    if (visible && m_goOnTyping) {
+        m_goOnTyping = false;
+        m_subject->deselect();
+        m_subject->setCursorPosition(int(m_subject->text().size()));
     }
 }
 
@@ -1240,6 +1249,11 @@ void SchedulingStrip::paintEvent(QPaintEvent *)
         p.setBrush(Qt::NoBrush);
         p.drawRect(QRectF(std::max<qreal>(label, from), 18, std::max<qreal>(2, std::min<qreal>(width(), to) - std::max<qreal>(label, from)), height() - 19));
     }
+}
+
+QJsonObject graphLocalTime(const QDateTime &local)
+{
+    return graphTime(local);
 }
 
 }

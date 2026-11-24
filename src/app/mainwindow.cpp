@@ -190,6 +190,12 @@ MainWindow::MainWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWidget *par
     });
     m_messages->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_messages, &QWidget::customContextMenuRequested, this, &MainWindow::messageMenu);
+    // Read / Unread follows a message that changes while selected (read after a few seconds, or
+    // elsewhere), not just a new selection (0.14.5)
+    for (QAbstractItemModel *model : std::initializer_list<QAbstractItemModel *>{m_messageModel, m_conversationModel}) {
+        connect(model, &QAbstractItemModel::dataChanged, this, &MainWindow::updateActions);
+        connect(model, &QAbstractItemModel::modelReset, this, &MainWindow::updateActions);
+    }
     // Outlook's buttons on the row under the mouse (0.14.3): the list repaints the row being hovered
     m_messages->setMouseTracking(true);
     m_messages->viewport()->setAttribute(Qt::WA_Hover);
@@ -2814,6 +2820,7 @@ void MainWindow::messageMenu(const QPoint &pos)
         return;
     }
     QMenu menu(this);
+    updateActions();
     fillMessageMenu(&menu);
     menu.exec(m_messages->viewport()->mapToGlobal(pos));
 }

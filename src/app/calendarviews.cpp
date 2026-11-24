@@ -9,6 +9,7 @@
 #include <QApplication>
 #include <QContextMenuEvent>
 #include <QHeaderView>
+#include <QKeyEvent>
 #include <QLocale>
 #include <QMouseEvent>
 #include <QPainter>
@@ -129,6 +130,23 @@ std::optional<DisplayEvent> CalendarView::selected() const
     return m_selected;
 }
 
+void CalendarView::showMoved(const DisplayEvent &event, const QDateTime &start, const QDateTime &end, bool allDay)
+{
+    for (DisplayEvent &e : m_events) {
+        if (e.id == event.id && e.mailboxKey == event.mailboxKey) {
+            e.start = start;
+            e.end = end;
+            e.allDay = allDay;
+            e.firstDay = start.date();
+            e.lastDay = allDay ? end.date().addDays(-1) : end.addMSecs(-1).date();
+            if (m_selected && m_selected->id == e.id && m_selected->mailboxKey == e.mailboxKey) {
+                m_selected = e;
+            }
+        }
+    }
+    eventsMoved();
+}
+
 // The day names and the all-day events above the hours
 class TimeGridView::Header : public QWidget
 {
@@ -137,6 +155,9 @@ public:
         : QWidget(view)
         , m_view(view)
     {
+        // Esc during a drag, and the resize cursor on an event's right edge
+        setFocusPolicy(Qt::ClickFocus);
+        setMouseTracking(true);
     }
 
     int rows() const
@@ -225,14 +246,74 @@ protected:
                 p.fillRect(QRectF(m_view->columnX(int(col), width) + 1, dayHeader, m_view->columnWidth(width) - 1, height() - dayHeader - 1), selectionColor(pal));
             }
         }
+        const auto spanRect = [this, width](QDate from, QDate to, int row) {
+            const int fromCol = int(m_view->m_first.daysTo(from));
+            const int toCol = int(m_view->m_first.daysTo(to));
+            return QRectF(m_view->columnX(fromCol, width) + 1, dayHeader + row * allDayRow, m_view->columnX(toCol, width) + m_view->columnWidth(width) - m_view->columnX(fromCol, width) - 2,
+                          allDayRow - 2);
+        };
+        int draggedRow = 0;
         for (const Span &s : std::as_const(m_spans)) {
-            const int fromCol = int(m_view->m_first.daysTo(s.from));
-            const int toCol = int(m_view->m_first.daysTo(s.to));
-            const QRectF r(m_view->columnX(fromCol, width) + 1, dayHeader + s.row * allDayRow, m_view->columnX(toCol, width) + m_view->columnWidth(width) - m_view->columnX(fromCol, width) - 2,
-                           allDayRow - 2);
+            const QRectF r = spanRect(s.from, s.to, s.row);
+            // An event being dragged stays where it was, faded, until it is dropped
+            const bool dragged = m_view->isDragged(s.event);
+            if (dragged) {
+                draggedRow = s.row;
+                p.setOpacity(0.35);
+            }
             drawEventBlock(p, r, s.event, m_view->m_selected && m_view->m_selected->id == s.event.id && m_view->m_selected->mailboxKey == s.event.mailboxKey, pal, false);
+            p.setOpacity(1.0);
             m_placed.append({r, s.event});
         }
+        // Where a dragged event lands, when that is in the strip
+        if (const std::optional<Drag> &drag = m_view->m_drag; drag && drag->started && !inHours(*drag)) {
+            DisplayEvent landing = drag->event;
+            landing.start = drag->start;
+            landing.end = drag->end;
+            landing.allDay = drag->allDay;
+            landing.firstDay = drag->start.date();
+            landing.lastDay = drag->allDay ? drag->end.date().addDays(-1) : drag->end.addMSecs(-1).date();
+            const QDate from = std::max(landing.firstDay, m_view->m_first);
+            const QDate to = std::min(landing.lastDay, m_view->m_last);
+            if (from <= to) {
+                drawEventBlock(p, spanRect(from, to, drag->fromHeader ? draggedRow : 0), landing, true, pal, false);
+            }
+        }
+    }
+
+    void mouseMoveEvent(QMouseEvent *event) override
+    {
+        if (m_view->m_drag) {
+            if (event->buttons() & Qt::LeftButton) {
+                m_view->dragMoved(event->globalPosition().toPoint());
+            }
+            return;
+        }
+        if (event->buttons() == Qt::NoButton) {
+            const Placed *placed = hitPlaced(event->position());
+            const bool edge = placed && onRightEdge(*placed, event->position());
+            if (edge) {
+                setCursor(Qt::SizeHorCursor);
+            } else {
+                unsetCursor();
+            }
+        }
+    }
+
+    void mouseReleaseEvent(QMouseEvent *) override
+    {
+        if (m_view->m_drag) {
+            m_view->dragReleased();
+        }
+    }
+
+    void keyPressEvent(QKeyEvent *event) override
+    {
+        if (event->key() == Qt::Key_Escape && m_view->m_drag) {
+            m_view->cancelDrag();
+            return;
+        }
+        QWidget::keyPressEvent(event);
     }
 
     void mousePressEvent(QMouseEvent *event) override
@@ -240,6 +321,13 @@ protected:
         m_view->m_selected = hit(event->position());
         Q_EMIT m_view->selectionChanged();
         m_view->m_slot.reset();
+        // An event can be dragged to other days, an all-day one into the hours, and an all-day
+        // one made longer or shorter by its right edge
+        if (const Placed *placed = hitPlaced(event->position()); placed && event->button() == Qt::LeftButton && m_view->movable(placed->second)) {
+            setFocus(Qt::MouseFocusReason);
+            m_view->beginDrag(placed->second, onRightEdge(*placed, event->position()) ? Drag::Mode::ResizeEnd : Drag::Mode::Move, true,
+                              event->globalPosition().toPoint());
+        }
         // An empty spot below the day names: the whole day
         if (!m_view->m_selected && event->position().y() >= dayHeader) {
             const int width = this->width();
@@ -299,6 +387,8 @@ protected:
     }
 
 private:
+    using Drag = TimeGridView::Drag;
+    using Placed = QPair<QRectF, DisplayEvent>;
     struct Span {
         QDate from;
         QDate to;
@@ -306,14 +396,33 @@ private:
         DisplayEvent event;
     };
 
-    std::optional<DisplayEvent> hit(const QPointF &pos) const
+    // A drag that lands in the hours rather than in this strip
+    static bool inHours(const Drag &drag)
+    {
+        return !drag.allDay && drag.start.date() == drag.end.addMSecs(-1).date();
+    }
+
+    const Placed *hitPlaced(const QPointF &pos) const
     {
         for (const auto &placed : m_placed) {
             if (placed.first.contains(pos)) {
-                return placed.second;
+                return &placed;
             }
         }
-        return std::nullopt;
+        return nullptr;
+    }
+
+    std::optional<DisplayEvent> hit(const QPointF &pos) const
+    {
+        const Placed *placed = hitPlaced(pos);
+        return placed ? std::optional<DisplayEvent>(placed->second) : std::nullopt;
+    }
+
+    // The right edge of an all-day event that ends within the days shown: drag it for more or
+    // fewer days
+    bool onRightEdge(const Placed &placed, const QPointF &pos) const
+    {
+        return placed.second.allDay && placed.second.lastDay <= m_view->m_last && m_view->movable(placed.second) && placed.first.right() - pos.x() < 6;
     }
 
     TimeGridView *m_view;
@@ -333,6 +442,8 @@ public:
         setFixedHeight(24 * hourHeight + 1);
         // Enter and typing on a selected time
         setFocusPolicy(Qt::ClickFocus);
+        // The resize cursor on an event's top and bottom edge
+        setMouseTracking(true);
         // The red line for now moves on
         auto *timer = new QTimer(this);
         timer->setInterval(60 * 1000);
@@ -451,7 +562,26 @@ protected:
         }
         for (const auto &placed : std::as_const(m_placed)) {
             const bool selected = m_view->m_selected && m_view->m_selected->id == placed.second.id && m_view->m_selected->mailboxKey == placed.second.mailboxKey;
+            // An event being dragged stays where it was, faded, until it is dropped
+            p.setOpacity(m_view->isDragged(placed.second) ? 0.35 : 1.0);
             drawEventBlock(p, placed.first, placed.second, selected, pal, placed.first.height() >= hourHeight * 0.9);
+        }
+        p.setOpacity(1.0);
+        // Where a dragged event lands, with its new times, when that is in the hours
+        if (const std::optional<Drag> &drag = m_view->m_drag; drag && drag->started && !drag->allDay && drag->start.date() == drag->end.addMSecs(-1).date()) {
+            const qint64 col = m_view->m_first.daysTo(drag->start.date());
+            if (col >= 0 && col < m_view->days()) {
+                DisplayEvent landing = drag->event;
+                landing.start = drag->start;
+                landing.end = drag->end;
+                landing.allDay = false;
+                landing.firstDay = landing.lastDay = drag->start.date();
+                const QDateTime dayStart(drag->start.date(), QTime(0, 0));
+                const qreal top = dayStart.secsTo(drag->start) / 3600.0 * hourHeight;
+                const qreal bottom = std::min<qint64>(24 * 3600, dayStart.secsTo(drag->end)) / 3600.0 * hourHeight;
+                const QRectF r(m_view->columnX(int(col), width) + 1, top, m_view->columnWidth(width) - 6, std::max<qreal>(bottom - top, hourHeight / 2.0 - 2));
+                drawEventBlock(p, r, landing, true, pal, true);
+            }
         }
         // Now
         const QDateTime now = QDateTime::currentDateTime();
@@ -473,6 +603,11 @@ protected:
         Q_EMIT m_view->selectionChanged();
         m_anchor.reset();
         m_collapse.reset();
+        // An event can be dragged to another time or day, or by its top or bottom edge to
+        // another length, as in Outlook
+        if (const Placed *placed = hitPlaced(event->position()); placed && event->button() == Qt::LeftButton && m_view->movable(placed->second)) {
+            m_view->beginDrag(placed->second, edgeAt(*placed, event->position()), false, event->globalPosition().toPoint());
+        }
         const std::optional<QPair<int, int>> at = m_view->m_selected ? std::nullopt : halfHourAt(event->position());
         // Inside the selection: it stays for a double click or a right click; a single click
         // narrows it to the half hour clicked once the double click time is over
@@ -501,6 +636,21 @@ protected:
 
     void mouseMoveEvent(QMouseEvent *event) override
     {
+        if (m_view->m_drag) {
+            if (event->buttons() & Qt::LeftButton) {
+                m_view->dragMoved(event->globalPosition().toPoint());
+            }
+            return;
+        }
+        if (event->buttons() == Qt::NoButton) {
+            const Placed *placed = hitPlaced(event->position());
+            if (placed && edgeAt(*placed, event->position()) != Drag::Mode::Move) {
+                setCursor(Qt::SizeVerCursor);
+            } else {
+                unsetCursor();
+            }
+            return;
+        }
         if (!(event->buttons() & Qt::LeftButton)) {
             return;
         }
@@ -521,6 +671,9 @@ protected:
     void mouseReleaseEvent(QMouseEvent *) override
     {
         m_anchor.reset();
+        if (m_view->m_drag) {
+            m_view->dragReleased();
+        }
     }
 
     void mouseDoubleClickEvent(QMouseEvent *event) override
@@ -574,6 +727,10 @@ protected:
 
     void keyPressEvent(QKeyEvent *event) override
     {
+        if (event->key() == Qt::Key_Escape && m_view->m_drag) {
+            m_view->cancelDrag();
+            return;
+        }
         const std::optional<CalendarView::Slot> slot = m_view->m_slot;
         if (!slot || slot->allDay) {
             QWidget::keyPressEvent(event);
@@ -602,15 +759,39 @@ private:
         return moment >= m_view->m_slot->start && moment < m_view->m_slot->end;
     }
 
-    std::optional<DisplayEvent> hit(const QPointF &pos) const
+    using Drag = TimeGridView::Drag;
+    using Placed = QPair<QRectF, DisplayEvent>;
+
+    const Placed *hitPlaced(const QPointF &pos) const
     {
         // The last drawn is on top
         for (auto it = m_placed.crbegin(); it != m_placed.crend(); ++it) {
             if (it->first.contains(pos)) {
-                return it->second;
+                return &*it;
             }
         }
-        return std::nullopt;
+        return nullptr;
+    }
+
+    std::optional<DisplayEvent> hit(const QPointF &pos) const
+    {
+        const Placed *placed = hitPlaced(pos);
+        return placed ? std::optional<DisplayEvent>(placed->second) : std::nullopt;
+    }
+
+    // The top or bottom edge of an event that may be changed: drag it for another start or end
+    Drag::Mode edgeAt(const Placed &placed, const QPointF &pos) const
+    {
+        if (!m_view->movable(placed.second) || placed.first.height() < 16) {
+            return Drag::Mode::Move;
+        }
+        if (pos.y() - placed.first.top() < 5) {
+            return Drag::Mode::ResizeStart;
+        }
+        if (placed.first.bottom() - pos.y() < 5) {
+            return Drag::Mode::ResizeEnd;
+        }
+        return Drag::Mode::Move;
     }
 
     // The day column and the half hour (0..47) under a point
@@ -646,6 +827,176 @@ private:
 QWidget *TimeGridView::gridForTests() const
 {
     return m_grid;
+}
+
+namespace
+{
+constexpr int halfHour = 30 * 60;
+
+// Seconds rounded to the nearest half hour, as the grid's lines
+int snapped(int seconds)
+{
+    return int(std::lround(seconds / double(halfHour))) * halfHour;
+}
+}
+
+void TimeGridView::beginDrag(const DisplayEvent &event, Drag::Mode mode, bool fromHeader, const QPoint &global)
+{
+    Drag drag;
+    drag.event = event;
+    drag.mode = mode;
+    drag.fromHeader = fromHeader;
+    drag.pressGlobal = global;
+    drag.pressColumn = columnAt(global);
+    drag.pressSeconds = secondsAt(global);
+    drag.start = event.start;
+    drag.end = event.end;
+    drag.allDay = event.allDay;
+    m_drag = drag;
+}
+
+int TimeGridView::columnAt(const QPoint &global) const
+{
+    const QPoint at = m_header->mapFromGlobal(global);
+    const qreal width = columnWidth(m_header->width());
+    const int column = width > 0 ? int(std::floor((at.x() - timeColumnWidth()) / width)) : 0;
+    return std::clamp(column, 0, days() - 1);
+}
+
+int TimeGridView::secondsAt(const QPoint &global) const
+{
+    const int y = m_grid->mapFromGlobal(global).y();
+    return std::clamp(int(y * 3600.0 / hourHeight), 0, 24 * 3600 - 1);
+}
+
+bool TimeGridView::isDragged(const DisplayEvent &event) const
+{
+    return m_drag && m_drag->started && m_drag->event.id == event.id && m_drag->event.mailboxKey == event.mailboxKey;
+}
+
+void TimeGridView::dragMoved(const QPoint &global)
+{
+    if (!m_drag) {
+        return;
+    }
+    Drag &d = *m_drag;
+    if (!d.started) {
+        if ((global - d.pressGlobal).manhattanLength() < QApplication::startDragDistance()) {
+            return;
+        }
+        d.started = true;
+        const Qt::CursorShape shape = d.mode == Drag::Mode::Move ? Qt::SizeAllCursor : (d.fromHeader ? Qt::SizeHorCursor : Qt::SizeVerCursor);
+        m_header->setCursor(shape);
+        m_grid->setCursor(shape);
+    }
+    const DisplayEvent &e = d.event;
+    const int column = columnAt(global);
+    const QDate day = m_first.addDays(column);
+    const int dayShift = column - d.pressColumn;
+    // Above the hours (the strip, the day names, or further up) counts as the strip
+    const bool inStrip = m_header->mapFromGlobal(global).y() < m_header->height();
+    const int seconds = secondsAt(global);
+    const qint64 length = e.start.secsTo(e.end);
+    // Never shorter than half an hour, or than it was
+    const int shortest = int(std::min<qint64>(halfHour, std::max<qint64>(60, length)));
+
+    if (d.fromHeader && d.mode == Drag::Mode::ResizeEnd) {
+        // An all-day event: more or fewer days
+        const QDate last = std::max(e.firstDay, e.lastDay.addDays(dayShift));
+        d.start = QDateTime(e.firstDay, QTime(0, 0));
+        d.end = QDateTime(last.addDays(1), QTime(0, 0));
+        d.allDay = true;
+    } else if (d.mode == Drag::Mode::ResizeEnd || d.mode == Drag::Mode::ResizeStart) {
+        // A timed event in its own day: another end or start, in half hours
+        const QDateTime dayStart(e.start.date(), QTime(0, 0));
+        const int shift = snapped(seconds - d.pressSeconds);
+        if (d.mode == Drag::Mode::ResizeEnd) {
+            d.start = e.start;
+            d.end = std::max(std::min(e.end.addSecs(shift), dayStart.addDays(1)), e.start.addSecs(shortest));
+        } else {
+            d.start = std::min(std::max(e.start.addSecs(shift), dayStart), e.end.addSecs(-shortest));
+            d.end = e.end;
+        }
+        d.allDay = false;
+    } else if (inStrip && (d.fromHeader || !e.allDay)) {
+        if (!d.fromHeader) {
+            // A timed event dropped in the strip becomes an all-day event that day, as in Outlook
+            d.start = QDateTime(day, QTime(0, 0));
+            d.end = QDateTime(day.addDays(1), QTime(0, 0));
+            d.allDay = true;
+        } else if (e.allDay) {
+            d.start = QDateTime(e.firstDay.addDays(dayShift), QTime(0, 0));
+            d.end = QDateTime(e.lastDay.addDays(dayShift + 1), QTime(0, 0));
+            d.allDay = true;
+        } else {
+            // A timed event over several days: other days, the same times
+            d.start = e.start.addDays(dayShift);
+            d.end = e.end.addDays(dayShift);
+            d.allDay = false;
+        }
+    } else if (d.fromHeader && e.allDay) {
+        // An all-day event dropped in the hours: half an hour from there, as in Outlook
+        d.start = QDateTime(day, QTime(0, 0).addSecs(seconds / halfHour * halfHour));
+        d.end = d.start.addSecs(halfHour);
+        d.allDay = false;
+    } else if (d.fromHeader) {
+        // A timed event over several days stays in the strip
+        d.start = e.start.addDays(dayShift);
+        d.end = e.end.addDays(dayShift);
+        d.allDay = false;
+    } else {
+        // A timed event to another time or day: as long as it was, within the day it lands on
+        const QDateTime dayStart(day, QTime(0, 0));
+        QDateTime start = e.start.addDays(e.start.date().daysTo(day)).addSecs(snapped(seconds - d.pressSeconds));
+        if (start < dayStart) {
+            start = dayStart;
+        }
+        if (length <= 24 * 3600 && start.addSecs(length) > dayStart.addDays(1)) {
+            start = dayStart.addDays(1).addSecs(-length);
+        }
+        d.start = start;
+        d.end = start.addSecs(length);
+        d.allDay = false;
+    }
+    // Near the top or bottom of the hours they scroll along
+    if (!inStrip) {
+        const QPoint at = m_grid->mapFromGlobal(global);
+        m_scroll->ensureVisible(at.x(), std::clamp(at.y(), 0, m_grid->height() - 1), 0, hourHeight / 2);
+    }
+    repaintAll();
+}
+
+void TimeGridView::dragReleased()
+{
+    const std::optional<Drag> drag = m_drag;
+    cancelDrag();
+    if (!drag || !drag->started) {
+        return;
+    }
+    const DisplayEvent &e = drag->event;
+    const bool same = drag->allDay && e.allDay ? drag->start.date() == e.firstDay && drag->end.date().addDays(-1) == e.lastDay
+                                               : drag->allDay == e.allDay && drag->start == e.start && drag->end == e.end;
+    if (same) {
+        return;
+    }
+    // Where it was dropped at once, until the calendar has it from the cache
+    showMoved(e, drag->start, drag->end, drag->allDay);
+    Q_EMIT eventMoveRequested(e, drag->start, drag->end, drag->allDay);
+}
+
+void TimeGridView::eventsMoved()
+{
+    m_header->reset();
+    m_grid->layoutEvents();
+    repaintAll();
+}
+
+void TimeGridView::cancelDrag()
+{
+    m_drag.reset();
+    m_header->unsetCursor();
+    m_grid->unsetCursor();
+    repaintAll();
 }
 
 TimeGridView::TimeGridView(QWidget *parent)
@@ -802,6 +1153,8 @@ MonthView::MonthView(QWidget *parent)
     : CalendarView(parent)
 {
     setMinimumSize(400, 300);
+    // Esc during a drag
+    setFocusPolicy(Qt::ClickFocus);
 }
 
 void MonthView::setEvents(QDate first, QDate last, const QList<DisplayEvent> &events)
@@ -929,6 +1282,19 @@ void MonthView::paintEvent(QPaintEvent *)
             m_placed.append({r, e});
         }
     }
+    // The days a dragged event lands on
+    if (m_drag && m_drag->started && m_drag->day.isValid()) {
+        const qint64 length = m_drag->event.firstDay.daysTo(m_drag->event.lastDay);
+        QColor frame = pal.color(QPalette::Highlight);
+        for (int i = 0; i < weeks() * 7; ++i) {
+            const QDate day = m_first.addDays(i);
+            if (day >= m_drag->day && day <= m_drag->day.addDays(length)) {
+                p.fillRect(cellRect(i), selectionColor(pal));
+                p.setPen(QPen(frame, 2));
+                p.drawRect(cellRect(i).adjusted(1, 1, -1, -1));
+            }
+        }
+    }
 }
 
 std::optional<DisplayEvent> MonthView::eventAt(const QPointF &pos) const
@@ -962,11 +1328,65 @@ void MonthView::mousePressEvent(QMouseEvent *event)
     m_selected = eventAt(event->position());
     Q_EMIT selectionChanged();
     m_slot.reset();
+    m_drag.reset();
+    // An event can be dragged to another day (0.14.5)
+    if (m_selected && event->button() == Qt::LeftButton && movable(*m_selected)) {
+        setFocus(Qt::MouseFocusReason);
+        m_drag = Drag{*m_selected, event->globalPosition().toPoint(), dayAt(event->position()), dayAt(event->position()), false};
+    }
     // An empty spot: the day, for New Event (at nine, as a double click makes it)
     if (const QDate day = dayAt(event->position()); !m_selected && day.isValid()) {
         m_slot = Slot{QDateTime(day, QTime(9, 0)), QDateTime(day, QTime(9, 30)), false};
     }
     update();
+}
+
+void MonthView::mouseMoveEvent(QMouseEvent *event)
+{
+    if (!m_drag || !(event->buttons() & Qt::LeftButton)) {
+        return;
+    }
+    if (!m_drag->started) {
+        if ((event->globalPosition().toPoint() - m_drag->pressGlobal).manhattanLength() < QApplication::startDragDistance()) {
+            return;
+        }
+        m_drag->started = true;
+        setCursor(Qt::SizeAllCursor);
+    }
+    if (const QDate day = dayAt(event->position()); day.isValid()) {
+        m_drag->day = day;
+    }
+    update();
+}
+
+void MonthView::mouseReleaseEvent(QMouseEvent *)
+{
+    const std::optional<Drag> drag = m_drag;
+    m_drag.reset();
+    unsetCursor();
+    update();
+    if (!drag || !drag->started || !drag->pressDay.isValid() || !drag->day.isValid() || drag->day == drag->pressDay) {
+        return;
+    }
+    // Another day, the same times (an all-day event its days)
+    const DisplayEvent &e = drag->event;
+    const qint64 shift = drag->pressDay.daysTo(drag->day);
+    const QDateTime start = e.allDay ? QDateTime(e.firstDay.addDays(shift), QTime(0, 0)) : e.start.addDays(shift);
+    const QDateTime end = e.allDay ? QDateTime(e.lastDay.addDays(shift + 1), QTime(0, 0)) : e.end.addDays(shift);
+    // On its new day at once, until the calendar has it from the cache
+    showMoved(e, start, end, e.allDay);
+    Q_EMIT eventMoveRequested(e, start, end, e.allDay);
+}
+
+void MonthView::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Escape && m_drag) {
+        m_drag.reset();
+        unsetCursor();
+        update();
+        return;
+    }
+    CalendarView::keyPressEvent(event);
 }
 
 void MonthView::mouseDoubleClickEvent(QMouseEvent *event)

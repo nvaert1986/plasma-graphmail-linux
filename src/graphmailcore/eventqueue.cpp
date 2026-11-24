@@ -140,6 +140,13 @@ bool EventQueue::remove(qint64 event, bool cancel, const QString &comment)
     }
     const QJsonObject previous = cachedJson(store, *e);
     return store->inTransaction([&] {
+        // Changes still waiting go with it (0.14.5): the delete does not wait behind them, and none
+        // is sent to an event in Deleted Items
+        for (const OperationRow &waiting : store->operationsFor(e->graphId)) {
+            if (waiting.kind == QLatin1String("eventUpdate") && !m_inFlight.contains(waiting.id) && !store->removeOperation(waiting.id)) {
+                return false;
+            }
+        }
         return store->removeItem(ItemKind::Event, e->graphId)
             && enqueue(cancel ? QStringLiteral("eventCancel") : QStringLiteral("eventDelete"),
                        e->graphId,
@@ -229,6 +236,12 @@ void EventQueue::process(int slots)
             break;
         }
         if (m_inFlight.contains(op.id)) {
+            continue;
+        }
+        // One change at a time per event, in the order made (0.14.5): one sent beside an earlier
+        // change of the same event was checked against the version that one was replacing, and
+        // fast drags in the calendar came back as "Changed elsewhere too"
+        if (const QList<OperationRow> same = m_ctx->store->operationsFor(op.target); !same.isEmpty() && same.constFirst().id != op.id) {
             continue;
         }
         const QJsonObject payload = payloadOf(op);
@@ -347,14 +360,78 @@ void EventQueue::finished(const OperationRow &op, const GraphResponse &response)
         resolveConflict(op);
         return;
     }
-    if (response.ok() || (response.status == 404 && op.kind != QLatin1String("eventCreate"))) {
+    // No longer in a calendar: deleted (404), or in Deleted Items, where Exchange refuses calendar
+    // changes with 400 "does not support binding to a non-calendar folder". Done, not refused: the
+    // cache lets it go rather than putting it back (0.14.5: a deleted event came back and could
+    // not be moved)
+    const bool gone = op.kind != QLatin1String("eventCreate") && !op.target.startsWith(QLatin1String("local:"))
+        && (response.status == 404 || (response.status == 400 && response.body.contains("non-calendar folder")));
+    const bool leaves = op.kind == QLatin1String("eventUpdate") || op.kind == QLatin1String("eventDelete") || op.kind == QLatin1String("eventCancel");
+    if (gone && leaves) {
+        qCInfo(GRAPHMAIL) << "An event is no longer in a calendar; removed here too after" << op.kind;
+    }
+    if (response.ok() || gone) {
         store->inTransaction([&] {
+            // A deleted event that came back meanwhile (a sync before the delete reached Exchange)
+            if ((gone && leaves) || (response.ok() && (op.kind == QLatin1String("eventDelete") || op.kind == QLatin1String("eventCancel")))) {
+                store->removeItem(ItemKind::Event, op.target);
+            }
+            if (op.kind == QLatin1String("eventUpdate") && response.ok()) {
+                // The event's new version: the next change made here goes onto it rather than
+                // being refused for the version this one replaced
+                const QJsonObject updated = response.json();
+                const QString tag = updated.value(QLatin1String("@odata.etag")).toString();
+                bool later = false;
+                for (const OperationRow &next : store->operationsFor(op.target)) {
+                    if (next.id == op.id) {
+                        continue;
+                    }
+                    later = true;
+                    if (next.kind == QLatin1String("eventUpdate") && !tag.isEmpty()) {
+                        QJsonObject nextPayload = payloadOf(next);
+                        QJsonObject previous = nextPayload.value(QLatin1String("previous")).toObject();
+                        previous.insert(QStringLiteral("@odata.etag"), tag);
+                        nextPayload.insert(QStringLiteral("previous"), previous);
+                        store->updateOperationPayload(next.id, QString::fromUtf8(QJsonDocument(nextPayload).toJson(QJsonDocument::Compact)));
+                    }
+                }
+                // Nothing newer waiting: the cache takes Exchange's version (with its tag), as
+                // after a create
+                if (!later && updated.value(QLatin1String("id")).toString() == op.target) {
+                    store->upsertItem(ItemKind::Event, payload.value(QLatin1String("calendarRow")).toInteger(), Mapper::event(updated));
+                }
+            }
             if (op.kind == QLatin1String("eventCreate") && response.ok()) {
                 // The local stand-in makes way for the event Exchange made
                 store->removeItem(ItemKind::Event, op.target);
                 const QJsonObject created = response.json();
-                if (!created.value(QLatin1String("id")).toString().isEmpty()) {
-                    store->upsertItem(ItemKind::Event, payload.value(QLatin1String("calendarRow")).toInteger(), Mapper::event(created));
+                if (const QString id = created.value(QLatin1String("id")).toString(); !id.isEmpty()) {
+                    // Shown with the changes still waiting on top, so it does not step back
+                    QJsonObject shown = created;
+                    for (const OperationRow &next : store->operationsFor(op.target)) {
+                        if (next.kind == QLatin1String("eventUpdate")) {
+                            const QJsonObject changes = payloadOf(next).value(QLatin1String("changes")).toObject();
+                            for (auto it = changes.constBegin(); it != changes.constEnd(); ++it) {
+                                shown.insert(it.key(), it.value());
+                            }
+                        }
+                    }
+                    shown.insert(QStringLiteral("id"), id);
+                    store->upsertItem(ItemKind::Event, payload.value(QLatin1String("calendarRow")).toInteger(), Mapper::event(shown));
+                    // Changes made to the stand-in meanwhile (a drag right after creating it) go
+                    // to the event Exchange made, onto its version (0.14.5)
+                    const QString tag = created.value(QLatin1String("@odata.etag")).toString();
+                    for (const OperationRow &next : store->operationsFor(op.target)) {
+                        if (next.id == op.id || next.kind != QLatin1String("eventUpdate") || tag.isEmpty()) {
+                            continue;
+                        }
+                        QJsonObject nextPayload = payloadOf(next);
+                        QJsonObject previous = nextPayload.value(QLatin1String("previous")).toObject();
+                        previous.insert(QStringLiteral("@odata.etag"), tag);
+                        nextPayload.insert(QStringLiteral("previous"), previous);
+                        store->updateOperationPayload(next.id, QString::fromUtf8(QJsonDocument(nextPayload).toJson(QJsonDocument::Compact)));
+                    }
+                    store->retargetOperations(op.target, id);
                 }
             }
             return store->removeOperation(op.id);

@@ -393,22 +393,29 @@ void ComposerWindow::setupActions()
             });
             return;
         }
+        // The checks and their questions (attachment, subject) once per Send (0.14.5: they came
+        // twice), also when the OneDrive step below sends by itself later
+        if (!m_sendChecked) {
+            if (!validate()) {
+                return;
+            }
+            m_sendChecked = true;
+        }
         // OneDrive/SharePoint links: uploads finished and the recipients given access first; this
         // runs again by itself when that is done
-        if (validate() && !cloudReadyToSend()) {
+        if (!cloudReadyToSend()) {
             return;
         }
-        if (validate()) {
-            save(true);
-            m_closing = true;
-            // Undo send: the main window offers Undo while the message waits
-            if (m_record.sendAfter > 0) {
-                if (MainWindow *main = MainWindow::instance()) {
-                    main->offerUndoSend(m_mailboxKey, m_record.uuid, m_subject->text(), undoSendSeconds());
-                }
+        m_sendChecked = false;
+        save(true);
+        m_closing = true;
+        // Undo send: the main window offers Undo while the message waits
+        if (m_record.sendAfter > 0) {
+            if (MainWindow *main = MainWindow::instance()) {
+                main->offerUndoSend(m_mailboxKey, m_record.uuid, m_subject->text(), undoSendSeconds());
             }
-            close();
         }
+        close();
     });
     m_sendMenu = new QMenu(this);
     m_sendModes = new QActionGroup(this);

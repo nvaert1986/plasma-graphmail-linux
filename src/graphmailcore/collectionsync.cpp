@@ -603,6 +603,43 @@ void MailFolderSync::runIncremental()
 
 // --- items under a parent (calendar, contacts, To Do lists) ---------------------------------
 
+namespace
+{
+// An event with changes made here still on their way to Exchange: the cache keeps them on top of
+// the version Exchange has so far, as the operation queue made them (0.14.5: quick drags in the
+// calendar went back through every step while the queue sent them one by one)
+// Nothing when it is on its way out of the calendar (deleted, cancelled or declined here): the
+// sync does not bring it back before Exchange has that
+std::optional<QJsonObject> withPendingChanges(Store *store, QJsonObject item)
+{
+    bool changed = false;
+    const QList<OperationRow> ops = store->operationsFor(item.value(QLatin1String("id")).toString());
+    for (const OperationRow &op : ops) {
+        if (op.kind == QLatin1String("eventDelete") || op.kind == QLatin1String("eventCancel")
+            || (op.kind == QLatin1String("eventRespond")
+                && QJsonDocument::fromJson(op.payload.toUtf8()).object().value(QLatin1String("action")).toString() == QLatin1String("decline"))) {
+            return std::nullopt;
+        }
+        if (op.kind != QLatin1String("eventUpdate")) {
+            continue;
+        }
+        const QJsonObject changes = QJsonDocument::fromJson(op.payload.toUtf8()).object().value(QLatin1String("changes")).toObject();
+        for (auto it = changes.constBegin(); it != changes.constEnd(); ++it) {
+            // The event keeps its own identity
+            if (it.key() != QLatin1String("id") && it.key() != QLatin1String("type") && it.key() != QLatin1String("seriesMasterId")) {
+                item.insert(it.key(), it.value());
+                changed = true;
+            }
+        }
+    }
+    // A changed occurrence is an exception, as EventQueue::update makes it
+    if (changed && item.value(QLatin1String("type")).toString() == QLatin1String("occurrence")) {
+        item.insert(QStringLiteral("type"), QStringLiteral("exception"));
+    }
+    return item;
+}
+}
+
 void CollectionSync::runItemChain(ItemKind kind,
                                   const ParentRow &parent,
                                   const QString &freshUrl,
@@ -625,9 +662,17 @@ void CollectionSync::runItemChain(ItemKind kind,
 
     auto handler = [this, store, kind, parent, generation, map](const QJsonArray &items, const QString &link, bool) {
         int changes = 0;
+        const bool pending = kind == ItemKind::Event && store->pendingOperationCount() > 0;
         const bool ok = store->inTransaction([&] {
             for (const QJsonValue &value : items) {
-                const QJsonObject item = value.toObject();
+                QJsonObject item = value.toObject();
+                if (pending && !Mapper::isRemoved(item)) {
+                    const std::optional<QJsonObject> shown = withPendingChanges(store, item);
+                    if (!shown) {
+                        continue;
+                    }
+                    item = *shown;
+                }
                 const QString id = item.value(QLatin1String("id")).toString();
                 if (id.isEmpty()) {
                     continue;

@@ -187,6 +187,10 @@ CalendarWindow::CalendarWindow(MailboxSet *mailboxes, DaemonClient *daemon, QWid
             newEvent(start, end, allDay, text);
         });
         connect(view, &CalendarView::slotMenuRequested, this, &CalendarWindow::slotMenu);
+        view->setMovable([this](const DisplayEvent &e) {
+            return canMove(e);
+        });
+        connect(view, &CalendarView::eventMoveRequested, this, &CalendarWindow::moveEvent);
         connect(view, &CalendarView::selectionChanged, this, [this, view] {
             const std::optional<DisplayEvent> e = view->selected();
             if (QAction *join = actionCollection()->action(QStringLiteral("join_meeting"))) {
@@ -1266,6 +1270,49 @@ bool CalendarWindow::proposeForTests(const QString &mailboxKey, qint64 id, const
     m_daemon->proposeNewTime(mailboxKey.section(QLatin1Char('/'), 0, 0), mailboxKey.section(QLatin1Char('/'), 1), e->graphId, spec.section(QLatin1Char('|'), 3, 3), m_testComment,
                              start.toMSecsSinceEpoch(), end.toMSecsSinceEpoch());
     return true;
+}
+
+bool CalendarWindow::canMove(const DisplayEvent &event) const
+{
+    if (!event.canEdit || event.cancelled) {
+        return false;
+    }
+    // Someone else's meeting is theirs to move (Propose New Time asks them)
+    const QString organizer = event.json.value(QLatin1String("organizer")).toObject().value(QLatin1String("emailAddress")).toObject().value(QLatin1String("address")).toString().toLower();
+    return event.isOrganizer || organizer.isEmpty() || m_data->ownAddresses().contains(organizer);
+}
+
+void CalendarWindow::moveEvent(const DisplayEvent &event, const QDateTime &start, const QDateTime &end, bool allDay)
+{
+    // The view shows it where it was dropped already: not moved after all, it goes back
+    if (!canMove(event) || !start.isValid() || end <= start) {
+        m_reloadTimer.start();
+        return;
+    }
+    const bool attendees = !event.json.value(QLatin1String("attendees")).toArray().isEmpty();
+    if (event.isOrganizer && attendees && !m_testMode) {
+        const QString title = event.subject.isEmpty() ? i18nc("@item an event without a subject", "(no subject)") : event.subject;
+        DisplayEvent moved = event;
+        moved.start = start;
+        moved.end = end;
+        moved.allDay = allDay;
+        moved.firstDay = start.date();
+        moved.lastDay = allDay ? end.date().addDays(-1) : end.addMSecs(-1).date();
+        const QString when = i18nc("@info %1 a day, %2 its times", "%1, %2", QLocale().toString(start.date(), QStringLiteral("dddd d MMMM")), eventTimeText(moved));
+        const auto answer = KMessageBox::questionTwoActions(this,
+                                                            i18nc("@info", "Move \"%1\" to %2?\nThe attendees get an update with the new time.", title, when),
+                                                            i18nc("@title:window", "Move Meeting"),
+                                                            KGuiItem(i18nc("@action:button", "Send Update"), QStringLiteral("mail-send")),
+                                                            KStandardGuiItem::cancel());
+        if (answer != KMessageBox::PrimaryAction) {
+            m_reloadTimer.start();
+            return;
+        }
+    }
+    // An occurrence is its own row: changing it makes it an exception of the series
+    const QJsonObject changes{{QStringLiteral("start"), graphLocalTime(start)}, {QStringLiteral("end"), graphLocalTime(end)}, {QStringLiteral("isAllDay"), allDay}};
+    m_daemon->updateEvent(event.mailboxKey.section(QLatin1Char('/'), 0, 0), event.mailboxKey.section(QLatin1Char('/'), 1), event.id,
+                          QString::fromUtf8(QJsonDocument(changes).toJson(QJsonDocument::Compact)));
 }
 
 void CalendarWindow::deleteEvent(const DisplayEvent &original)
